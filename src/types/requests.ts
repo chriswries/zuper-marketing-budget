@@ -1,6 +1,6 @@
 import { Month } from './budget';
 
-export type ApprovalLevel = 'ic' | 'manager' | 'cmo' | 'finance';
+export type ApprovalLevel = 'manager' | 'cmo' | 'finance';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type RequestStatus = 'pending' | 'approved' | 'rejected';
 
@@ -28,7 +28,6 @@ export interface SpendRequest {
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
   return [
-    { level: 'ic', status: 'pending' },
     { level: 'manager', status: 'pending' },
     { level: 'cmo', status: 'pending' },
     { level: 'finance', status: 'pending' },

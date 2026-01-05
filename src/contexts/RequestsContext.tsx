@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { SpendRequest } from '@/types/requests';
+import { SpendRequest, ApprovalStep, createDefaultApprovalSteps } from '@/types/requests';
 
 interface RequestsContextType {
   requests: SpendRequest[];
@@ -12,10 +12,42 @@ const RequestsContext = createContext<RequestsContextType | undefined>(undefined
 
 const STORAGE_KEY = 'spend-requests';
 
+// Migrate legacy requests that may have 'ic' approval step
+function migrateRequest(request: SpendRequest): SpendRequest {
+  // Filter out 'ic' steps from approvalSteps (cast to handle legacy data)
+  const filteredSteps = (request.approvalSteps || []).filter(
+    (step) => (step.level as string) !== 'ic'
+  ) as ApprovalStep[];
+
+  // If no steps remain, use default
+  const approvalSteps = filteredSteps.length > 0 ? filteredSteps : createDefaultApprovalSteps();
+
+  // Recompute status based on steps
+  let status: SpendRequest['status'] = 'pending';
+  if (approvalSteps.some((s) => s.status === 'rejected')) {
+    status = 'rejected';
+  } else if (approvalSteps.every((s) => s.status === 'approved')) {
+    status = 'approved';
+  }
+
+  return {
+    ...request,
+    approvalSteps,
+    status,
+  };
+}
+
 export function RequestsProvider({ children }: { children: ReactNode }) {
   const [requests, setRequests] = useState<SpendRequest[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    try {
+      const parsed = JSON.parse(stored) as SpendRequest[];
+      // Migrate all requests on load
+      return parsed.map(migrateRequest);
+    } catch {
+      return [];
+    }
   });
 
   useEffect(() => {

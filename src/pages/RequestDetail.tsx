@@ -9,7 +9,6 @@ import { MONTH_LABELS } from '@/types/budget';
 import { ApprovalStep, SpendRequest } from '@/types/requests';
 
 const levelLabels: Record<string, string> = {
-  ic: 'IC',
   manager: 'Manager',
   cmo: 'CMO',
   finance: 'Finance',
