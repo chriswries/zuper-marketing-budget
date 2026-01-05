@@ -3,7 +3,15 @@ import Papa from "papaparse";
 import { Card, CardContent } from "@/components/ui/card";
 import { UploadStep } from "./UploadStep";
 import { PreviewStep } from "./PreviewStep";
-import type { ImportWizardStep, ParsedImportData, RawImportedRow } from "@/types/import";
+import { MappingStep } from "./MappingStep";
+import { ConfirmStep } from "./ConfirmStep";
+import type { 
+  ImportWizardStep, 
+  ParsedImportData, 
+  RawImportedRow,
+  ColumnMapping,
+  ImportedTransactionDraft 
+} from "@/types/import";
 import { cn } from "@/lib/utils";
 
 const STEPS: { key: ImportWizardStep; label: string }[] = [
@@ -17,6 +25,8 @@ export function ImportWizard() {
   const [currentStep, setCurrentStep] = useState<ImportWizardStep>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedImportData | null>(null);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
+  const [normalizedTransactions, setNormalizedTransactions] = useState<ImportedTransactionDraft[]>([]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
@@ -60,10 +70,30 @@ export function ImportWizard() {
     setCurrentStep("upload");
   };
 
+  const handleContinueToMapping = () => {
+    setCurrentStep("mapping");
+  };
+
+  const handleBackToPreview = () => {
+    setCurrentStep("preview");
+  };
+
+  const handleContinueToConfirm = (result: { mapping: ColumnMapping; transactions: ImportedTransactionDraft[] }) => {
+    setColumnMapping(result.mapping);
+    setNormalizedTransactions(result.transactions);
+    setCurrentStep("confirm");
+  };
+
+  const handleBackToMapping = () => {
+    setCurrentStep("mapping");
+  };
+
   const handleFileSelect = (selectedFile: File | null) => {
     setFile(selectedFile);
     if (!selectedFile) {
       setParsedData(null);
+      setColumnMapping(null);
+      setNormalizedTransactions([]);
     }
   };
 
@@ -118,7 +148,24 @@ export function ImportWizard() {
             />
           )}
           {currentStep === "preview" && parsedData && (
-            <PreviewStep data={parsedData} onBack={handleBackToUpload} />
+            <PreviewStep 
+              data={parsedData} 
+              onBack={handleBackToUpload} 
+              onContinue={handleContinueToMapping}
+            />
+          )}
+          {currentStep === "mapping" && parsedData && (
+            <MappingStep
+              data={parsedData}
+              onBack={handleBackToPreview}
+              onContinue={handleContinueToConfirm}
+            />
+          )}
+          {currentStep === "confirm" && (
+            <ConfirmStep
+              transactions={normalizedTransactions}
+              onBack={handleBackToMapping}
+            />
           )}
         </CardContent>
       </Card>
