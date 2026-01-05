@@ -324,7 +324,7 @@ export function VendorNormalizationStep({
           Back to Confirm
         </Button>
         <Button onClick={handleContinue} disabled={!allMapped}>
-          Continue to Line Item Mapping (Coming Next)
+          Continue to Line Item Mapping
         </Button>
       </div>
     </div>
