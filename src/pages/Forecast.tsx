@@ -39,6 +39,30 @@ function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
   }));
 }
 
+const FORECAST_STORAGE_KEY = 'forecast_cost_centers_v1';
+
+// Load forecast state from localStorage or default to mock data
+function loadForecastState(): CostCenter[] {
+  try {
+    const stored = localStorage.getItem(FORECAST_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored) as CostCenter[];
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return deepCloneCostCenters(mockCostCenters);
+}
+
+// Save forecast state to localStorage
+function saveForecastState(costCenters: CostCenter[]): void {
+  try {
+    localStorage.setItem(FORECAST_STORAGE_KEY, JSON.stringify(costCenters));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface CellChangeArgs {
   costCenterId: string;
   lineItemId: string;
@@ -68,12 +92,15 @@ const formatTimestamp = (isoString: string): string => {
 
 export default function Forecast() {
   const { requests, addRequest, updateRequest } = useRequests();
-  const [costCenters, setCostCenters] = useState<CostCenter[]>(() =>
-    deepCloneCostCenters(mockCostCenters)
-  );
+  const [costCenters, setCostCenters] = useState<CostCenter[]>(loadForecastState);
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set(['feb', 'mar']));
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+
+  // Persist costCenters to localStorage whenever they change
+  useEffect(() => {
+    saveForecastState(costCenters);
+  }, [costCenters]);
 
   // Sync line item approval status with request status
   useEffect(() => {
