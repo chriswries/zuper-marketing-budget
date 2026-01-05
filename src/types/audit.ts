@@ -4,7 +4,8 @@ export interface AuditEntry {
   id: string;
   timestamp: string; // ISO string
   userName: string;
-  sheet: 'forecast';
+  sheet: 'forecast' | 'budget';
+  fiscalYearId?: string; // For budget entries
   costCenterId: string;
   costCenterName: string;
   lineItemId: string;
