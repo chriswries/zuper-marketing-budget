@@ -127,9 +127,9 @@ export default function Forecast() {
     });
   }, [requests]);
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
-    // Find cost center for request
-    const costCenter = costCenters.find((cc) => cc.id === costCenterId);
-    if (!costCenter) return;
+    // Use mockCostCenters as source of truth for cost center name (stable reference)
+    const cc = mockCostCenters.find((c) => c.id === costCenterId);
+    const costCenterName = cc?.name ?? 'Unknown Cost Center';
 
     // Compute request fields from line item
     const fyTotal = calculateFYTotal(lineItem.forecastValues);
@@ -145,7 +145,7 @@ export default function Forecast() {
     const newRequest = {
       id: requestId,
       costCenterId,
-      costCenterName: costCenter.name,
+      costCenterName,
       vendorName,
       amount: fyTotal,
       startMonth,
@@ -166,15 +166,15 @@ export default function Forecast() {
     };
 
     setCostCenters((prev) =>
-      prev.map((cc) => {
-        if (cc.id !== costCenterId) return cc;
+      prev.map((c) => {
+        if (c.id !== costCenterId) return c;
         return {
-          ...cc,
-          lineItems: [...cc.lineItems, lineItemWithApproval],
+          ...c,
+          lineItems: [...c.lineItems, lineItemWithApproval],
         };
       })
     );
-  }, [costCenters, addRequest]);
+  }, [addRequest]);
 
   const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
     // Find the line item to check if we need to cancel a request
