@@ -12,7 +12,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2 } from 'lucide-react';
 import {
   CostCenter,
   LineItem,
@@ -33,11 +50,17 @@ interface CellChangeArgs {
   newValue: number;
 }
 
+interface DeleteLineItemArgs {
+  costCenterId: string;
+  lineItemId: string;
+}
+
 interface SheetTableProps {
   costCenters: CostCenter[];
   valueType: ValueType;
   editable?: boolean;
   onCellChange?: (args: CellChangeArgs) => void;
+  onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
   lockedMonths?: Set<Month>;
 }
 
@@ -67,13 +90,15 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, onCellChange, lockedMonths }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, onCellChange, onDeleteLineItem, lockedMonths }: SheetTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
 
   // Determine if editing is enabled
   const isEditable = editable && valueType === 'forecastValues' && !!onCellChange;
+  // Determine if delete is enabled
+  const canDelete = editable && valueType === 'forecastValues' && !!onDeleteLineItem;
 
   // Filter cost centers and line items
   const filteredCostCenters = useMemo(() => {
@@ -192,12 +217,15 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
               <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted">
                 FY Total
               </TableHead>
+              {canDelete && (
+                <TableHead className="w-[50px] min-w-[50px]"></TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredCostCenters.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canDelete ? 16 : 15} className="text-center text-muted-foreground py-8">
                   No matching line items found.
                 </TableCell>
               </TableRow>
@@ -238,6 +266,7 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                         <TableCell className="text-right tabular-nums font-semibold bg-muted/50">
                           {formatCurrency(fyTotal)}
                         </TableCell>
+                        {canDelete && <TableCell></TableCell>}
                       </TableRow>
 
                       {/* Line Item Child Rows */}
@@ -300,6 +329,64 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                               <TableCell className="text-right tabular-nums font-medium bg-muted/20">
                                 {formatCurrency(itemFYTotal)}
                               </TableCell>
+                              {canDelete && (
+                                <TableCell className="text-center">
+                                  {item.isContracted ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                            disabled
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Contracted items cannot be deleted.</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Delete line item?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            This will permanently delete "{item.name}" from the forecast.
+                                            This action cannot be undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            onClick={() => {
+                                              onDeleteLineItem?.({
+                                                costCenterId: costCenter.id,
+                                                lineItemId: item.id,
+                                              });
+                                            }}
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -321,6 +408,7 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                   <TableCell className="text-right tabular-nums bg-primary/10">
                     {formatCurrency(grandFYTotal)}
                   </TableCell>
+                  {canDelete && <TableCell></TableCell>}
                 </TableRow>
               </>
             )}
