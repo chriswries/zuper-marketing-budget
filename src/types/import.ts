@@ -11,7 +11,7 @@ export interface ParsedImportData {
   errors: string[];
 }
 
-export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm';
+export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm' | 'vendors';
 
 export interface ColumnMapping {
   dateColumn: string;
@@ -28,6 +28,21 @@ export interface ImportedTransactionDraft {
   rawVendorName: string;
   memo?: string;
   recognizedMonth: Month;
+}
+
+export interface ImportedTransactionWithVendor extends ImportedTransactionDraft {
+  canonicalVendorId: string;
+  canonicalVendorName: string;
+}
+
+export interface CanonicalVendor {
+  id: string;
+  name: string;
+}
+
+export interface VendorMapping {
+  rawVendorName: string;
+  canonicalVendorId: string;
 }
 
 export interface MappingValidationError {

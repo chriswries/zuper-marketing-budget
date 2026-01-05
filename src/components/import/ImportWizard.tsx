@@ -1,24 +1,29 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Papa from "papaparse";
 import { Card, CardContent } from "@/components/ui/card";
 import { UploadStep } from "./UploadStep";
 import { PreviewStep } from "./PreviewStep";
 import { MappingStep } from "./MappingStep";
 import { ConfirmStep } from "./ConfirmStep";
+import { VendorNormalizationStep } from "./VendorNormalizationStep";
 import type { 
   ImportWizardStep, 
   ParsedImportData, 
   RawImportedRow,
   ColumnMapping,
-  ImportedTransactionDraft 
+  ImportedTransactionDraft,
+  ImportedTransactionWithVendor,
+  CanonicalVendor
 } from "@/types/import";
 import { cn } from "@/lib/utils";
+import { mockVendors } from "@/data/mock-budget-data";
 
 const STEPS: { key: ImportWizardStep; label: string }[] = [
   { key: "upload", label: "Upload" },
   { key: "preview", label: "Preview" },
   { key: "mapping", label: "Mapping" },
   { key: "confirm", label: "Confirm" },
+  { key: "vendors", label: "Vendors" },
 ];
 
 export function ImportWizard() {
@@ -27,8 +32,20 @@ export function ImportWizard() {
   const [parsedData, setParsedData] = useState<ParsedImportData | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
   const [normalizedTransactions, setNormalizedTransactions] = useState<ImportedTransactionDraft[]>([]);
+  const [vendorMappings, setVendorMappings] = useState<Record<string, string>>({});
+  const [vendorNormalizedTransactions, setVendorNormalizedTransactions] = useState<ImportedTransactionWithVendor[]>([]);
+  const [canonicalVendors, setCanonicalVendors] = useState<CanonicalVendor[]>([]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
+
+  // Initialize canonical vendors from mock data
+  const initialCanonicalVendors = useMemo(() => {
+    const vendors: CanonicalVendor[] = mockVendors.map(v => ({
+      id: v.id,
+      name: v.name,
+    }));
+    return vendors.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
 
   const parseFile = (file: File): Promise<ParsedImportData> => {
     return new Promise((resolve) => {
@@ -88,12 +105,33 @@ export function ImportWizard() {
     setCurrentStep("mapping");
   };
 
+  const handleContinueToVendors = () => {
+    setCurrentStep("vendors");
+  };
+
+  const handleBackToConfirm = () => {
+    setCurrentStep("confirm");
+  };
+
+  const handleVendorNormalizationComplete = (result: {
+    vendorMappings: Record<string, string>;
+    transactions: ImportedTransactionWithVendor[];
+    canonicalVendors: CanonicalVendor[];
+  }) => {
+    setVendorMappings(result.vendorMappings);
+    setVendorNormalizedTransactions(result.transactions);
+    setCanonicalVendors(result.canonicalVendors);
+    // Next step would be line item mapping - for now just stay on vendors
+  };
+
   const handleFileSelect = (selectedFile: File | null) => {
     setFile(selectedFile);
     if (!selectedFile) {
       setParsedData(null);
       setColumnMapping(null);
       setNormalizedTransactions([]);
+      setVendorMappings({});
+      setVendorNormalizedTransactions([]);
     }
   };
 
@@ -165,6 +203,16 @@ export function ImportWizard() {
             <ConfirmStep
               transactions={normalizedTransactions}
               onBack={handleBackToMapping}
+              onContinue={handleContinueToVendors}
+            />
+          )}
+          {currentStep === "vendors" && (
+            <VendorNormalizationStep
+              transactions={normalizedTransactions}
+              canonicalVendors={canonicalVendors.length > 0 ? canonicalVendors : initialCanonicalVendors}
+              initialMappings={vendorMappings}
+              onBack={handleBackToConfirm}
+              onContinue={handleVendorNormalizationComplete}
             />
           )}
         </CardContent>
