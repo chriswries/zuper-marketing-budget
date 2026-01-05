@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable } from '@/components/sheet/SheetTable';
+import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
-import { CostCenter, Month, MONTHS, MONTH_LABELS } from '@/types/budget';
+import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +21,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Lock, History } from 'lucide-react';
+import { Lock, History, Plus } from 'lucide-react';
 
 // Deep clone cost centers to avoid mutating mock data
 function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
@@ -69,7 +70,19 @@ export default function Forecast() {
   );
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set(['feb', 'mar']));
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 
+  const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: [...cc.lineItems, lineItem],
+        };
+      })
+    );
+  }, []);
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
     // Find the old value BEFORE updating state
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
@@ -143,6 +156,10 @@ export default function Forecast() {
         />
         
         <div className="flex items-center gap-2">
+          <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add line item
+          </Button>
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -244,6 +261,14 @@ export default function Forecast() {
         editable={true}
         onCellChange={handleCellChange}
         lockedMonths={lockedMonths}
+      />
+
+      <AddLineItemDialog
+        open={addLineItemOpen}
+        onOpenChange={setAddLineItemOpen}
+        costCenters={costCenters}
+        lockedMonths={lockedMonths}
+        onCreateLineItem={handleCreateLineItem}
       />
     </div>
   );
