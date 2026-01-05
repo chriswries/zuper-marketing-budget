@@ -1,10 +1,4 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -13,6 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react';
 import {
   CostCenter,
   LineItem,
@@ -21,12 +21,23 @@ import {
   Month,
   calculateFYTotal,
 } from '@/types/budget';
+import { EditableCell } from './EditableCell';
 
 type ValueType = 'budgetValues' | 'forecastValues' | 'actualValues';
+
+interface CellChangeArgs {
+  costCenterId: string;
+  lineItemId: string;
+  month: Month;
+  valueType: 'forecastValues';
+  newValue: number;
+}
 
 interface SheetTableProps {
   costCenters: CostCenter[];
   valueType: ValueType;
+  editable?: boolean;
+  onCellChange?: (args: CellChangeArgs) => void;
 }
 
 const formatCurrency = (value: number): string => {
@@ -38,7 +49,7 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-// Helper to calculate rollup from a subset of line items
+// Calculate rollup from filtered line items
 function calculateFilteredRollup(
   lineItems: LineItem[],
   valueType: ValueType
@@ -55,14 +66,15 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType }: SheetTableProps) {
-  const [expandedCostCenters, setExpandedCostCenters] = useState<Set<string>>(
-    () => new Set(costCenters.map((cc) => cc.id))
-  );
+export function SheetTable({ costCenters, valueType, editable = false, onCellChange }: SheetTableProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
 
-  // Filter line items based on search and contracted toggle
+  // Determine if editing is enabled
+  const isEditable = editable && valueType === 'forecastValues' && !!onCellChange;
+
+  // Filter cost centers and line items
   const filteredCostCenters = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
 
@@ -87,8 +99,16 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
       .filter((cc) => cc.lineItems.length > 0); // Hide empty cost centers
   }, [costCenters, searchQuery, contractedOnly]);
 
+  // Compute grand total from visible data
+  const grandTotal = useMemo(() => {
+    const allVisibleItems = filteredCostCenters.flatMap((cc) => cc.lineItems);
+    return calculateFilteredRollup(allVisibleItems, valueType);
+  }, [filteredCostCenters, valueType]);
+
+  const grandFYTotal = calculateFYTotal(grandTotal);
+
   const toggleCostCenter = (id: string) => {
-    setExpandedCostCenters((prev) => {
+    setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -100,46 +120,36 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
   };
 
   const expandAll = () => {
-    setExpandedCostCenters(new Set(filteredCostCenters.map((cc) => cc.id)));
+    setExpandedIds(new Set(filteredCostCenters.map((cc) => cc.id)));
   };
 
   const collapseAll = () => {
-    setExpandedCostCenters(new Set());
+    setExpandedIds(new Set());
   };
 
-  const allExpanded = filteredCostCenters.length > 0 && 
-    filteredCostCenters.every((cc) => expandedCostCenters.has(cc.id));
-
-  // Calculate grand totals from filtered data
-  const grandTotals = useMemo(() => {
-    const totals: Record<Month, number> = {
-      feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
-      aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
-    };
-
-    for (const cc of filteredCostCenters) {
-      const rollup = calculateFilteredRollup(cc.lineItems, valueType);
-      for (const month of MONTHS) {
-        totals[month] += rollup[month];
-      }
-    }
-
-    return totals;
-  }, [filteredCostCenters, valueType]);
-
-  const grandFYTotal = calculateFYTotal(grandTotals);
+  const allExpanded = filteredCostCenters.every((cc) => expandedIds.has(cc.id));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={allExpanded ? collapseAll : expandAll}
+          className="flex items-center gap-2"
+        >
+          <ChevronsUpDown className="h-4 w-4" />
+          {allExpanded ? 'Collapse All' : 'Expand All'}
+        </Button>
+
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search items or vendors..."
+            placeholder="Search line items or vendors..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 w-[220px]"
+            className="pl-9"
           />
         </div>
 
@@ -153,31 +163,15 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
             Contracted only
           </Label>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={allExpanded ? collapseAll : expandAll}
-          className="gap-1.5"
-        >
-          <ChevronsUpDown className="h-4 w-4" />
-          {allExpanded ? 'Collapse All' : 'Expand All'}
-        </Button>
-
-        {(searchQuery || contractedOnly) && (
-          <span className="text-sm text-muted-foreground">
-            Showing {filteredCostCenters.reduce((sum, cc) => sum + cc.lineItems.length, 0)} items
-          </span>
-        )}
       </div>
 
       {/* Table */}
-      <div className="rounded-md border overflow-x-auto">
+      <div className="border rounded-lg overflow-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-[280px] min-w-[280px] sticky left-0 bg-muted/50 z-10">
-                Cost Center / Line Item
+              <TableHead className="w-[280px] min-w-[280px] sticky left-0 bg-muted/50 z-20">
+                Line Item
               </TableHead>
               <TableHead className="w-[120px] min-w-[120px]">Vendor</TableHead>
               {MONTHS.map((month) => (
@@ -194,98 +188,131 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCostCenters.map((costCenter) => {
-              const isExpanded = expandedCostCenters.has(costCenter.id);
-              const rollup = calculateFilteredRollup(costCenter.lineItems, valueType);
-              const fyTotal = calculateFYTotal(rollup);
-
-              return (
-                <>
-                  {/* Cost Center Parent Row */}
-                  <TableRow
-                    key={costCenter.id}
-                    className="bg-muted/30 font-medium cursor-pointer hover:bg-muted/50"
-                    onClick={() => toggleCostCenter(costCenter.id)}
-                  >
-                    <TableCell className="sticky left-0 bg-muted/30 z-10">
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        <span>{costCenter.name}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {costCenter.lineItems.length} items
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">—</TableCell>
-                    {MONTHS.map((month) => (
-                      <TableCell key={month} className="text-right tabular-nums">
-                        {formatCurrency(rollup[month])}
-                      </TableCell>
-                    ))}
-                    <TableCell className="text-right tabular-nums font-semibold bg-muted/50">
-                      {formatCurrency(fyTotal)}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Line Item Child Rows */}
-                  {isExpanded &&
-                    costCenter.lineItems.map((item) => {
-                      const itemFYTotal = calculateFYTotal(item[valueType]);
-
-                      return (
-                        <TableRow key={item.id} className="hover:bg-muted/20">
-                          <TableCell className="sticky left-0 bg-background z-10">
-                            <div className="flex items-center gap-2 pl-6">
-                              <span className="text-foreground">{item.name}</span>
-                              {item.isContracted && (
-                                <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
-                                  Contracted
-                                </Badge>
-                              )}
-                              {item.isAccrual && (
-                                <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
-                                  Accrual
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {item.vendor?.name ?? '—'}
-                          </TableCell>
-                          {MONTHS.map((month) => (
-                            <TableCell key={month} className="text-right tabular-nums">
-                              {formatCurrency(item[valueType][month])}
-                            </TableCell>
-                          ))}
-                          <TableCell className="text-right tabular-nums font-medium bg-muted/20">
-                            {formatCurrency(itemFYTotal)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                </>
-              );
-            })}
-
-            {/* Grand Total Row */}
-            <TableRow className="bg-primary/5 font-semibold border-t-2">
-              <TableCell className="sticky left-0 bg-primary/5 z-10">
-                Grand Total
-              </TableCell>
-              <TableCell>—</TableCell>
-              {MONTHS.map((month) => (
-                <TableCell key={month} className="text-right tabular-nums">
-                  {formatCurrency(grandTotals[month])}
+            {filteredCostCenters.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                  No matching line items found.
                 </TableCell>
-              ))}
-              <TableCell className="text-right tabular-nums bg-primary/10">
-                {formatCurrency(grandFYTotal)}
-              </TableCell>
-            </TableRow>
+              </TableRow>
+            ) : (
+              <>
+                {filteredCostCenters.map((costCenter) => {
+                  const isExpanded = expandedIds.has(costCenter.id);
+                  const rollup = calculateFilteredRollup(costCenter.lineItems, valueType);
+                  const fyTotal = calculateFYTotal(rollup);
+
+                  return (
+                    <>
+                      {/* Cost Center Parent Row */}
+                      <TableRow
+                        key={costCenter.id}
+                        className="bg-muted/30 font-medium cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggleCostCenter(costCenter.id)}
+                      >
+                        <TableCell className="sticky left-0 bg-muted/30 z-10">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span>{costCenter.name}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {costCenter.lineItems.length} items
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">—</TableCell>
+                        {MONTHS.map((month) => (
+                          <TableCell key={month} className="text-right tabular-nums">
+                            {formatCurrency(rollup[month])}
+                          </TableCell>
+                        ))}
+                        <TableCell className="text-right tabular-nums font-semibold bg-muted/50">
+                          {formatCurrency(fyTotal)}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Line Item Child Rows */}
+                      {isExpanded &&
+                        costCenter.lineItems.map((item) => {
+                          const itemFYTotal = calculateFYTotal(item[valueType]);
+
+                          return (
+                            <TableRow key={item.id} className="hover:bg-muted/20">
+                              <TableCell className="sticky left-0 bg-background z-10">
+                                <div className="flex items-center gap-2 pl-6">
+                                  <span className="text-foreground">{item.name}</span>
+                                  {item.isContracted && (
+                                    <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
+                                      Contracted
+                                    </Badge>
+                                  )}
+                                  {item.isAccrual && (
+                                    <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                                      Accrual
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {item.vendor?.name ?? '—'}
+                              </TableCell>
+                              {MONTHS.map((month) => {
+                                const cellValue = item[valueType][month];
+                                
+                                if (isEditable) {
+                                  return (
+                                    <EditableCell
+                                      key={month}
+                                      value={cellValue}
+                                      formatted={formatCurrency(cellValue)}
+                                      onSave={(newValue) => {
+                                        onCellChange({
+                                          costCenterId: costCenter.id,
+                                          lineItemId: item.id,
+                                          month,
+                                          valueType: 'forecastValues',
+                                          newValue,
+                                        });
+                                      }}
+                                    />
+                                  );
+                                }
+
+                                return (
+                                  <TableCell key={month} className="text-right tabular-nums">
+                                    {formatCurrency(cellValue)}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-right tabular-nums font-medium bg-muted/20">
+                                {formatCurrency(itemFYTotal)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </>
+                  );
+                })}
+
+                {/* Grand Total Row */}
+                <TableRow className="bg-primary/5 font-semibold border-t-2">
+                  <TableCell className="sticky left-0 bg-primary/5 z-10">
+                    Grand Total
+                  </TableCell>
+                  <TableCell>—</TableCell>
+                  {MONTHS.map((month) => (
+                    <TableCell key={month} className="text-right tabular-nums">
+                      {formatCurrency(grandTotal[month])}
+                    </TableCell>
+                  ))}
+                  <TableCell className="text-right tabular-nums bg-primary/10">
+                    {formatCurrency(grandFYTotal)}
+                  </TableCell>
+                </TableRow>
+              </>
+            )}
           </TableBody>
         </Table>
       </div>
