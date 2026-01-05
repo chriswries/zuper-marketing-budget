@@ -21,6 +21,8 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
+import { useRequests } from "@/contexts/RequestsContext";
 
 const navItems = [
   { title: "Budget", url: "/budget", icon: DollarSign },
@@ -36,7 +38,9 @@ const navItems = [
 export function AppSidebar() {
   const location = useLocation();
   const { setOpenMobile } = useSidebar();
+  const { requests } = useRequests();
 
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -66,10 +70,15 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       onClick={() => setOpenMobile(false)}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 w-full"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                      {item.url === "/requests" && pendingCount > 0 && (
+                        <Badge variant="secondary" className="ml-auto text-xs px-1.5 py-0 h-5 min-w-5 flex items-center justify-center">
+                          {pendingCount}
+                        </Badge>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
