@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock } from 'lucide-react';
 import {
   CostCenter,
   LineItem,
@@ -38,6 +38,7 @@ interface SheetTableProps {
   valueType: ValueType;
   editable?: boolean;
   onCellChange?: (args: CellChangeArgs) => void;
+  lockedMonths?: Set<Month>;
 }
 
 const formatCurrency = (value: number): string => {
@@ -66,7 +67,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, onCellChange }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, onCellChange, lockedMonths }: SheetTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
@@ -174,14 +175,20 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                 Line Item
               </TableHead>
               <TableHead className="w-[120px] min-w-[120px]">Vendor</TableHead>
-              {MONTHS.map((month) => (
-                <TableHead
-                  key={month}
-                  className="w-[90px] min-w-[90px] text-right"
-                >
-                  {MONTH_LABELS[month]}
-                </TableHead>
-              ))}
+              {MONTHS.map((month) => {
+                const isLocked = lockedMonths?.has(month);
+                return (
+                  <TableHead
+                    key={month}
+                    className={`w-[90px] min-w-[90px] text-right ${isLocked ? 'bg-muted/70' : ''}`}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                      {MONTH_LABELS[month]}
+                    </div>
+                  </TableHead>
+                );
+              })}
               <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted">
                 FY Total
               </TableHead>
@@ -260,8 +267,9 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                               </TableCell>
                               {MONTHS.map((month) => {
                                 const cellValue = item[valueType][month];
+                                const isMonthLocked = lockedMonths?.has(month);
                                 
-                                if (isEditable) {
+                                if (isEditable && !isMonthLocked) {
                                   return (
                                     <EditableCell
                                       key={month}
@@ -281,7 +289,10 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                                 }
 
                                 return (
-                                  <TableCell key={month} className="text-right tabular-nums">
+                                  <TableCell 
+                                    key={month} 
+                                    className={`text-right tabular-nums ${isMonthLocked ? 'bg-muted/40 cursor-not-allowed text-muted-foreground' : ''}`}
+                                  >
                                     {formatCurrency(cellValue)}
                                   </TableCell>
                                 );
