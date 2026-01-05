@@ -3,10 +3,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { MONTH_LABELS } from '@/types/budget';
-import { ApprovalStep } from '@/types/requests';
+import { ApprovalStep, SpendRequest } from '@/types/requests';
 
 const levelLabels: Record<string, string> = {
   ic: 'IC',
@@ -26,7 +26,14 @@ function ApprovalStepItem({ step }: { step: ApprovalStep }) {
     <div className="flex items-center justify-between py-3 border-b last:border-b-0">
       <div className="flex items-center gap-3">
         {statusIcon[step.status]}
-        <span className="font-medium">{levelLabels[step.level]}</span>
+        <div>
+          <span className="font-medium">{levelLabels[step.level]}</span>
+          {step.updatedAt && (
+            <p className="text-xs text-muted-foreground">
+              {new Date(step.updatedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
       </div>
       <Badge
         variant={
@@ -45,9 +52,67 @@ function ApprovalStepItem({ step }: { step: ApprovalStep }) {
 
 export default function RequestDetail() {
   const { id } = useParams<{ id: string }>();
-  const { getRequest } = useRequests();
+  const { getRequest, updateRequest } = useRequests();
 
   const request = id ? getRequest(id) : undefined;
+
+  const isFinalized = request?.status === 'approved' || request?.status === 'rejected';
+  const hasPendingStep = request?.approvalSteps.some((s) => s.status === 'pending');
+
+  const handleApprove = () => {
+    if (!id || !request) return;
+    updateRequest(id, (r): SpendRequest => {
+      const updatedSteps = [...r.approvalSteps];
+      const pendingIndex = updatedSteps.findIndex((s) => s.status === 'pending');
+      if (pendingIndex === -1) return r;
+
+      updatedSteps[pendingIndex] = {
+        ...updatedSteps[pendingIndex],
+        status: 'approved',
+        updatedAt: new Date().toISOString(),
+      };
+
+      const allApproved = updatedSteps.every((s) => s.status === 'approved');
+      return {
+        ...r,
+        approvalSteps: updatedSteps,
+        status: allApproved ? 'approved' : 'pending',
+      };
+    });
+  };
+
+  const handleReject = () => {
+    if (!id || !request) return;
+    updateRequest(id, (r): SpendRequest => {
+      const updatedSteps = [...r.approvalSteps];
+      const pendingIndex = updatedSteps.findIndex((s) => s.status === 'pending');
+      if (pendingIndex !== -1) {
+        updatedSteps[pendingIndex] = {
+          ...updatedSteps[pendingIndex],
+          status: 'rejected',
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return {
+        ...r,
+        approvalSteps: updatedSteps,
+        status: 'rejected',
+      };
+    });
+  };
+
+  const handleReset = () => {
+    if (!id || !request) return;
+    updateRequest(id, (r): SpendRequest => ({
+      ...r,
+      status: 'pending',
+      approvalSteps: r.approvalSteps.map((s) => ({
+        ...s,
+        status: 'pending',
+        updatedAt: undefined,
+      })),
+    }));
+  };
 
   if (!request) {
     return (
@@ -83,12 +148,34 @@ export default function RequestDetail() {
         title={`Request: ${request.vendorName}`}
         description={`Created ${new Date(request.createdAt).toLocaleDateString()}`}
       >
-        <Button asChild variant="outline">
-          <Link to="/requests">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Link>
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            onClick={handleApprove}
+            disabled={isFinalized || !hasPendingStep}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Approve Next Step
+          </Button>
+          <Button
+            onClick={handleReject}
+            disabled={isFinalized}
+            variant="destructive"
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Reject
+          </Button>
+          <Button onClick={handleReset} variant="outline">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/requests">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Link>
+          </Button>
+        </div>
       </PageHeader>
 
       <div className="grid gap-6 md:grid-cols-2">
