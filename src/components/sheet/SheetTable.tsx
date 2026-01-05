@@ -336,7 +336,8 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                               </TableCell>
                               {canDelete && (
                                 <TableCell className="text-center">
-                                  {item.isContracted ? (
+                                  {/* Allow delete for pending items (cancel request), block for contracted non-pending */}
+                                  {item.isContracted && item.approvalStatus !== 'pending' ? (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
@@ -357,20 +358,34 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                                   ) : (
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            {item.approvalStatus === 'pending' && (
+                                              <TooltipContent>
+                                                <p>Cancel request</p>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
-                                          <AlertDialogTitle>Delete line item?</AlertDialogTitle>
+                                          <AlertDialogTitle>
+                                            {item.approvalStatus === 'pending' ? 'Cancel request?' : 'Delete line item?'}
+                                          </AlertDialogTitle>
                                           <AlertDialogDescription>
-                                            This will permanently delete "{item.name}" from the forecast.
-                                            This action cannot be undone.
+                                            {item.approvalStatus === 'pending'
+                                              ? `This will cancel the pending approval request for "${item.name}" and remove it from the forecast.`
+                                              : `This will permanently delete "${item.name}" from the forecast. This action cannot be undone.`}
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
@@ -384,7 +399,7 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                                               });
                                             }}
                                           >
-                                            Delete
+                                            {item.approvalStatus === 'pending' ? 'Cancel Request' : 'Delete'}
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>
