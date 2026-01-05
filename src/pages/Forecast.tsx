@@ -106,42 +106,52 @@ export default function Forecast() {
   useEffect(() => {
     setCostCenters((prev) => {
       let changed = false;
+      
       const updated = prev.map((cc) => {
-        const updatedItems = cc.lineItems.filter((item) => {
-          if (!item.approvalRequestId) return true;
+        const updatedItems: LineItem[] = [];
+        
+        for (const item of cc.lineItems) {
+          if (!item.approvalRequestId) {
+            updatedItems.push(item);
+            continue;
+          }
           
           const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
-          if (!linkedRequest) return true;
+          if (!linkedRequest) {
+            updatedItems.push(item);
+            continue;
+          }
 
-          if (linkedRequest.status === 'rejected') {
+          // Check if rejected: either status is 'rejected' OR any step is rejected (defensive)
+          const isRejected = 
+            linkedRequest.status === 'rejected' ||
+            linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+
+          if (isRejected) {
             changed = true;
-            return false; // Remove rejected line items
+            // Don't include this item (remove it)
+            continue;
           }
 
-          if (linkedRequest.status === 'approved' && item.approvalStatus === 'pending') {
+          // Check if approved: either status is 'approved' OR all steps approved
+          const isApproved = 
+            linkedRequest.status === 'approved' ||
+            (linkedRequest.approvalSteps?.length > 0 && 
+             linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+
+          if (isApproved && item.approvalStatus === 'pending') {
             changed = true;
-            // Will update status below
+            updatedItems.push({ ...item, approvalStatus: undefined });
+            continue;
           }
 
-          return true;
-        }).map((item) => {
-          if (!item.approvalRequestId) return item;
-
-          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
-          if (!linkedRequest) return item;
-
-          if (linkedRequest.status === 'approved' && item.approvalStatus === 'pending') {
-            return { ...item, approvalStatus: undefined, approvalRequestId: undefined };
-          }
-
-          return item;
-        });
+          updatedItems.push(item);
+        }
 
         if (updatedItems.length !== cc.lineItems.length) {
           return { ...cc, lineItems: updatedItems };
         }
 
-        // Check if any item changed status
         const hasChangedItem = updatedItems.some((item, idx) => item !== cc.lineItems[idx]);
         if (hasChangedItem) {
           return { ...cc, lineItems: updatedItems };
