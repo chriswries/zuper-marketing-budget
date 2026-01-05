@@ -15,9 +15,10 @@ import { formatUSD } from "@/lib/import";
 interface ConfirmStepProps {
   transactions: ImportedTransactionDraft[];
   onBack: () => void;
+  onContinue: () => void;
 }
 
-export function ConfirmStep({ transactions, onBack }: ConfirmStepProps) {
+export function ConfirmStep({ transactions, onBack, onContinue }: ConfirmStepProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -76,9 +77,9 @@ export function ConfirmStep({ transactions, onBack }: ConfirmStepProps) {
       
       {/* Next Steps Info */}
       <div className="bg-muted/50 rounded-lg p-4 text-sm">
-        <p className="font-medium mb-1">Next steps (coming soon):</p>
+        <p className="font-medium mb-1">Next steps:</p>
         <ul className="list-disc list-inside text-muted-foreground space-y-1">
-          <li>Vendor normalization — map raw vendor names to canonical vendors</li>
+          <li><strong>Vendor normalization</strong> — map raw vendor names to canonical vendors</li>
           <li>Line item mapping — assign transactions to budget line items</li>
           <li>Post to Actuals — commit transactions to the actuals sheet</li>
         </ul>
@@ -90,8 +91,8 @@ export function ConfirmStep({ transactions, onBack }: ConfirmStepProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Mapping
         </Button>
-        <Button disabled>
-          Continue to Vendor Normalization (Coming Next)
+        <Button onClick={onContinue}>
+          Continue to Vendor Normalization
         </Button>
       </div>
     </div>
