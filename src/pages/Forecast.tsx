@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
-import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS } from '@/types/budget';
+import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Lock, History, Plus } from 'lucide-react';
+import { useRequests } from '@/contexts/RequestsContext';
+import { createDefaultApprovalSteps } from '@/types/requests';
 
 // Deep clone cost centers to avoid mutating mock data
 function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
@@ -65,6 +67,7 @@ const formatTimestamp = (isoString: string): string => {
 };
 
 export default function Forecast() {
+  const { addRequest } = useRequests();
   const [costCenters, setCostCenters] = useState<CostCenter[]>(() =>
     deepCloneCostCenters(mockCostCenters)
   );
@@ -73,16 +76,54 @@ export default function Forecast() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
+    // Find cost center for request
+    const costCenter = costCenters.find((cc) => cc.id === costCenterId);
+    if (!costCenter) return;
+
+    // Compute request fields from line item
+    const fyTotal = calculateFYTotal(lineItem.forecastValues);
+    const vendorName = lineItem.vendor?.name ?? '—';
+    
+    // Find start/end months (first/last month with spend > 0)
+    const monthsWithSpend = MONTHS.filter((m) => lineItem.forecastValues[m] > 0);
+    const startMonth: Month = monthsWithSpend[0] ?? 'feb';
+    const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
+
+    // Create the spend request
+    const requestId = crypto.randomUUID();
+    const newRequest = {
+      id: requestId,
+      costCenterId,
+      costCenterName: costCenter.name,
+      vendorName,
+      amount: fyTotal,
+      startMonth,
+      endMonth,
+      isContracted: lineItem.isContracted,
+      justification: `New line item: ${lineItem.name}`,
+      status: 'pending' as const,
+      createdAt: new Date().toISOString(),
+      approvalSteps: createDefaultApprovalSteps(),
+    };
+    addRequest(newRequest);
+
+    // Add line item with approval tracking
+    const lineItemWithApproval: LineItem = {
+      ...lineItem,
+      approvalStatus: 'pending',
+      approvalRequestId: requestId,
+    };
+
     setCostCenters((prev) =>
       prev.map((cc) => {
         if (cc.id !== costCenterId) return cc;
         return {
           ...cc,
-          lineItems: [...cc.lineItems, lineItem],
+          lineItems: [...cc.lineItems, lineItemWithApproval],
         };
       })
     );
-  }, []);
+  }, [costCenters, addRequest]);
 
   const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
     setCostCenters((prev) =>
