@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal } from '@/types/budget';
@@ -63,13 +63,8 @@ function saveForecastState(costCenters: CostCenter[]): void {
   }
 }
 
-interface CellChangeArgs {
-  costCenterId: string;
-  lineItemId: string;
-  month: Month;
-  valueType: 'forecastValues';
-  newValue: number;
-}
+// Re-export CellChangeArgs for local use with narrowed type
+type ForecastCellChangeArgs = CellChangeArgs;
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -245,7 +240,7 @@ export default function Forecast() {
       })
     );
   }, [costCenters, updateRequest]);
-  const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
+  const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: ForecastCellChangeArgs) => {
     // Find the old value BEFORE updating state
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
     const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);

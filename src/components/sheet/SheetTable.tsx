@@ -42,11 +42,11 @@ import { EditableCell } from './EditableCell';
 
 type ValueType = 'budgetValues' | 'forecastValues' | 'actualValues';
 
-interface CellChangeArgs {
+export interface CellChangeArgs {
   costCenterId: string;
   lineItemId: string;
   month: Month;
-  valueType: 'forecastValues';
+  valueType: 'forecastValues' | 'budgetValues';
   newValue: number;
 }
 
@@ -59,6 +59,7 @@ interface SheetTableProps {
   costCenters: CostCenter[];
   valueType: ValueType;
   editable?: boolean;
+  showEmptyCostCenters?: boolean;
   onCellChange?: (args: CellChangeArgs) => void;
   onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
   lockedMonths?: Set<Month>;
@@ -90,15 +91,18 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, onCellChange, onDeleteLineItem, lockedMonths }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths }: SheetTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
 
-  // Determine if editing is enabled
-  const isEditable = editable && valueType === 'forecastValues' && !!onCellChange;
-  // Determine if delete is enabled
-  const canDelete = editable && valueType === 'forecastValues' && !!onDeleteLineItem;
+  // Determine if editing is enabled (supports forecastValues and budgetValues)
+  const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange;
+  // Determine if delete is enabled (supports forecastValues and budgetValues)
+  const canDelete = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onDeleteLineItem;
+
+  // Check if any filter is active
+  const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly;
 
   // Filter cost centers and line items
   const filteredCostCenters = useMemo(() => {
@@ -122,8 +126,15 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
 
         return { ...cc, lineItems: filteredItems };
       })
-      .filter((cc) => cc.lineItems.length > 0); // Hide empty cost centers
-  }, [costCenters, searchQuery, contractedOnly]);
+      .filter((cc) => {
+        // If filter is active, hide empty cost centers
+        if (hasActiveFilter) return cc.lineItems.length > 0;
+        // If no filter and showEmptyCostCenters is true, keep all cost centers
+        if (showEmptyCostCenters) return true;
+        // Otherwise hide empty
+        return cc.lineItems.length > 0;
+      });
+  }, [costCenters, searchQuery, contractedOnly, hasActiveFilter, showEmptyCostCenters]);
 
   // Compute grand total from visible data
   const grandTotal = useMemo(() => {
@@ -301,7 +312,8 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                               </TableCell>
                               {MONTHS.map((month) => {
                                 const cellValue = item[valueType][month];
-                                const isMonthLocked = lockedMonths?.has(month);
+                                // Only apply locked months logic for forecastValues (not budgetValues)
+                                const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
                                 
                                 if (isEditable && !isMonthLocked) {
                                   return (
@@ -314,7 +326,7 @@ export function SheetTable({ costCenters, valueType, editable = false, onCellCha
                                           costCenterId: costCenter.id,
                                           lineItemId: item.id,
                                           month,
-                                          valueType: 'forecastValues',
+                                          valueType: valueType as 'forecastValues' | 'budgetValues',
                                           newValue,
                                         });
                                       }}
