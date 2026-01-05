@@ -7,8 +7,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
 
 export function AppHeader() {
+  const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId } = useFiscalYearBudget();
+
+  const hasBudgets = fiscalYears.length > 0;
+
   return (
     <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-4">
       <SidebarTrigger />
@@ -20,16 +25,25 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Select defaultValue="fy26">
-          <SelectTrigger className="w-[120px] h-8 text-sm">
-            <SelectValue placeholder="Fiscal Year" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fy25">FY25</SelectItem>
-            <SelectItem value="fy26">FY26</SelectItem>
-            <SelectItem value="fy27">FY27</SelectItem>
-          </SelectContent>
-        </Select>
+        {hasBudgets ? (
+          <Select 
+            value={selectedFiscalYearId ?? undefined} 
+            onValueChange={setSelectedFiscalYearId}
+          >
+            <SelectTrigger className="w-[120px] h-8 text-sm">
+              <SelectValue placeholder="Select FY" />
+            </SelectTrigger>
+            <SelectContent>
+              {fiscalYears.map((fy) => (
+                <SelectItem key={fy.id} value={fy.id}>
+                  {fy.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="text-sm text-muted-foreground">No budgets created</span>
+        )}
 
         <Badge variant="secondary" className="hidden sm:flex">
           Marketing Admin
