@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
@@ -67,7 +67,7 @@ const formatTimestamp = (isoString: string): string => {
 };
 
 export default function Forecast() {
-  const { addRequest } = useRequests();
+  const { requests, addRequest, updateRequest } = useRequests();
   const [costCenters, setCostCenters] = useState<CostCenter[]>(() =>
     deepCloneCostCenters(mockCostCenters)
   );
@@ -75,6 +75,57 @@ export default function Forecast() {
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 
+  // Sync line item approval status with request status
+  useEffect(() => {
+    setCostCenters((prev) => {
+      let changed = false;
+      const updated = prev.map((cc) => {
+        const updatedItems = cc.lineItems.filter((item) => {
+          if (!item.approvalRequestId) return true;
+          
+          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
+          if (!linkedRequest) return true;
+
+          if (linkedRequest.status === 'rejected') {
+            changed = true;
+            return false; // Remove rejected line items
+          }
+
+          if (linkedRequest.status === 'approved' && item.approvalStatus === 'pending') {
+            changed = true;
+            // Will update status below
+          }
+
+          return true;
+        }).map((item) => {
+          if (!item.approvalRequestId) return item;
+
+          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
+          if (!linkedRequest) return item;
+
+          if (linkedRequest.status === 'approved' && item.approvalStatus === 'pending') {
+            return { ...item, approvalStatus: undefined, approvalRequestId: undefined };
+          }
+
+          return item;
+        });
+
+        if (updatedItems.length !== cc.lineItems.length) {
+          return { ...cc, lineItems: updatedItems };
+        }
+
+        // Check if any item changed status
+        const hasChangedItem = updatedItems.some((item, idx) => item !== cc.lineItems[idx]);
+        if (hasChangedItem) {
+          return { ...cc, lineItems: updatedItems };
+        }
+
+        return cc;
+      });
+
+      return changed || updated.some((cc, idx) => cc !== prev[idx]) ? updated : prev;
+    });
+  }, [requests]);
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
     // Find cost center for request
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
@@ -126,6 +177,27 @@ export default function Forecast() {
   }, [costCenters, addRequest]);
 
   const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
+    // Find the line item to check if we need to cancel a request
+    const costCenter = costCenters.find((cc) => cc.id === costCenterId);
+    const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
+
+    // If this is a pending line item with a linked request, reject the request
+    if (lineItem?.approvalStatus === 'pending' && lineItem.approvalRequestId) {
+      updateRequest(lineItem.approvalRequestId, (request) => ({
+        ...request,
+        status: 'rejected',
+        approvalSteps: request.approvalSteps.map((step, idx) => {
+          // Find the first pending step and reject it
+          if (idx === 0 || request.approvalSteps.slice(0, idx).every((s) => s.status === 'approved')) {
+            if (step.status === 'pending') {
+              return { ...step, status: 'rejected' as const, updatedAt: new Date().toISOString() };
+            }
+          }
+          return step;
+        }),
+      }));
+    }
+
     setCostCenters((prev) =>
       prev.map((cc) => {
         if (cc.id !== costCenterId) return cc;
@@ -135,7 +207,7 @@ export default function Forecast() {
         };
       })
     );
-  }, []);
+  }, [costCenters, updateRequest]);
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
     // Find the old value BEFORE updating state
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
