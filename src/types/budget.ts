@@ -55,6 +55,9 @@ export interface LineItem {
   budgetValues: MonthlyValues; // Original budget (locked)
   forecastValues: MonthlyValues; // Editable forecast
   actualValues: MonthlyValues; // From imports
+  // Approval tracking (optional to avoid breaking mock data)
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  approvalRequestId?: string;
 }
 
 export interface CostCenter {

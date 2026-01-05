@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,25 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search } from 'lucide-react';
+import { Search, Info } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
-import { CreateRequestDialog } from '@/components/requests/CreateRequestDialog';
 import { MONTH_LABELS } from '@/types/budget';
-import { mockCostCenters } from '@/data/mock-budget-data';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
 export default function Requests() {
   const navigate = useNavigate();
-  const { requests, addRequest } = useRequests();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const { requests } = useRequests();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  const costCenterOptions = mockCostCenters.map((cc) => ({
-    id: cc.id,
-    name: cc.name,
-  }));
 
   const filteredRequests = useMemo(() => {
     return requests
@@ -72,13 +65,18 @@ export default function Requests() {
     <div>
       <PageHeader
         title="Spend Requests"
-        description="Submit and track approval requests for new spend or changes that exceed limits."
-      >
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Request
-        </Button>
-      </PageHeader>
+        description="Track approval requests for new spend or changes that exceed limits."
+      />
+
+      <Alert className="mb-4">
+        <Info className="h-4 w-4" />
+        <AlertDescription className="flex items-center justify-between">
+          <span>Requests are initiated from Forecast when adding a new line item.</span>
+          <Button variant="link" asChild className="p-0 h-auto">
+            <Link to="/forecast">Go to Forecast</Link>
+          </Button>
+        </AlertDescription>
+      </Alert>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)} className="w-full sm:w-auto">
@@ -112,7 +110,7 @@ export default function Requests() {
             <div className="p-6 text-center text-muted-foreground">
               <p>No spend requests yet.</p>
               <p className="text-sm mt-1">
-                Click "Create Request" to submit a new spend request for approval.
+                Add a new line item in the Forecast to create a spend request.
               </p>
             </div>
           ) : filteredRequests.length === 0 ? (
@@ -164,13 +162,6 @@ export default function Requests() {
           )}
         </CardContent>
       </Card>
-
-      <CreateRequestDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        costCenters={costCenterOptions}
-        onCreateRequest={addRequest}
-      />
     </div>
   );
 }
