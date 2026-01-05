@@ -83,6 +83,18 @@ export default function Forecast() {
       })
     );
   }, []);
+
+  const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.filter((item) => item.id !== lineItemId),
+        };
+      })
+    );
+  }, []);
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
     // Find the old value BEFORE updating state
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
@@ -260,6 +272,7 @@ export default function Forecast() {
         valueType="forecastValues"
         editable={true}
         onCellChange={handleCellChange}
+        onDeleteLineItem={handleDeleteLineItem}
         lockedMonths={lockedMonths}
       />
 
