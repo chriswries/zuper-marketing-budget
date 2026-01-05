@@ -11,7 +11,7 @@ export interface ParsedImportData {
   errors: string[];
 }
 
-export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm' | 'vendors';
+export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm' | 'vendors' | 'line_items';
 
 export interface ColumnMapping {
   dateColumn: string;
@@ -54,4 +54,21 @@ export interface MappingResult {
   mapping: ColumnMapping;
   transactions: ImportedTransactionDraft[];
   errors: MappingValidationError[];
+}
+
+export interface ImportedTransactionMapped extends ImportedTransactionWithVendor {
+  costCenterId: string;
+  costCenterName: string;
+  lineItemId: string;
+  lineItemName: string;
+}
+
+export type VendorToLineItemMap = Record<string, string>; // canonicalVendorId -> lineItemId
+
+export interface LineItemOption {
+  lineItemId: string;
+  lineItemName: string;
+  costCenterId: string;
+  costCenterName: string;
+  vendorName?: string;
 }

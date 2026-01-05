@@ -6,6 +6,7 @@ import { PreviewStep } from "./PreviewStep";
 import { MappingStep } from "./MappingStep";
 import { ConfirmStep } from "./ConfirmStep";
 import { VendorNormalizationStep } from "./VendorNormalizationStep";
+import { LineItemMappingStep } from "./LineItemMappingStep";
 import type { 
   ImportWizardStep, 
   ParsedImportData, 
@@ -13,10 +14,13 @@ import type {
   ColumnMapping,
   ImportedTransactionDraft,
   ImportedTransactionWithVendor,
-  CanonicalVendor
+  ImportedTransactionMapped,
+  CanonicalVendor,
+  VendorToLineItemMap,
+  LineItemOption
 } from "@/types/import";
 import { cn } from "@/lib/utils";
-import { mockVendors } from "@/data/mock-budget-data";
+import { mockVendors, mockCostCenters } from "@/data/mock-budget-data";
 
 const STEPS: { key: ImportWizardStep; label: string }[] = [
   { key: "upload", label: "Upload" },
@@ -24,6 +28,7 @@ const STEPS: { key: ImportWizardStep; label: string }[] = [
   { key: "mapping", label: "Mapping" },
   { key: "confirm", label: "Confirm" },
   { key: "vendors", label: "Vendors" },
+  { key: "line_items", label: "Line Items" },
 ];
 
 export function ImportWizard() {
@@ -35,6 +40,8 @@ export function ImportWizard() {
   const [vendorMappings, setVendorMappings] = useState<Record<string, string>>({});
   const [vendorNormalizedTransactions, setVendorNormalizedTransactions] = useState<ImportedTransactionWithVendor[]>([]);
   const [canonicalVendors, setCanonicalVendors] = useState<CanonicalVendor[]>([]);
+  const [lineItemMappings, setLineItemMappings] = useState<VendorToLineItemMap>({});
+  const [lineItemMappedTransactions, setLineItemMappedTransactions] = useState<ImportedTransactionMapped[]>([]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
@@ -45,6 +52,27 @@ export function ImportWizard() {
       name: v.name,
     }));
     return vendors.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  // Build line item options from mock cost centers
+  const lineItemOptions: LineItemOption[] = useMemo(() => {
+    const options: LineItemOption[] = [];
+    for (const cc of mockCostCenters) {
+      for (const li of cc.lineItems) {
+        options.push({
+          lineItemId: li.id,
+          lineItemName: li.name,
+          costCenterId: cc.id,
+          costCenterName: cc.name,
+          vendorName: li.vendor?.name,
+        });
+      }
+    }
+    return options.sort((a, b) => {
+      const ccCompare = a.costCenterName.localeCompare(b.costCenterName);
+      if (ccCompare !== 0) return ccCompare;
+      return a.lineItemName.localeCompare(b.lineItemName);
+    });
   }, []);
 
   const parseFile = (file: File): Promise<ParsedImportData> => {
@@ -121,7 +149,20 @@ export function ImportWizard() {
     setVendorMappings(result.vendorMappings);
     setVendorNormalizedTransactions(result.transactions);
     setCanonicalVendors(result.canonicalVendors);
-    // Next step would be line item mapping - for now just stay on vendors
+    setCurrentStep("line_items");
+  };
+
+  const handleBackToVendors = () => {
+    setCurrentStep("vendors");
+  };
+
+  const handleLineItemMappingComplete = (result: {
+    lineItemMappings: VendorToLineItemMap;
+    transactions: ImportedTransactionMapped[];
+  }) => {
+    setLineItemMappings(result.lineItemMappings);
+    setLineItemMappedTransactions(result.transactions);
+    // Next step would be posting to actuals - for now stay on line_items
   };
 
   const handleFileSelect = (selectedFile: File | null) => {
@@ -132,6 +173,8 @@ export function ImportWizard() {
       setNormalizedTransactions([]);
       setVendorMappings({});
       setVendorNormalizedTransactions([]);
+      setLineItemMappings({});
+      setLineItemMappedTransactions([]);
     }
   };
 
@@ -206,13 +249,22 @@ export function ImportWizard() {
               onContinue={handleContinueToVendors}
             />
           )}
-          {currentStep === "vendors" && (
+          {currentStep === "vendors" && normalizedTransactions.length > 0 && (
             <VendorNormalizationStep
               transactions={normalizedTransactions}
               canonicalVendors={canonicalVendors.length > 0 ? canonicalVendors : initialCanonicalVendors}
               initialMappings={vendorMappings}
               onBack={handleBackToConfirm}
               onContinue={handleVendorNormalizationComplete}
+            />
+          )}
+          {currentStep === "line_items" && vendorNormalizedTransactions.length > 0 && (
+            <LineItemMappingStep
+              transactions={vendorNormalizedTransactions}
+              lineItemOptions={lineItemOptions}
+              initialMappings={lineItemMappings}
+              onBack={handleBackToVendors}
+              onContinue={handleLineItemMappingComplete}
             />
           )}
         </CardContent>
