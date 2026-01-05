@@ -11,7 +11,7 @@ export interface ParsedImportData {
   errors: string[];
 }
 
-export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm' | 'vendors' | 'line_items';
+export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm' | 'vendors' | 'line_items' | 'post';
 
 export interface ColumnMapping {
   dateColumn: string;

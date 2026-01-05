@@ -7,6 +7,7 @@ import { MappingStep } from "./MappingStep";
 import { ConfirmStep } from "./ConfirmStep";
 import { VendorNormalizationStep } from "./VendorNormalizationStep";
 import { LineItemMappingStep } from "./LineItemMappingStep";
+import { PostToActualsStep } from "./PostToActualsStep";
 import type { 
   ImportWizardStep, 
   ParsedImportData, 
@@ -29,6 +30,7 @@ const STEPS: { key: ImportWizardStep; label: string }[] = [
   { key: "confirm", label: "Confirm" },
   { key: "vendors", label: "Vendors" },
   { key: "line_items", label: "Line Items" },
+  { key: "post", label: "Post" },
 ];
 
 export function ImportWizard() {
@@ -42,6 +44,7 @@ export function ImportWizard() {
   const [canonicalVendors, setCanonicalVendors] = useState<CanonicalVendor[]>([]);
   const [lineItemMappings, setLineItemMappings] = useState<VendorToLineItemMap>({});
   const [lineItemMappedTransactions, setLineItemMappedTransactions] = useState<ImportedTransactionMapped[]>([]);
+  const [postedBatchId, setPostedBatchId] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
@@ -162,7 +165,15 @@ export function ImportWizard() {
   }) => {
     setLineItemMappings(result.lineItemMappings);
     setLineItemMappedTransactions(result.transactions);
-    // Next step would be posting to actuals - for now stay on line_items
+    setCurrentStep("post");
+  };
+
+  const handleBackToLineItems = () => {
+    setCurrentStep("line_items");
+  };
+
+  const handlePosted = (batchId: string) => {
+    setPostedBatchId(batchId);
   };
 
   const handleFileSelect = (selectedFile: File | null) => {
@@ -265,6 +276,14 @@ export function ImportWizard() {
               initialMappings={lineItemMappings}
               onBack={handleBackToVendors}
               onContinue={handleLineItemMappingComplete}
+            />
+          )}
+          {currentStep === "post" && lineItemMappedTransactions.length > 0 && (
+            <PostToActualsStep
+              transactions={lineItemMappedTransactions}
+              fileName={file?.name}
+              onBack={handleBackToLineItems}
+              onPosted={handlePosted}
             />
           )}
         </CardContent>
