@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -12,11 +15,11 @@ import {
 } from '@/components/ui/table';
 import {
   CostCenter,
+  LineItem,
   MONTHS,
   MONTH_LABELS,
   Month,
   calculateFYTotal,
-  calculateCostCenterRollup,
 } from '@/types/budget';
 
 type ValueType = 'budgetValues' | 'forecastValues' | 'actualValues';
@@ -35,10 +38,54 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
+// Helper to calculate rollup from a subset of line items
+function calculateFilteredRollup(
+  lineItems: LineItem[],
+  valueType: ValueType
+): Record<Month, number> {
+  const rollup: Record<Month, number> = {
+    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
+    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
+  };
+  for (const item of lineItems) {
+    for (const month of MONTHS) {
+      rollup[month] += item[valueType][month] || 0;
+    }
+  }
+  return rollup;
+}
+
 export function SheetTable({ costCenters, valueType }: SheetTableProps) {
   const [expandedCostCenters, setExpandedCostCenters] = useState<Set<string>>(
     () => new Set(costCenters.map((cc) => cc.id))
   );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [contractedOnly, setContractedOnly] = useState(false);
+
+  // Filter line items based on search and contracted toggle
+  const filteredCostCenters = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+
+    return costCenters
+      .map((cc) => {
+        const filteredItems = cc.lineItems.filter((item) => {
+          // Contracted filter
+          if (contractedOnly && !item.isContracted) return false;
+
+          // Search filter (name or vendor)
+          if (query) {
+            const nameMatch = item.name.toLowerCase().includes(query);
+            const vendorMatch = item.vendor?.name.toLowerCase().includes(query) ?? false;
+            if (!nameMatch && !vendorMatch) return false;
+          }
+
+          return true;
+        });
+
+        return { ...cc, lineItems: filteredItems };
+      })
+      .filter((cc) => cc.lineItems.length > 0); // Hide empty cost centers
+  }, [costCenters, searchQuery, contractedOnly]);
 
   const toggleCostCenter = (id: string) => {
     setExpandedCostCenters((prev) => {
@@ -53,38 +100,60 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
   };
 
   const expandAll = () => {
-    setExpandedCostCenters(new Set(costCenters.map((cc) => cc.id)));
+    setExpandedCostCenters(new Set(filteredCostCenters.map((cc) => cc.id)));
   };
 
   const collapseAll = () => {
     setExpandedCostCenters(new Set());
   };
 
-  const allExpanded = expandedCostCenters.size === costCenters.length;
+  const allExpanded = filteredCostCenters.length > 0 && 
+    filteredCostCenters.every((cc) => expandedCostCenters.has(cc.id));
 
-  // Calculate grand totals
+  // Calculate grand totals from filtered data
   const grandTotals = useMemo(() => {
     const totals: Record<Month, number> = {
       feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
       aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
     };
-    
-    for (const cc of costCenters) {
-      const rollup = calculateCostCenterRollup(cc.lineItems, valueType);
+
+    for (const cc of filteredCostCenters) {
+      const rollup = calculateFilteredRollup(cc.lineItems, valueType);
       for (const month of MONTHS) {
         totals[month] += rollup[month];
       }
     }
-    
+
     return totals;
-  }, [costCenters, valueType]);
+  }, [filteredCostCenters, valueType]);
 
   const grandFYTotal = calculateFYTotal(grandTotals);
 
   return (
     <div className="space-y-3">
       {/* Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search items or vendors..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 w-[220px]"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Switch
+            id="contracted-only"
+            checked={contractedOnly}
+            onCheckedChange={setContractedOnly}
+          />
+          <Label htmlFor="contracted-only" className="text-sm cursor-pointer">
+            Contracted only
+          </Label>
+        </div>
+
         <Button
           variant="outline"
           size="sm"
@@ -94,6 +163,12 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
           <ChevronsUpDown className="h-4 w-4" />
           {allExpanded ? 'Collapse All' : 'Expand All'}
         </Button>
+
+        {(searchQuery || contractedOnly) && (
+          <span className="text-sm text-muted-foreground">
+            Showing {filteredCostCenters.reduce((sum, cc) => sum + cc.lineItems.length, 0)} items
+          </span>
+        )}
       </div>
 
       {/* Table */}
@@ -119,9 +194,9 @@ export function SheetTable({ costCenters, valueType }: SheetTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {costCenters.map((costCenter) => {
+            {filteredCostCenters.map((costCenter) => {
               const isExpanded = expandedCostCenters.has(costCenter.id);
-              const rollup = calculateCostCenterRollup(costCenter.lineItems, valueType);
+              const rollup = calculateFilteredRollup(costCenter.lineItems, valueType);
               const fyTotal = calculateFYTotal(rollup);
 
               return (
