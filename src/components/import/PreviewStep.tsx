@@ -14,11 +14,12 @@ import type { ParsedImportData } from "@/types/import";
 interface PreviewStepProps {
   data: ParsedImportData;
   onBack: () => void;
+  onContinue: () => void;
 }
 
 const MAX_PREVIEW_ROWS = 25;
 
-export function PreviewStep({ data, onBack }: PreviewStepProps) {
+export function PreviewStep({ data, onBack, onContinue }: PreviewStepProps) {
   const { headers, rows, errors } = data;
   const previewRows = rows.slice(0, MAX_PREVIEW_ROWS);
   const hasMoreRows = rows.length > MAX_PREVIEW_ROWS;
@@ -99,8 +100,8 @@ export function PreviewStep({ data, onBack }: PreviewStepProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Upload
         </Button>
-        <Button disabled>
-          Continue to Mapping (Coming Soon)
+        <Button onClick={onContinue} disabled={rows.length === 0}>
+          Continue to Mapping
         </Button>
       </div>
     </div>

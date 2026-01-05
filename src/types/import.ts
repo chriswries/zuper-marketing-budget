@@ -1,3 +1,5 @@
+import type { Month } from './budget';
+
 export interface RawImportedRow {
   rowIndex: number;
   raw: Record<string, string>;
@@ -10,3 +12,31 @@ export interface ParsedImportData {
 }
 
 export type ImportWizardStep = 'upload' | 'preview' | 'mapping' | 'confirm';
+
+export interface ColumnMapping {
+  dateColumn: string;
+  amountColumn: string;
+  vendorColumn: string;
+  memoColumn?: string;
+  amountSignMode: 'expenses_negative' | 'expenses_positive';
+}
+
+export interface ImportedTransactionDraft {
+  rowIndex: number;
+  transactionDate: string;
+  amount: number;
+  rawVendorName: string;
+  memo?: string;
+  recognizedMonth: Month;
+}
+
+export interface MappingValidationError {
+  rowIndex: number;
+  message: string;
+}
+
+export interface MappingResult {
+  mapping: ColumnMapping;
+  transactions: ImportedTransactionDraft[];
+  errors: MappingValidationError[];
+}
