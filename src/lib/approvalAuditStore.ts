@@ -69,6 +69,7 @@ export function appendApprovalAudit(
   store[entityType][entityId] = store[entityType][entityId].slice(0, 50);
   
   saveStore(store);
+  dispatchAuditUpdated();
   return fullEvent;
 }
 
@@ -156,4 +157,32 @@ export function formatAuditTimestamp(isoString: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// Global loader for all audit events across all entities
+export function loadAllApprovalAuditEvents(): ApprovalAuditEvent[] {
+  const store = loadStore();
+  const allEvents: ApprovalAuditEvent[] = [];
+
+  // Flatten request events
+  for (const entityId of Object.keys(store.request)) {
+    allEvents.push(...store.request[entityId]);
+  }
+
+  // Flatten budget events
+  for (const entityId of Object.keys(store.budget)) {
+    allEvents.push(...store.budget[entityId]);
+  }
+
+  // Sort by timestamp descending (newest first)
+  allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  return allEvents;
+}
+
+// Custom event for same-tab updates
+export const APPROVAL_AUDIT_UPDATED_EVENT = 'approval-audit-updated';
+
+function dispatchAuditUpdated(): void {
+  window.dispatchEvent(new CustomEvent(APPROVAL_AUDIT_UPDATED_EVENT));
 }
