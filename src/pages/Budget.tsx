@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
@@ -123,6 +124,7 @@ function getStepIcon(status: 'pending' | 'approved' | 'rejected') {
 }
 
 export default function Budget() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget } = useFiscalYearBudget();
   const { requests, addRequest, updateRequest } = useRequests();
   const { settings: adminSettings } = useAdminSettings();
@@ -131,6 +133,20 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+
+  // Focus props from URL params
+  const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
+  const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
+
+  const handleFocusLineItemNotFound = useCallback(() => {
+    toast({
+      title: 'Line item not found',
+      description: 'This line item no longer exists (may have been rejected or deleted).',
+      variant: 'destructive',
+    });
+    // Clear the focus params
+    setSearchParams({});
+  }, [setSearchParams]);
 
   // Check if budget is editable
   const isEditable = useMemo(() => {
@@ -544,7 +560,7 @@ export default function Budget() {
         const startMonth: Month = monthsWithSpend[0] ?? 'feb';
         const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
 
-        // Create the spend request
+        // Create the spend request with origin metadata
         const requestId = crypto.randomUUID();
         const newRequest = {
           id: requestId,
@@ -559,6 +575,12 @@ export default function Budget() {
           status: 'pending' as const,
           createdAt: new Date().toISOString(),
           approvalSteps: createDefaultApprovalSteps(),
+          // Origin metadata for deep linking
+          originSheet: 'budget' as const,
+          originFiscalYearId: selectedFiscalYearId,
+          originCostCenterId: costCenterId,
+          originLineItemId: lineItemId,
+          originKind: 'adjustment' as const,
         };
         addRequest(newRequest);
 
@@ -691,7 +713,7 @@ export default function Budget() {
       const startMonth: Month = monthsWithSpend[0] ?? 'feb';
       const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
 
-      // Create the spend request
+      // Create the spend request with origin metadata
       const requestId = crypto.randomUUID();
       const newRequest = {
         id: requestId,
@@ -706,6 +728,12 @@ export default function Budget() {
         status: 'pending' as const,
         createdAt: new Date().toISOString(),
         approvalSteps: createDefaultApprovalSteps(),
+        // Origin metadata for deep linking
+        originSheet: 'budget' as const,
+        originFiscalYearId: selectedFiscalYearId,
+        originCostCenterId: costCenterId,
+        originLineItemId: lineItem.id,
+        originKind: 'new_line_item' as const,
       };
       addRequest(newRequest);
 
@@ -1027,6 +1055,9 @@ export default function Budget() {
         onDeleteLineItem={handleDeleteLineItem}
         renderCostCenterFYMeta={renderCostCenterFYMeta}
         renderGrandTotalFYMeta={renderGrandTotalFYMeta}
+        focusCostCenterId={focusCostCenterId}
+        focusLineItemId={focusLineItemId}
+        onFocusLineItemNotFound={handleFocusLineItemNotFound}
       />
 
       <AddLineItemDialog

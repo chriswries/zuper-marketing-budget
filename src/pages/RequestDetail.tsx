@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadsheet } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
+import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { MONTH_LABELS } from '@/types/budget';
 import { ApprovalStep, SpendRequest } from '@/types/requests';
 
@@ -58,8 +59,10 @@ function ApprovalStepItem({ step }: { step: ApprovalStep }) {
 
 export default function RequestDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { getRequest, updateRequest } = useRequests();
   const { currentRole } = useCurrentUserRole();
+  const { setSelectedFiscalYearId } = useFiscalYearBudget();
 
   const request = id ? getRequest(id) : undefined;
 
@@ -70,6 +73,32 @@ export default function RequestDetail() {
   // Role gating: only the role matching the next pending step can approve/reject
   const canApproveReject = hasPendingStep && nextPendingStep?.level === currentRole;
   const roleCannotApprove = currentRole === 'admin' || (hasPendingStep && nextPendingStep?.level !== currentRole);
+
+  // Deep linking: navigate to origin line item
+  const hasOrigin = request?.originSheet && request?.originLineItemId;
+  
+  const handleViewInSheet = () => {
+    if (!request?.originSheet || !request?.originLineItemId) return;
+
+    // If there's a fiscal year, select it first
+    if (request.originFiscalYearId) {
+      setSelectedFiscalYearId(request.originFiscalYearId);
+    }
+
+    const params = new URLSearchParams();
+    if (request.originCostCenterId) params.set('focusCostCenterId', request.originCostCenterId);
+    params.set('focusLineItemId', request.originLineItemId);
+
+    if (request.originSheet === 'budget') {
+      navigate(`/budget?${params.toString()}`);
+    } else {
+      // For forecast, handle legacy mode
+      if (request.originFiscalYearId === null) {
+        params.set('forecastMode', 'legacy');
+      }
+      navigate(`/forecast?${params.toString()}`);
+    }
+  };
 
   const handleApprove = () => {
     if (!id || !request || !canApproveReject) return;
@@ -165,6 +194,12 @@ export default function RequestDetail() {
         description={`Created ${new Date(request.createdAt).toLocaleDateString()}`}
       >
         <div className="flex gap-2 flex-wrap">
+          {hasOrigin && (
+            <Button onClick={handleViewInSheet} variant="outline">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              View in {request.originSheet === 'budget' ? 'Budget' : 'Forecast'}
+            </Button>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <span>

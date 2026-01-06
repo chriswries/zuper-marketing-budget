@@ -11,6 +11,9 @@ export interface ApprovalStep {
   comment?: string;
 }
 
+export type OriginSheet = 'budget' | 'forecast';
+export type OriginKind = 'new_line_item' | 'adjustment';
+
 export interface SpendRequest {
   id: string;
   costCenterId: string;
@@ -24,6 +27,12 @@ export interface SpendRequest {
   status: RequestStatus;
   createdAt: string;
   approvalSteps: ApprovalStep[];
+  // Origin metadata for deep linking
+  originSheet?: OriginSheet;
+  originFiscalYearId?: string | null;
+  originCostCenterId?: string;
+  originLineItemId?: string;
+  originKind?: OriginKind;
 }
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
