@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
 import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
-import { CalendarPlus, ShieldCheck, UserCog } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -24,6 +25,7 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 export default function Admin() {
+  const navigate = useNavigate();
   const [wizardOpen, setWizardOpen] = useState(false);
   const { settings, updateSettings } = useAdminSettings();
   const { currentRole, setCurrentRole } = useCurrentUserRole();
@@ -157,6 +159,24 @@ export default function Admin() {
               Example: With ${settings.increaseApprovalAbsoluteUsd.toLocaleString()} and {settings.increaseApprovalPercent}%, 
               a line item with $100,000 FY total would require approval for increases over ${Math.max(settings.increaseApprovalAbsoluteUsd, 100000 * (settings.increaseApprovalPercent / 100)).toLocaleString()}.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Audit Log */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Audit Log</CardTitle>
+            </div>
+            <CardDescription>
+              View approval and notification activity across budgets and requests.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => navigate('/audit')}>
+              Open Audit Log
+            </Button>
           </CardContent>
         </Card>
 
