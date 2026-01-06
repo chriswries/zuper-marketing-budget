@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -23,8 +25,10 @@ import {
 import { Search, Info, FileSpreadsheet } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { MONTH_LABELS } from '@/types/budget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getNextPendingStep, getApproverLabel, canRoleApproveRequest } from '@/lib/requestApprovals';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -32,8 +36,10 @@ export default function Requests() {
   const navigate = useNavigate();
   const { requests } = useRequests();
   const { setSelectedFiscalYearId } = useFiscalYearBudget();
+  const { currentRole } = useCurrentUserRole();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [needsMyApproval, setNeedsMyApproval] = useState(false);
 
   const handleViewInSheet = (request: typeof requests[0]) => {
     if (!request.originSheet || !request.originLineItemId) return;
@@ -58,6 +64,11 @@ export default function Requests() {
     }
   };
 
+  // Count of requests that need current user's approval
+  const needsMyApprovalCount = useMemo(() => {
+    return requests.filter(r => canRoleApproveRequest(r, currentRole)).length;
+  }, [requests, currentRole]);
+
   const filteredRequests = useMemo(() => {
     return requests
       .filter((request) => {
@@ -74,12 +85,16 @@ export default function Requests() {
             return false;
           }
         }
+        // Needs my approval filter
+        if (needsMyApproval && !canRoleApproveRequest(request, currentRole)) {
+          return false;
+        }
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [requests, statusFilter, searchQuery]);
+  }, [requests, statusFilter, searchQuery, needsMyApproval, currentRole]);
 
-  const isFiltered = statusFilter !== 'all' || searchQuery.trim() !== '';
+  const isFiltered = statusFilter !== 'all' || searchQuery.trim() !== '' || needsMyApproval;
 
   const statusVariant = (status: string) => {
     switch (status) {
@@ -97,7 +112,13 @@ export default function Requests() {
       <PageHeader
         title="Spend Requests"
         description="Track approval requests for new spend or changes that exceed limits."
-      />
+      >
+        {needsMyApprovalCount > 0 && currentRole !== 'admin' && (
+          <Badge variant="secondary" className="text-sm">
+            Waiting on you: {needsMyApprovalCount}
+          </Badge>
+        )}
+      </PageHeader>
 
       <Alert className="mb-4">
         <Info className="h-4 w-4" />
@@ -109,7 +130,7 @@ export default function Requests() {
         </AlertDescription>
       </Alert>
 
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+      <div className="flex flex-col sm:flex-row gap-4 mb-4 items-start sm:items-center">
         <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)} className="w-full sm:w-auto">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
@@ -118,6 +139,20 @@ export default function Requests() {
             <TabsTrigger value="rejected">Rejected</TabsTrigger>
           </TabsList>
         </Tabs>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="needsMyApproval"
+            checked={needsMyApproval}
+            onCheckedChange={(checked) => setNeedsMyApproval(!!checked)}
+            disabled={currentRole === 'admin'}
+          />
+          <Label 
+            htmlFor="needsMyApproval" 
+            className={currentRole === 'admin' ? 'text-muted-foreground' : 'cursor-pointer'}
+          >
+            Needs my approval
+          </Label>
+        </div>
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -156,6 +191,7 @@ export default function Requests() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Status</TableHead>
+                  <TableHead>Next Approver</TableHead>
                   <TableHead>Cost Center</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -175,6 +211,16 @@ export default function Requests() {
                       <Badge variant={statusVariant(request.status)}>
                         {request.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const nextStep = getNextPendingStep(request);
+                        return nextStep ? (
+                          <Badge variant="outline">{getApproverLabel(nextStep.level)}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>{request.costCenterName}</TableCell>
                     <TableCell>{request.vendorName}</TableCell>
