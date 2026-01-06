@@ -18,6 +18,7 @@ import Tasks from "./pages/Tasks";
 import Import from "./pages/Import";
 import Admin from "./pages/Admin";
 import ApprovalAudit from "./pages/ApprovalAudit";
+import VarianceReport from "./pages/VarianceReport";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
                     <Route path="/import" element={<Import />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/audit" element={<ApprovalAudit />} />
+                    <Route path="/reports/variance" element={<VarianceReport />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </AppLayout>
