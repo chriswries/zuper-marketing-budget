@@ -3,8 +3,15 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
+import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { MONTH_LABELS } from '@/types/budget';
 import { ApprovalStep, SpendRequest } from '@/types/requests';
 
@@ -52,14 +59,20 @@ function ApprovalStepItem({ step }: { step: ApprovalStep }) {
 export default function RequestDetail() {
   const { id } = useParams<{ id: string }>();
   const { getRequest, updateRequest } = useRequests();
+  const { currentRole } = useCurrentUserRole();
 
   const request = id ? getRequest(id) : undefined;
 
   const isFinalized = request?.status === 'approved' || request?.status === 'rejected';
-  const hasPendingStep = request?.approvalSteps.some((s) => s.status === 'pending');
+  const nextPendingStep = request?.approvalSteps.find((s) => s.status === 'pending');
+  const hasPendingStep = !!nextPendingStep;
+
+  // Role gating: only the role matching the next pending step can approve/reject
+  const canApproveReject = hasPendingStep && nextPendingStep?.level === currentRole;
+  const roleCannotApprove = currentRole === 'admin' || (hasPendingStep && nextPendingStep?.level !== currentRole);
 
   const handleApprove = () => {
-    if (!id || !request) return;
+    if (!id || !request || !canApproveReject) return;
     updateRequest(id, (r): SpendRequest => {
       const updatedSteps = [...r.approvalSteps];
       const pendingIndex = updatedSteps.findIndex((s) => s.status === 'pending');
@@ -81,7 +94,7 @@ export default function RequestDetail() {
   };
 
   const handleReject = () => {
-    if (!id || !request) return;
+    if (!id || !request || !canApproveReject) return;
     updateRequest(id, (r): SpendRequest => {
       const updatedSteps = [...r.approvalSteps];
       const pendingIndex = updatedSteps.findIndex((s) => s.status === 'pending');
@@ -141,6 +154,10 @@ export default function RequestDetail() {
       ? 'destructive'
       : 'secondary';
 
+  const disabledTooltip = currentRole === 'admin'
+    ? "Admin cannot approve/reject spend requests. Switch role in Admin settings."
+    : `Current role is ${currentRole.toUpperCase()}. Switch to ${nextPendingStep?.level?.toUpperCase()} in Admin to approve this step.`;
+
   return (
     <div>
       <PageHeader
@@ -148,22 +165,46 @@ export default function RequestDetail() {
         description={`Created ${new Date(request.createdAt).toLocaleDateString()}`}
       >
         <div className="flex gap-2 flex-wrap">
-          <Button
-            onClick={handleApprove}
-            disabled={isFinalized || !hasPendingStep}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Approve Next Step
-          </Button>
-          <Button
-            onClick={handleReject}
-            disabled={isFinalized}
-            variant="destructive"
-          >
-            <XCircle className="h-4 w-4 mr-2" />
-            Reject
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  onClick={handleApprove}
+                  disabled={isFinalized || !hasPendingStep || !canApproveReject}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve Next Step
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {roleCannotApprove && !isFinalized && hasPendingStep && (
+              <TooltipContent>
+                <p>{disabledTooltip}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  onClick={handleReject}
+                  disabled={isFinalized || !canApproveReject}
+                  variant="destructive"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {roleCannotApprove && !isFinalized && hasPendingStep && (
+              <TooltipContent>
+                <p>{disabledTooltip}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+          
           <Button onClick={handleReset} variant="outline">
             <RotateCcw className="h-4 w-4 mr-2" />
             Reset
@@ -176,6 +217,16 @@ export default function RequestDetail() {
           </Button>
         </div>
       </PageHeader>
+
+      {/* Role gating info */}
+      {hasPendingStep && !isFinalized && roleCannotApprove && (
+        <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Current role is <strong>{currentRole.toUpperCase()}</strong>. Switch to <strong>{nextPendingStep?.level?.toUpperCase()}</strong> in Admin settings to approve this step.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -222,7 +273,14 @@ export default function RequestDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Approval Timeline</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Approval Timeline</CardTitle>
+              {nextPendingStep && (
+                <Badge variant="outline" className="text-xs">
+                  Next: {levelLabels[nextPendingStep.level]}
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {request.approvalSteps.map((step, index) => (

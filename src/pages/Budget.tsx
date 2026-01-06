@@ -6,10 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
 import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
+import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
@@ -41,6 +47,7 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Info,
 } from 'lucide-react';
 
 const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
@@ -119,6 +126,7 @@ export default function Budget() {
   const { selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget } = useFiscalYearBudget();
   const { requests, addRequest, updateRequest } = useRequests();
   const { settings: adminSettings } = useAdminSettings();
+  const { currentRole } = useCurrentUserRole();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
@@ -130,6 +138,16 @@ export default function Budget() {
     const status = selectedFiscalYear.approval?.status ?? 'draft';
     return status === 'draft' || status === 'rejected';
   }, [selectedFiscalYear]);
+
+  // Determine the next pending budget approval step
+  const nextPendingBudgetStep = useMemo(() => {
+    if (!selectedFiscalYear?.approval?.steps) return null;
+    return selectedFiscalYear.approval.steps.find((s) => s.status === 'pending') ?? null;
+  }, [selectedFiscalYear]);
+
+  // Role gating for budget approvals
+  const canApproveBudgetStep = nextPendingBudgetStep?.level === currentRole;
+  const isAdmin = currentRole === 'admin';
 
   // Check if allocations are balanced
   const allocationsBalanced = useMemo(() => {
@@ -836,7 +854,14 @@ export default function Budget() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-medium">Budget Approval</CardTitle>
-            {getApprovalStatusBadge(approvalStatus)}
+            <div className="flex items-center gap-2">
+              {nextPendingBudgetStep && approvalStatus === 'pending' && (
+                <Badge variant="outline" className="text-xs">
+                  Next: {nextPendingBudgetStep.level.toUpperCase()}
+                </Badge>
+              )}
+              {getApprovalStatusBadge(approvalStatus)}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -885,52 +910,109 @@ export default function Budget() {
             </Alert>
           )}
 
+          {/* Role gating info */}
+          {approvalStatus === 'pending' && !canApproveBudgetStep && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Current role is <strong>{currentRole.toUpperCase()}</strong>. Switch to <strong>{nextPendingBudgetStep?.level?.toUpperCase()}</strong> in Admin settings to approve this step.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {(approvalStatus === 'draft' || approvalStatus === 'rejected') && (
-              <Button
-                onClick={handleSubmitForApproval}
-                disabled={!canSubmit}
-                size="sm"
-                className="gap-2"
-              >
-                <Send className="h-4 w-4" />
-                Submit for approval
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      onClick={handleSubmitForApproval}
+                      disabled={!canSubmit || !isAdmin}
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <Send className="h-4 w-4" />
+                      Submit for approval
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isAdmin && (
+                  <TooltipContent>
+                    <p>Only Admin can submit budgets for approval</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
 
             {approvalStatus === 'pending' && (
               <>
-                <Button
-                  onClick={handleApproveNextStep}
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Check className="h-4 w-4" />
-                  Approve next step
-                </Button>
-                <Button
-                  onClick={handleReject}
-                  variant="destructive"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <X className="h-4 w-4" />
-                  Reject
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        onClick={handleApproveNextStep}
+                        disabled={!canApproveBudgetStep}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Check className="h-4 w-4" />
+                        Approve next step
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canApproveBudgetStep && (
+                    <TooltipContent>
+                      <p>Only {nextPendingBudgetStep?.level?.toUpperCase()} can approve this step</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        onClick={handleReject}
+                        disabled={!canApproveBudgetStep}
+                        variant="destructive"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <X className="h-4 w-4" />
+                        Reject
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canApproveBudgetStep && (
+                    <TooltipContent>
+                      <p>Only {nextPendingBudgetStep?.level?.toUpperCase()} can reject this step</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </>
             )}
 
             {(approvalStatus === 'pending' || approvalStatus === 'rejected') && (
-              <Button
-                onClick={handleResetToDraft}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reset to draft
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      onClick={handleResetToDraft}
+                      disabled={!isAdmin}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reset to draft
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isAdmin && (
+                  <TooltipContent>
+                    <p>Only Admin can reset budgets to draft</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             )}
           </div>
         </CardContent>

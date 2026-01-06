@@ -4,13 +4,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
-import { CalendarPlus, ShieldCheck } from "lucide-react";
+import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
+import { CalendarPlus, ShieldCheck, UserCog } from "lucide-react";
+
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Marketing Admin',
+  manager: 'Manager',
+  cmo: 'CMO',
+  finance: 'Finance',
+};
 
 export default function Admin() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const { settings, updateSettings } = useAdminSettings();
+  const { currentRole, setCurrentRole } = useCurrentUserRole();
 
   const handleAbsoluteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
@@ -34,6 +50,41 @@ export default function Admin() {
       />
 
       <div className="space-y-6">
+        {/* User Role Selector (Demo) */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <UserCog className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">User Role (Demo)</CardTitle>
+            </div>
+            <CardDescription>
+              Switch roles to test role-gated approval workflows. This simulates different user permissions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <Label htmlFor="role-select">Current role</Label>
+              <Select value={currentRole} onValueChange={(v) => setCurrentRole(v as UserRole)}>
+                <SelectTrigger id="role-select" className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">{roleLabels.admin}</SelectItem>
+                  <SelectItem value="manager">{roleLabels.manager}</SelectItem>
+                  <SelectItem value="cmo">{roleLabels.cmo}</SelectItem>
+                  <SelectItem value="finance">{roleLabels.finance}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                <strong>Admin:</strong> Create/edit budgets, submit for approval, reset to draft. Cannot approve.<br />
+                <strong>Manager:</strong> Approve manager-level spend requests.<br />
+                <strong>CMO:</strong> Approve CMO-level budget and spend request steps.<br />
+                <strong>Finance:</strong> Approve Finance-level budget and spend request steps.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">

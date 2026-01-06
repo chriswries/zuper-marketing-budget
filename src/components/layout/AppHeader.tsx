@@ -8,9 +8,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
+import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
+
+const roleLabels: Record<UserRole, string> = {
+  admin: 'Admin',
+  manager: 'Manager',
+  cmo: 'CMO',
+  finance: 'Finance',
+};
+
+const roleBadgeColors: Record<UserRole, string> = {
+  admin: 'bg-primary text-primary-foreground',
+  manager: 'bg-amber-500 text-white',
+  cmo: 'bg-purple-600 text-white',
+  finance: 'bg-green-600 text-white',
+};
 
 export function AppHeader() {
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId } = useFiscalYearBudget();
+  const { currentRole } = useCurrentUserRole();
 
   const hasBudgets = fiscalYears.length > 0;
 
@@ -45,8 +61,8 @@ export function AppHeader() {
           <span className="text-sm text-muted-foreground">No budgets created</span>
         )}
 
-        <Badge variant="secondary" className="hidden sm:flex">
-          Marketing Admin
+        <Badge className={`hidden sm:flex ${roleBadgeColors[currentRole]}`}>
+          {roleLabels[currentRole]}
         </Badge>
       </div>
     </header>

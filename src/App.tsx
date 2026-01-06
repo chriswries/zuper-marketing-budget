@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { RequestsProvider } from "@/contexts/RequestsContext";
 import { FiscalYearBudgetProvider } from "@/contexts/FiscalYearBudgetContext";
 import { AdminSettingsProvider } from "@/contexts/AdminSettingsContext";
+import { CurrentUserRoleProvider } from "@/contexts/CurrentUserRoleContext";
 import Budget from "./pages/Budget";
 import Forecast from "./pages/Forecast";
 import Actuals from "./pages/Actuals";
@@ -24,29 +25,31 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AdminSettingsProvider>
-        <FiscalYearBudgetProvider>
-          <RequestsProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <AppLayout>
-                <Routes>
-                  <Route path="/" element={<Navigate to="/budget" replace />} />
-                  <Route path="/budget" element={<Budget />} />
-                  <Route path="/forecast" element={<Forecast />} />
-                  <Route path="/actuals" element={<Actuals />} />
-                  <Route path="/requests" element={<Requests />} />
-                  <Route path="/requests/:id" element={<RequestDetail />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/tasks" element={<Tasks />} />
-                  <Route path="/import" element={<Import />} />
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </AppLayout>
-            </BrowserRouter>
-          </RequestsProvider>
-        </FiscalYearBudgetProvider>
+        <CurrentUserRoleProvider>
+          <FiscalYearBudgetProvider>
+            <RequestsProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <AppLayout>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/budget" replace />} />
+                    <Route path="/budget" element={<Budget />} />
+                    <Route path="/forecast" element={<Forecast />} />
+                    <Route path="/actuals" element={<Actuals />} />
+                    <Route path="/requests" element={<Requests />} />
+                    <Route path="/requests/:id" element={<RequestDetail />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/tasks" element={<Tasks />} />
+                    <Route path="/import" element={<Import />} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </AppLayout>
+              </BrowserRouter>
+            </RequestsProvider>
+          </FiscalYearBudgetProvider>
+        </CurrentUserRoleProvider>
       </AdminSettingsProvider>
     </TooltipProvider>
   </QueryClientProvider>
