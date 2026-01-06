@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,8 +37,14 @@ import {
 } from '@/lib/budgetForecastVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3 } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+
+// Helper to compute variance percentage
+function computeVariancePct(variance: number, budget: number): number | null {
+  if (budget === 0) return null;
+  return variance / budget;
+}
 
 type SortOption = 'variance_abs' | 'variance_pct' | 'alpha';
 
@@ -136,7 +142,10 @@ export default function VarianceReport() {
     return buildVarianceReport(selectedFiscalYear.costCenters, forecastCCs);
   }, [selectedFiscalYear, forecastCCs]);
   
-  // Filter and sort
+  // Table ref for scroll-to-table
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  
+  // Filter, recompute totals, and sort
   const filteredReport = useMemo(() => {
     if (!report) return null;
     
@@ -147,7 +156,7 @@ export default function VarianceReport() {
       costCenters = costCenters.filter(cc => cc.costCenterId === costCenterFilter);
     }
     
-    // Apply line item filters
+    // Apply line item filters and recompute cost center totals
     costCenters = costCenters.map(cc => {
       let lineItems = cc.lineItems;
       
@@ -159,8 +168,21 @@ export default function VarianceReport() {
         lineItems = lineItems.filter(item => item.variance !== 0);
       }
       
-      return { ...cc, lineItems };
-    }).filter(cc => cc.lineItems.length > 0 || !contractedOnly && !varianceOnly);
+      // Recompute cost center totals from filtered line items
+      const ccBudgetTotal = lineItems.reduce((sum, item) => sum + item.budgetTotal, 0);
+      const ccForecastTotal = lineItems.reduce((sum, item) => sum + item.forecastTotal, 0);
+      const ccVariance = ccForecastTotal - ccBudgetTotal;
+      const ccVariancePct = computeVariancePct(ccVariance, ccBudgetTotal);
+      
+      return {
+        ...cc,
+        lineItems,
+        budgetTotal: ccBudgetTotal,
+        forecastTotal: ccForecastTotal,
+        variance: ccVariance,
+        variancePct: ccVariancePct,
+      };
+    }).filter(cc => cc.lineItems.length > 0 || (!contractedOnly && !varianceOnly));
     
     // Sort line items within each cost center
     costCenters = costCenters.map(cc => {
@@ -185,7 +207,7 @@ export default function VarianceReport() {
       return { ...cc, lineItems: sortedItems };
     });
     
-    // Sort cost centers by total variance
+    // Sort cost centers by recomputed variance
     if (sortBy === 'variance_abs') {
       costCenters.sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
     } else if (sortBy === 'variance_pct') {
@@ -198,7 +220,22 @@ export default function VarianceReport() {
       costCenters.sort((a, b) => a.costCenterName.localeCompare(b.costCenterName));
     }
     
-    return { ...report, costCenters };
+    // Recompute grand totals from filtered/recomputed cost centers
+    const grandBudgetTotal = costCenters.reduce((sum, cc) => sum + cc.budgetTotal, 0);
+    const grandForecastTotal = costCenters.reduce((sum, cc) => sum + cc.forecastTotal, 0);
+    const grandVariance = grandForecastTotal - grandBudgetTotal;
+    const grandVariancePct = computeVariancePct(grandVariance, grandBudgetTotal);
+    
+    return {
+      ...report,
+      costCenters,
+      totals: {
+        budgetTotal: grandBudgetTotal,
+        forecastTotal: grandForecastTotal,
+        variance: grandVariance,
+        variancePct: grandVariancePct,
+      },
+    };
   }, [report, costCenterFilter, contractedOnly, varianceOnly, sortBy]);
   
   const toggleCC = (ccId: string) => {
@@ -212,6 +249,17 @@ export default function VarianceReport() {
       return next;
     });
   };
+  
+  const handleClearFilters = useCallback(() => {
+    setCostCenterFilter('all');
+    setContractedOnly(false);
+    setVarianceOnly(false);
+    setShowMonthly(false);
+    setSortBy('variance_abs');
+    setExpandedCCs(new Set());
+  }, []);
+  
+  const hasActiveFilters = costCenterFilter !== 'all' || contractedOnly || varianceOnly || showMonthly || sortBy !== 'variance_abs';
   
   const handleViewInBudget = (ccId: string, itemId: string) => {
     if (selectedFiscalYearId) {
@@ -518,6 +566,18 @@ export default function VarianceReport() {
                 </SelectContent>
               </Select>
             </div>
+            
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -528,9 +588,11 @@ export default function VarianceReport() {
         costCenterFilter={costCenterFilter}
         setCostCenterFilter={setCostCenterFilter}
         setExpandedCCs={setExpandedCCs}
+        tableRef={tableRef}
       />
       
       {/* Main Table */}
+      <div ref={tableRef}>
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -581,6 +643,7 @@ export default function VarianceReport() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
@@ -743,6 +806,7 @@ interface VarianceChartsProps {
   costCenterFilter: string;
   setCostCenterFilter: (id: string) => void;
   setExpandedCCs: React.Dispatch<React.SetStateAction<Set<string>>>;
+  tableRef: React.RefObject<HTMLDivElement | null>;
 }
 
 function VarianceCharts({
@@ -750,8 +814,9 @@ function VarianceCharts({
   costCenterFilter,
   setCostCenterFilter,
   setExpandedCCs,
+  tableRef,
 }: VarianceChartsProps) {
-  // Get top cost centers from filtered data
+  // Get top cost centers from filtered data (already has recomputed totals)
   const topCostCenters = useMemo(
     () => getTopCostCenters(filteredReport.costCenters),
     [filteredReport.costCenters]
@@ -781,6 +846,10 @@ function VarianceCharts({
   const handleCostCenterClick = (ccId: string) => {
     setCostCenterFilter(ccId);
     setExpandedCCs(prev => new Set([...prev, ccId]));
+    // Scroll to table after a brief delay to allow state updates
+    setTimeout(() => {
+      tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
   
   return (
