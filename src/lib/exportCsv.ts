@@ -3,6 +3,8 @@
  * Properly escapes commas, quotes, and newlines for RFC 4180 compliance.
  */
 
+export type CsvRow = Record<string, unknown>;
+
 export interface CsvColumn {
   key: string;
   header: string;
@@ -33,7 +35,7 @@ function escapeCsvValue(value: unknown): string {
 /**
  * Build CSV content from rows and columns
  */
-function buildCsvContent(rows: Record<string, unknown>[], columns: CsvColumn[]): string {
+function buildCsvContent(rows: CsvRow[], columns: CsvColumn[]): string {
   // Header row
   const headerRow = columns.map(col => escapeCsvValue(col.header)).join(',');
   
@@ -50,7 +52,7 @@ function buildCsvContent(rows: Record<string, unknown>[], columns: CsvColumn[]):
  */
 export function downloadCsv(
   filename: string,
-  rows: Record<string, unknown>[],
+  rows: CsvRow[],
   columns: CsvColumn[]
 ): void {
   const csvContent = buildCsvContent(rows, columns);
@@ -68,6 +70,8 @@ export function downloadCsv(
   link.click();
   document.body.removeChild(link);
   
-  // Clean up the URL object
-  URL.revokeObjectURL(url);
+  // Clean up the URL object after a delay to ensure download starts
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
