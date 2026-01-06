@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
@@ -8,6 +8,7 @@ import { AuditEntry } from '@/types/audit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Popover,
   PopoverContent,
@@ -21,9 +22,12 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Lock, History, Plus } from 'lucide-react';
+import { Lock, History, Plus, Info } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
+import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
+import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 
 // Deep clone cost centers to avoid mutating mock data
 function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
@@ -39,12 +43,12 @@ function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
   }));
 }
 
-const FORECAST_STORAGE_KEY = 'forecast_cost_centers_v1';
+const LEGACY_FORECAST_STORAGE_KEY = 'forecast_cost_centers_v1';
 
-// Load forecast state from localStorage or default to mock data
-function loadForecastState(): CostCenter[] {
+// Load legacy forecast state from localStorage or default to mock data
+function loadLegacyForecastState(): CostCenter[] {
   try {
-    const stored = localStorage.getItem(FORECAST_STORAGE_KEY);
+    const stored = localStorage.getItem(LEGACY_FORECAST_STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored) as CostCenter[];
     }
@@ -54,10 +58,10 @@ function loadForecastState(): CostCenter[] {
   return deepCloneCostCenters(mockCostCenters);
 }
 
-// Save forecast state to localStorage
-function saveForecastState(costCenters: CostCenter[]): void {
+// Save legacy forecast state to localStorage
+function saveLegacyForecastState(costCenters: CostCenter[]): void {
   try {
-    localStorage.setItem(FORECAST_STORAGE_KEY, JSON.stringify(costCenters));
+    localStorage.setItem(LEGACY_FORECAST_STORAGE_KEY, JSON.stringify(costCenters));
   } catch {
     // Ignore storage errors
   }
@@ -87,15 +91,61 @@ const formatTimestamp = (isoString: string): string => {
 
 export default function Forecast() {
   const { requests, addRequest, updateRequest } = useRequests();
-  const [costCenters, setCostCenters] = useState<CostCenter[]>(loadForecastState);
+  const { selectedFiscalYear, selectedFiscalYearId } = useFiscalYearBudget();
+  
+  // Determine if we should use FY-specific forecast or legacy
+  const isActiveFY = selectedFiscalYear?.status === 'active';
+  const fyId = selectedFiscalYearId;
+
+  // Initialize cost centers based on active FY or legacy
+  const [costCenters, setCostCenters] = useState<CostCenter[]>(() => {
+    if (isActiveFY && fyId) {
+      const fyForecast = loadForecastForFY(fyId);
+      if (fyForecast) return fyForecast;
+      // Initialize from budget if no forecast exists yet
+      if (selectedFiscalYear) {
+        const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
+        saveForecastForFY(fyId, newForecast);
+        return newForecast;
+      }
+    }
+    return loadLegacyForecastState();
+  });
+
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set(['feb', 'mar']));
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 
-  // Persist costCenters to localStorage whenever they change
+  // Track the current FY mode for display
+  const usingLegacyForecast = useMemo(() => {
+    return !isActiveFY;
+  }, [isActiveFY]);
+
+  // Reload cost centers when FY changes
   useEffect(() => {
-    saveForecastState(costCenters);
-  }, [costCenters]);
+    if (isActiveFY && fyId) {
+      const fyForecast = loadForecastForFY(fyId);
+      if (fyForecast) {
+        setCostCenters(fyForecast);
+      } else if (selectedFiscalYear) {
+        // Initialize from budget if no forecast exists
+        const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
+        saveForecastForFY(fyId, newForecast);
+        setCostCenters(newForecast);
+      }
+    } else {
+      setCostCenters(loadLegacyForecastState());
+    }
+  }, [isActiveFY, fyId, selectedFiscalYear]);
+
+  // Persist costCenters to appropriate storage whenever they change
+  useEffect(() => {
+    if (isActiveFY && fyId) {
+      saveForecastForFY(fyId, costCenters);
+    } else {
+      saveLegacyForecastState(costCenters);
+    }
+  }, [costCenters, isActiveFY, fyId]);
 
   // Sync line item approval status with request status
   useEffect(() => {
@@ -158,9 +208,10 @@ export default function Forecast() {
       return changed || updated.some((cc, idx) => cc !== prev[idx]) ? updated : prev;
     });
   }, [requests]);
+
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
-    // Use mockCostCenters as source of truth for cost center name (stable reference)
-    const cc = mockCostCenters.find((c) => c.id === costCenterId);
+    // Use current costCenters as source of truth for cost center name
+    const cc = costCenters.find((c) => c.id === costCenterId);
     const costCenterName = cc?.name ?? 'Unknown Cost Center';
 
     // Compute request fields from line item
@@ -206,7 +257,7 @@ export default function Forecast() {
         };
       })
     );
-  }, [addRequest]);
+  }, [addRequest, costCenters]);
 
   const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
     // Find the line item to check if we need to cancel a request
@@ -240,6 +291,7 @@ export default function Forecast() {
       })
     );
   }, [costCenters, updateRequest]);
+
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: ForecastCellChangeArgs) => {
     // Find the old value BEFORE updating state
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
@@ -308,7 +360,7 @@ export default function Forecast() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader
-          title="Forecast"
+          title={isActiveFY ? `Forecast — ${selectedFiscalYear?.name}` : 'Forecast'}
           description="Current forecast — updated throughout the year as plans change."
         />
         
@@ -406,6 +458,17 @@ export default function Forecast() {
           </Popover>
         </div>
       </div>
+
+      {/* Legacy forecast banner */}
+      {usingLegacyForecast && selectedFiscalYear && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Forecast for {selectedFiscalYear.name} will be available after budget approval. 
+            Currently viewing legacy forecast.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <p className="text-sm text-muted-foreground">
         <Lock className="inline h-3 w-3 mr-1" />
