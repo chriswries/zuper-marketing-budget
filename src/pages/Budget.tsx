@@ -7,6 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +34,13 @@ import {
   formatAuditEvent,
   formatAuditTimestamp,
 } from '@/lib/approvalAuditStore';
+import {
+  buildBudgetSlackTemplate,
+  buildBudgetEmailSubject,
+  buildBudgetEmailBody,
+  buildBudgetUrl,
+} from '@/lib/notificationTemplates';
+import { copyText } from '@/lib/copyToClipboard';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -56,6 +67,8 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  Bell,
+  Copy,
 } from 'lucide-react';
 
 const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
@@ -1136,6 +1149,24 @@ export default function Budget() {
               </ScrollArea>
             )}
           </div>
+
+          {/* Notify Next Approver */}
+          {approvalStatus === 'pending' && nextPendingBudgetStep && (
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Bell className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Notify Next Approver</span>
+                <Badge variant="outline" className="text-xs ml-auto capitalize">
+                  {nextPendingBudgetStep.level}
+                </Badge>
+              </div>
+              <BudgetNotifyApprover
+                budgetName={selectedFiscalYear.name}
+                nextLevel={nextPendingBudgetStep.level as 'cmo' | 'finance'}
+                fiscalYearId={selectedFiscalYearId}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1168,5 +1199,109 @@ export default function Budget() {
         onSave={handleSaveAllocations}
       />
     </div>
+  );
+}
+
+function BudgetNotifyApprover({
+  budgetName,
+  nextLevel,
+  fiscalYearId,
+}: {
+  budgetName: string;
+  nextLevel: 'cmo' | 'finance';
+  fiscalYearId: string | null;
+}) {
+  const links = {
+    budgetUrl: buildBudgetUrl(fiscalYearId ?? undefined),
+  };
+
+  const slackMessage = buildBudgetSlackTemplate({
+    budgetName,
+    nextLevel,
+    links,
+  });
+
+  const emailSubject = buildBudgetEmailSubject({
+    budgetName,
+    nextLevel,
+  });
+
+  const emailBody = buildBudgetEmailBody({
+    budgetName,
+    nextLevel,
+    links,
+  });
+
+  const handleCopy = async (text: string, label: string) => {
+    const success = await copyText(text);
+    if (success) {
+      toast({
+        title: 'Copied!',
+        description: `${label} copied to clipboard.`,
+      });
+    } else {
+      toast({
+        title: 'Copy failed',
+        description: 'Could not copy to clipboard.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <Tabs defaultValue="slack" className="w-full">
+      <TabsList className="grid w-full grid-cols-2 mb-3">
+        <TabsTrigger value="slack">Slack</TabsTrigger>
+        <TabsTrigger value="email">Email</TabsTrigger>
+      </TabsList>
+      <TabsContent value="slack" className="space-y-3">
+        <Textarea
+          value={slackMessage}
+          readOnly
+          className="min-h-[120px] text-sm font-mono"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleCopy(slackMessage, 'Slack message')}
+          className="gap-2"
+        >
+          <Copy className="h-4 w-4" />
+          Copy Slack message
+        </Button>
+      </TabsContent>
+      <TabsContent value="email" className="space-y-3">
+        <div className="space-y-2">
+          <Label className="text-sm text-muted-foreground">Subject</Label>
+          <div className="flex gap-2">
+            <Input value={emailSubject} readOnly className="flex-1 text-sm" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleCopy(emailSubject, 'Email subject')}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-sm text-muted-foreground">Body</Label>
+          <Textarea
+            value={emailBody}
+            readOnly
+            className="min-h-[120px] text-sm font-mono"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleCopy(emailBody, 'Email body')}
+            className="gap-2"
+          >
+            <Copy className="h-4 w-4" />
+            Copy email body
+          </Button>
+        </div>
+      </TabsContent>
+    </Tabs>
   );
 }

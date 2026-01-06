@@ -6,12 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadsheet, History, Send, Plus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadsheet, History, Send, Plus, Copy, Bell } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
@@ -25,6 +29,15 @@ import {
   formatAuditEvent,
   formatAuditTimestamp,
 } from '@/lib/approvalAuditStore';
+import {
+  buildRequestSlackTemplate,
+  buildRequestEmailSubject,
+  buildRequestEmailBody,
+  buildRequestUrl,
+  buildSheetUrl,
+} from '@/lib/notificationTemplates';
+import { copyText } from '@/lib/copyToClipboard';
+import { toast } from '@/hooks/use-toast';
 
 const levelLabels: Record<string, string> = {
   manager: 'Manager',
@@ -417,7 +430,122 @@ export default function RequestDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Notify Next Approver */}
+        {request.status === 'pending' && nextPendingStep && (
+          <NotifyApproverCard request={request} nextPendingStep={nextPendingStep} />
+        )}
       </div>
     </div>
+  );
+}
+
+function NotifyApproverCard({ request, nextPendingStep }: { request: SpendRequest; nextPendingStep: ApprovalStep }) {
+  const links = {
+    requestUrl: buildRequestUrl(request.id),
+    sheetUrl: buildSheetUrl(request),
+  };
+
+  const slackMessage = buildRequestSlackTemplate({
+    request,
+    nextLevel: nextPendingStep.level,
+    links,
+  });
+
+  const emailSubject = buildRequestEmailSubject({
+    request,
+    nextLevel: nextPendingStep.level,
+  });
+
+  const emailBody = buildRequestEmailBody({
+    request,
+    nextLevel: nextPendingStep.level,
+    links,
+  });
+
+  const handleCopy = async (text: string, label: string) => {
+    const success = await copyText(text);
+    if (success) {
+      toast({
+        title: 'Copied!',
+        description: `${label} copied to clipboard.`,
+      });
+    } else {
+      toast({
+        title: 'Copy failed',
+        description: 'Could not copy to clipboard.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <Card className="md:col-span-2">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-lg">Notify Next Approver</CardTitle>
+          <Badge variant="outline" className="text-xs ml-auto">
+            {levelLabels[nextPendingStep.level]}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="slack" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="slack">Slack</TabsTrigger>
+            <TabsTrigger value="email">Email</TabsTrigger>
+          </TabsList>
+          <TabsContent value="slack" className="space-y-3">
+            <Textarea
+              value={slackMessage}
+              readOnly
+              className="min-h-[180px] text-sm font-mono"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleCopy(slackMessage, 'Slack message')}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copy Slack message
+            </Button>
+          </TabsContent>
+          <TabsContent value="email" className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">Subject</Label>
+              <div className="flex gap-2">
+                <Input value={emailSubject} readOnly className="flex-1 text-sm" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopy(emailSubject, 'Email subject')}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm text-muted-foreground">Body</Label>
+              <Textarea
+                value={emailBody}
+                readOnly
+                className="min-h-[180px] text-sm font-mono"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCopy(emailBody, 'Email body')}
+                className="gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Copy email body
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
