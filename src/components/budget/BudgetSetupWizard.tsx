@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -41,6 +41,8 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
   const [fiscalYear, setFiscalYear] = useState<string>('');
   const [targetBudget, setTargetBudget] = useState<string>('');
   const [costCenters, setCostCenters] = useState<CostCenterDraft[]>([]);
+  const [newlyAddedId, setNewlyAddedId] = useState<string | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Find prior FY for copy-forward
   const priorFY = useMemo(() => {
@@ -111,11 +113,21 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
   };
 
   const handleAddCostCenter = () => {
+    const newId = crypto.randomUUID();
     setCostCenters(prev => [
       ...prev,
-      { id: crypto.randomUUID(), name: '', mode: '%', value: 0 },
+      { id: newId, name: '', mode: '%', value: 0 },
     ]);
+    setNewlyAddedId(newId);
   };
+
+  // Auto-focus newly added cost center input
+  useEffect(() => {
+    if (newlyAddedId && inputRefs.current[newlyAddedId]) {
+      inputRefs.current[newlyAddedId]?.focus();
+      setNewlyAddedId(null);
+    }
+  }, [newlyAddedId, costCenters]);
 
   const handleRemoveCostCenter = (id: string) => {
     setCostCenters(prev => prev.filter(cc => cc.id !== id));
@@ -270,6 +282,7 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
                     </Button>
                   </div>
                   <Input
+                    ref={(el) => { inputRefs.current[cc.id] = el; }}
                     className="flex-1"
                     placeholder="Cost center name"
                     value={cc.name}
@@ -363,7 +376,7 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
                           value={cc.value}
                           onChange={(e) => handleUpdateCostCenter(cc.id, 'value', parseFloat(e.target.value) || 0)}
                           min={0}
-                          step={cc.mode === '%' ? 0.1 : 1000}
+                          step={cc.mode === '%' ? 1 : 1000}
                         />
                       </td>
                       <td className="p-2 text-right font-mono">
