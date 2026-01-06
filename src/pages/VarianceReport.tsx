@@ -33,13 +33,43 @@ import {
   buildVarianceReport,
   VarianceCostCenterRow,
   VarianceLineItemRow,
+  VarianceReportResult,
 } from '@/lib/budgetForecastVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 type SortOption = 'variance_abs' | 'variance_pct' | 'alpha';
+
+// Chart helper: Get top cost centers by absolute variance
+function getTopCostCenters(
+  costCenters: VarianceCostCenterRow[],
+  limit = 10
+): { costCenterId: string; name: string; variance: number }[] {
+  return [...costCenters]
+    .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
+    .slice(0, limit)
+    .map(cc => ({
+      costCenterId: cc.costCenterId,
+      name: cc.costCenterName,
+      variance: cc.variance,
+    }));
+}
+
+// Chart helper: Get monthly totals for a single cost center from its filtered line items
+function getMonthlyTotalsForCostCenter(
+  cc: VarianceCostCenterRow
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const month of MONTHS) {
+    totals[month] = cc.lineItems.reduce(
+      (sum, item) => sum + (item.varianceByMonth[month] || 0),
+      0
+    );
+  }
+  return totals;
+}
 
 function formatCurrency(value: number): string {
   const sign = value >= 0 ? '' : '-';
@@ -492,6 +522,14 @@ export default function VarianceReport() {
         </CardContent>
       </Card>
       
+      {/* Variance Charts */}
+      <VarianceCharts
+        filteredReport={filteredReport}
+        costCenterFilter={costCenterFilter}
+        setCostCenterFilter={setCostCenterFilter}
+        setExpandedCCs={setExpandedCCs}
+      />
+      
       {/* Main Table */}
       <Card>
         <CardContent className="p-0">
@@ -696,5 +734,151 @@ function LineItemRow({ item, showMonthly, onViewInBudget, onViewInForecast }: Li
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+// Variance Charts Component
+interface VarianceChartsProps {
+  filteredReport: VarianceReportResult;
+  costCenterFilter: string;
+  setCostCenterFilter: (id: string) => void;
+  setExpandedCCs: React.Dispatch<React.SetStateAction<Set<string>>>;
+}
+
+function VarianceCharts({
+  filteredReport,
+  costCenterFilter,
+  setCostCenterFilter,
+  setExpandedCCs,
+}: VarianceChartsProps) {
+  // Get top cost centers from filtered data
+  const topCostCenters = useMemo(
+    () => getTopCostCenters(filteredReport.costCenters),
+    [filteredReport.costCenters]
+  );
+  
+  const maxAbsVariance = useMemo(
+    () => Math.max(...topCostCenters.map(cc => Math.abs(cc.variance)), 1),
+    [topCostCenters]
+  );
+  
+  // Get selected cost center for monthly chart
+  const selectedCC = useMemo(() => {
+    if (costCenterFilter === 'all') return null;
+    return filteredReport.costCenters.find(cc => cc.costCenterId === costCenterFilter) || null;
+  }, [costCenterFilter, filteredReport.costCenters]);
+  
+  const monthlyTotals = useMemo(() => {
+    if (!selectedCC) return null;
+    return getMonthlyTotalsForCostCenter(selectedCC);
+  }, [selectedCC]);
+  
+  const maxAbsMonthlyVariance = useMemo(() => {
+    if (!monthlyTotals) return 1;
+    return Math.max(...Object.values(monthlyTotals).map(Math.abs), 1);
+  }, [monthlyTotals]);
+  
+  const handleCostCenterClick = (ccId: string) => {
+    setCostCenterFilter(ccId);
+    setExpandedCCs(prev => new Set([...prev, ccId]));
+  };
+  
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {/* Chart 1: Top Cost Centers by Variance */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Top Cost Centers by FY Variance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {topCostCenters.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              No cost centers to display
+            </div>
+          ) : (
+            topCostCenters.map(cc => {
+              const barWidth = (Math.abs(cc.variance) / maxAbsVariance) * 100;
+              const isPositive = cc.variance > 0;
+              
+              return (
+                <div
+                  key={cc.costCenterId}
+                  className="cursor-pointer hover:bg-muted/50 rounded p-2 transition-colors"
+                  onClick={() => handleCostCenterClick(cc.costCenterId)}
+                >
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="truncate font-medium">{cc.name}</span>
+                    <span className={isPositive ? 'text-destructive' : cc.variance < 0 ? 'text-green-600' : ''}>
+                      {formatVariance(cc.variance)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded overflow-hidden">
+                    <div
+                      className={`h-full rounded transition-all ${
+                        isPositive ? 'bg-destructive/70' : 'bg-green-500/70'
+                      }`}
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Chart 2: Monthly Variance Trend (only when single CC selected) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Monthly Variance Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!selectedCC ? (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              Select a cost center to view monthly trend
+            </div>
+          ) : monthlyTotals && Object.values(monthlyTotals).every(v => v === 0) ? (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              No variance for selected cost center
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {MONTHS.map(month => {
+                const value = monthlyTotals?.[month] || 0;
+                const barWidth = (Math.abs(value) / maxAbsMonthlyVariance) * 100;
+                const isPositive = value > 0;
+                
+                return (
+                  <div key={month} className="flex items-center gap-2">
+                    <span className="text-xs w-8 text-muted-foreground">
+                      {MONTH_LABELS[month]}
+                    </span>
+                    <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
+                      <div
+                        className={`h-full rounded transition-all ${
+                          isPositive ? 'bg-destructive/70' : value < 0 ? 'bg-green-500/70' : 'bg-muted'
+                        }`}
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    <span className={`text-xs w-20 text-right ${
+                      isPositive ? 'text-destructive' : value < 0 ? 'text-green-600' : 'text-muted-foreground'
+                    }`}>
+                      {value !== 0 ? formatVariance(value) : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
