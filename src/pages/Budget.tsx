@@ -1125,17 +1125,18 @@ export default function Budget() {
               <ScrollArea className="max-h-48">
                 <div className="space-y-2">
                   {approvalAuditEvents.map((event) => {
-                    const actionIcon = {
+                    const actionIcon: Record<string, React.ReactNode> = {
                       created: <CalendarPlus className="h-3.5 w-3.5 text-muted-foreground" />,
                       submitted_for_approval: <Send className="h-3.5 w-3.5 text-blue-500" />,
                       approved_step: <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />,
                       rejected_step: <XCircle className="h-3.5 w-3.5 text-destructive" />,
                       reset: <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />,
                       final_approved: <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />,
+                      notified_next_approver: <Bell className="h-3.5 w-3.5 text-blue-500" />,
                     };
                     return (
                       <div key={event.id} className="flex items-start gap-3 text-sm">
-                        <div className="mt-0.5">{actionIcon[event.action]}</div>
+                        <div className="mt-0.5">{actionIcon[event.action] ?? <Clock className="h-3.5 w-3.5 text-muted-foreground" />}</div>
                         <div className="flex-1">
                           <div className="font-medium">{formatAuditEvent(event)}</div>
                           <div className="text-xs text-muted-foreground">
@@ -1164,6 +1165,7 @@ export default function Budget() {
                 budgetName={selectedFiscalYear.name}
                 nextLevel={nextPendingBudgetStep.level as 'cmo' | 'finance'}
                 fiscalYearId={selectedFiscalYearId}
+                onAuditUpdated={() => setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId))}
               />
             </div>
           )}
@@ -1206,11 +1208,15 @@ function BudgetNotifyApprover({
   budgetName,
   nextLevel,
   fiscalYearId,
+  onAuditUpdated,
 }: {
   budgetName: string;
   nextLevel: 'cmo' | 'finance';
   fiscalYearId: string | null;
+  onAuditUpdated: () => void;
 }) {
+  const { currentRole } = useCurrentUserRole();
+  
   const links = {
     budgetUrl: buildBudgetUrl(fiscalYearId ?? undefined),
   };
@@ -1232,13 +1238,24 @@ function BudgetNotifyApprover({
     links,
   });
 
-  const handleCopy = async (text: string, label: string) => {
+  const handleCopy = async (text: string, label: string, channel: 'slack' | 'email', part: 'message' | 'subject' | 'body') => {
     const success = await copyText(text);
     if (success) {
       toast({
         title: 'Copied!',
         description: `${label} copied to clipboard.`,
       });
+      
+      // Append audit event on successful copy
+      if (fiscalYearId) {
+        appendApprovalAudit('budget', fiscalYearId, {
+          action: 'notified_next_approver',
+          actorRole: currentRole,
+          stepLevel: nextLevel,
+          meta: { channel, part },
+        });
+        onAuditUpdated();
+      }
     } else {
       toast({
         title: 'Copy failed',
@@ -1263,7 +1280,7 @@ function BudgetNotifyApprover({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => handleCopy(slackMessage, 'Slack message')}
+          onClick={() => handleCopy(slackMessage, 'Slack message', 'slack', 'message')}
           className="gap-2"
         >
           <Copy className="h-4 w-4" />
@@ -1278,7 +1295,7 @@ function BudgetNotifyApprover({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleCopy(emailSubject, 'Email subject')}
+              onClick={() => handleCopy(emailSubject, 'Email subject', 'email', 'subject')}
             >
               <Copy className="h-4 w-4" />
             </Button>
@@ -1294,7 +1311,7 @@ function BudgetNotifyApprover({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleCopy(emailBody, 'Email body')}
+            onClick={() => handleCopy(emailBody, 'Email body', 'email', 'body')}
             className="gap-2"
           >
             <Copy className="h-4 w-4" />
