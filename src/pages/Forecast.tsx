@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
-import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal } from '@/types/budget';
+import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,6 +28,8 @@ import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
+import { shouldTriggerIncreaseApproval } from '@/lib/lineItemApprovalThreshold';
+import { toast } from '@/hooks/use-toast';
 
 // Deep clone cost centers to avoid mutating mock data
 function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
@@ -147,7 +149,7 @@ export default function Forecast() {
     }
   }, [costCenters, isActiveFY, fyId]);
 
-  // Sync line item approval status with request status
+  // Sync line item approval/adjustment status with request status
   useEffect(() => {
     setCostCenters((prev) => {
       let changed = false;
@@ -156,38 +158,73 @@ export default function Forecast() {
         const updatedItems: LineItem[] = [];
         
         for (const item of cc.lineItems) {
-          if (!item.approvalRequestId) {
-            updatedItems.push(item);
-            continue;
+          // Handle NEW line item approval (approvalRequestId)
+          if (item.approvalRequestId) {
+            const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
+            if (linkedRequest) {
+              const isRejected = 
+                linkedRequest.status === 'rejected' ||
+                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+
+              if (isRejected) {
+                changed = true;
+                // Remove the line item for rejected NEW items
+                continue;
+              }
+
+              const isApproved = 
+                linkedRequest.status === 'approved' ||
+                (linkedRequest.approvalSteps?.length > 0 && 
+                 linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+
+              if (isApproved && item.approvalStatus === 'pending') {
+                changed = true;
+                updatedItems.push({ ...item, approvalStatus: undefined });
+                continue;
+              }
+            }
           }
-          
-          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
-          if (!linkedRequest) {
-            updatedItems.push(item);
-            continue;
-          }
 
-          // Check if rejected: either status is 'rejected' OR any step is rejected (defensive)
-          const isRejected = 
-            linkedRequest.status === 'rejected' ||
-            linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+          // Handle ADJUSTMENT approval (adjustmentRequestId)
+          if (item.adjustmentRequestId) {
+            const linkedRequest = requests.find((r) => r.id === item.adjustmentRequestId);
+            if (linkedRequest) {
+              const isRejected = 
+                linkedRequest.status === 'rejected' ||
+                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
 
-          if (isRejected) {
-            changed = true;
-            // Don't include this item (remove it)
-            continue;
-          }
+              if (isRejected && item.adjustmentBeforeValues && item.adjustmentSheet === 'forecast') {
+                changed = true;
+                // Revert values and clear adjustment fields
+                updatedItems.push({
+                  ...item,
+                  forecastValues: item.adjustmentBeforeValues,
+                  adjustmentStatus: undefined,
+                  adjustmentRequestId: undefined,
+                  adjustmentBeforeValues: undefined,
+                  adjustmentSheet: undefined,
+                });
+                continue;
+              }
 
-          // Check if approved: either status is 'approved' OR all steps approved
-          const isApproved = 
-            linkedRequest.status === 'approved' ||
-            (linkedRequest.approvalSteps?.length > 0 && 
-             linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+              const isApproved = 
+                linkedRequest.status === 'approved' ||
+                (linkedRequest.approvalSteps?.length > 0 && 
+                 linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
 
-          if (isApproved && item.approvalStatus === 'pending') {
-            changed = true;
-            updatedItems.push({ ...item, approvalStatus: undefined });
-            continue;
+              if (isApproved && item.adjustmentStatus === 'pending') {
+                changed = true;
+                // Keep values, clear adjustment fields
+                updatedItems.push({
+                  ...item,
+                  adjustmentStatus: undefined,
+                  adjustmentRequestId: undefined,
+                  adjustmentBeforeValues: undefined,
+                  adjustmentSheet: undefined,
+                });
+                continue;
+              }
+            }
           }
 
           updatedItems.push(item);
@@ -293,32 +330,102 @@ export default function Forecast() {
   }, [costCenters, updateRequest]);
 
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: ForecastCellChangeArgs) => {
-    // Find the old value BEFORE updating state
+    // Find the line item
     const costCenter = costCenters.find((cc) => cc.id === costCenterId);
     const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
-    const oldValue = lineItem?.forecastValues[month] ?? 0;
+    if (!lineItem) return;
+
     const costCenterName = costCenter?.name ?? '';
     const lineItemName = lineItem?.name ?? '';
 
-    // Update cost centers state
-    setCostCenters((prev) =>
-      prev.map((cc) => {
-        if (cc.id !== costCenterId) return cc;
-        return {
-          ...cc,
-          lineItems: cc.lineItems.map((item) => {
-            if (item.id !== lineItemId) return item;
-            return {
-              ...item,
-              forecastValues: {
-                ...item.forecastValues,
-                [month]: newValue,
-              },
-            };
-          }),
-        };
-      })
-    );
+    // Block edits if pending approval or adjustment
+    if (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending') {
+      toast({
+        title: 'Edit locked',
+        description: 'This line item has a pending approval request. Changes are locked until approved/rejected.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const oldForecastValues = lineItem.forecastValues;
+    const oldValue = oldForecastValues[month] ?? 0;
+    const updatedForecastValues = { ...oldForecastValues, [month]: newValue };
+
+    const oldTotal = calculateFYTotal(oldForecastValues);
+    const newTotal = calculateFYTotal(updatedForecastValues);
+
+    // Check if this triggers an approval workflow
+    if (shouldTriggerIncreaseApproval(oldTotal, newTotal)) {
+      const delta = newTotal - oldTotal;
+      const vendorName = lineItem.vendor?.name ?? '—';
+
+      // Find start/end months
+      const monthsWithSpend = MONTHS.filter((m) => updatedForecastValues[m] > 0);
+      const startMonth: Month = monthsWithSpend[0] ?? 'feb';
+      const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
+
+      // Create the spend request
+      const requestId = crypto.randomUUID();
+      const newRequest = {
+        id: requestId,
+        costCenterId,
+        costCenterName,
+        vendorName,
+        amount: Math.round(delta),
+        startMonth,
+        endMonth,
+        isContracted: lineItem.isContracted,
+        justification: `Forecast increase: ${lineItemName} (+${formatCurrency(delta)})`,
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+        approvalSteps: createDefaultApprovalSteps(),
+      };
+      addRequest(newRequest);
+
+      // Update with pending adjustment
+      setCostCenters((prev) =>
+        prev.map((cc) => {
+          if (cc.id !== costCenterId) return cc;
+          return {
+            ...cc,
+            lineItems: cc.lineItems.map((item) => {
+              if (item.id !== lineItemId) return item;
+              return {
+                ...item,
+                forecastValues: updatedForecastValues,
+                adjustmentStatus: 'pending' as const,
+                adjustmentRequestId: requestId,
+                adjustmentBeforeValues: oldForecastValues,
+                adjustmentSheet: 'forecast' as const,
+              };
+            }),
+          };
+        })
+      );
+
+      toast({
+        title: 'Approval required',
+        description: `Increase of ${formatCurrency(delta)} requires approval. A spend request has been created.`,
+      });
+    } else {
+      // Normal edit without approval
+      setCostCenters((prev) =>
+        prev.map((cc) => {
+          if (cc.id !== costCenterId) return cc;
+          return {
+            ...cc,
+            lineItems: cc.lineItems.map((item) => {
+              if (item.id !== lineItemId) return item;
+              return {
+                ...item,
+                forecastValues: updatedForecastValues,
+              };
+            }),
+          };
+        })
+      );
+    }
 
     // Add audit entry (only if value actually changed)
     if (oldValue !== newValue) {
@@ -338,7 +445,7 @@ export default function Forecast() {
 
       setAuditLog((prev) => [entry, ...prev].slice(0, 50));
     }
-  }, [costCenters]);
+  }, [costCenters, addRequest]);
 
   const toggleLockedMonth = (month: Month) => {
     setLockedMonths((prev) => {

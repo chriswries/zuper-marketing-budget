@@ -15,6 +15,8 @@ import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues,
 import { AuditEntry } from '@/types/audit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
+import { shouldTriggerIncreaseApproval } from '@/lib/lineItemApprovalThreshold';
+import { toast } from '@/hooks/use-toast';
 import {
   Sheet,
   SheetContent,
@@ -137,11 +139,11 @@ export default function Budget() {
     return Math.abs(totalAllocated - selectedFiscalYear.targetBudget) <= 1;
   }, [selectedFiscalYear]);
 
-  // Check if any line items are pending approval
+  // Check if any line items are pending approval (create or adjustment)
   const hasPendingLineItems = useMemo(() => {
     if (!selectedFiscalYear) return false;
     return selectedFiscalYear.costCenters.some((cc) =>
-      cc.lineItems.some((item) => item.approvalStatus === 'pending')
+      cc.lineItems.some((item) => item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending')
     );
   }, [selectedFiscalYear]);
 
@@ -379,7 +381,7 @@ export default function Budget() {
     }
   }, [selectedFiscalYearId, auditLog]);
 
-  // Sync line item approval status with request status
+  // Sync line item approval/adjustment status with request status
   useEffect(() => {
     if (!selectedFiscalYear || !selectedFiscalYearId) return;
 
@@ -390,38 +392,73 @@ export default function Budget() {
         const updatedItems: LineItem[] = [];
 
         for (const item of cc.lineItems) {
-          if (!item.approvalRequestId) {
-            updatedItems.push(item);
-            continue;
+          // Handle NEW line item approval (approvalRequestId)
+          if (item.approvalRequestId) {
+            const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
+            if (linkedRequest) {
+              const isRejected =
+                linkedRequest.status === 'rejected' ||
+                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+
+              if (isRejected) {
+                changed = true;
+                // Remove the line item for rejected NEW items
+                continue;
+              }
+
+              const isApproved =
+                linkedRequest.status === 'approved' ||
+                (linkedRequest.approvalSteps?.length > 0 &&
+                  linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+
+              if (isApproved && item.approvalStatus === 'pending') {
+                changed = true;
+                updatedItems.push({ ...item, approvalStatus: undefined });
+                continue;
+              }
+            }
           }
 
-          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
-          if (!linkedRequest) {
-            updatedItems.push(item);
-            continue;
-          }
+          // Handle ADJUSTMENT approval (adjustmentRequestId)
+          if (item.adjustmentRequestId) {
+            const linkedRequest = requests.find((r) => r.id === item.adjustmentRequestId);
+            if (linkedRequest) {
+              const isRejected =
+                linkedRequest.status === 'rejected' ||
+                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
 
-          // Check if rejected: either status is 'rejected' OR any step is rejected
-          const isRejected =
-            linkedRequest.status === 'rejected' ||
-            linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+              if (isRejected && item.adjustmentBeforeValues && item.adjustmentSheet === 'budget') {
+                changed = true;
+                // Revert values and clear adjustment fields
+                updatedItems.push({
+                  ...item,
+                  budgetValues: item.adjustmentBeforeValues,
+                  adjustmentStatus: undefined,
+                  adjustmentRequestId: undefined,
+                  adjustmentBeforeValues: undefined,
+                  adjustmentSheet: undefined,
+                });
+                continue;
+              }
 
-          if (isRejected) {
-            changed = true;
-            // Don't include this item (remove it)
-            continue;
-          }
+              const isApproved =
+                linkedRequest.status === 'approved' ||
+                (linkedRequest.approvalSteps?.length > 0 &&
+                  linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
 
-          // Check if approved: either status is 'approved' OR all steps approved
-          const isApproved =
-            linkedRequest.status === 'approved' ||
-            (linkedRequest.approvalSteps?.length > 0 &&
-              linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
-
-          if (isApproved && item.approvalStatus === 'pending') {
-            changed = true;
-            updatedItems.push({ ...item, approvalStatus: undefined });
-            continue;
+              if (isApproved && item.adjustmentStatus === 'pending') {
+                changed = true;
+                // Keep values, clear adjustment fields
+                updatedItems.push({
+                  ...item,
+                  adjustmentStatus: undefined,
+                  adjustmentRequestId: undefined,
+                  adjustmentBeforeValues: undefined,
+                  adjustmentSheet: undefined,
+                });
+                continue;
+              }
+            }
           }
 
           updatedItems.push(item);
@@ -451,34 +488,106 @@ export default function Budget() {
     ({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
       if (!selectedFiscalYear || !selectedFiscalYearId) return;
 
-      // Find old value for audit
+      // Find the line item
       const costCenter = selectedFiscalYear.costCenters.find((cc) => cc.id === costCenterId);
       const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
-      const oldValue = lineItem?.budgetValues[month] ?? 0;
+      if (!lineItem) return;
+
       const costCenterName = costCenter?.name ?? '';
       const lineItemName = lineItem?.name ?? '';
 
-      // Update FY budget
-      updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-        ...fy,
-        updatedAt: new Date().toISOString(),
-        costCenters: fy.costCenters.map((cc) => {
-          if (cc.id !== costCenterId) return cc;
-          return {
-            ...cc,
-            lineItems: cc.lineItems.map((item) => {
-              if (item.id !== lineItemId) return item;
-              return {
-                ...item,
-                budgetValues: {
-                  ...item.budgetValues,
-                  [month]: newValue,
-                },
-              };
-            }),
-          };
-        }),
-      }));
+      // Block edits if pending approval or adjustment
+      if (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending') {
+        toast({
+          title: 'Edit locked',
+          description: 'This line item has a pending approval request. Changes are locked until approved/rejected.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const oldBudgetValues = lineItem.budgetValues;
+      const oldValue = oldBudgetValues[month] ?? 0;
+      const updatedBudgetValues = { ...oldBudgetValues, [month]: newValue };
+
+      const oldTotal = calculateFYTotal(oldBudgetValues);
+      const newTotal = calculateFYTotal(updatedBudgetValues);
+
+      // Check if this triggers an approval workflow
+      if (shouldTriggerIncreaseApproval(oldTotal, newTotal)) {
+        const delta = newTotal - oldTotal;
+        const vendorName = lineItem.vendor?.name ?? '—';
+
+        // Find start/end months
+        const monthsWithSpend = MONTHS.filter((m) => updatedBudgetValues[m] > 0);
+        const startMonth: Month = monthsWithSpend[0] ?? 'feb';
+        const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
+
+        // Create the spend request
+        const requestId = crypto.randomUUID();
+        const newRequest = {
+          id: requestId,
+          costCenterId,
+          costCenterName,
+          vendorName,
+          amount: Math.round(delta),
+          startMonth,
+          endMonth,
+          isContracted: lineItem.isContracted,
+          justification: `Budget increase: ${lineItemName} (+${formatCurrency(delta)})`,
+          status: 'pending' as const,
+          createdAt: new Date().toISOString(),
+          approvalSteps: createDefaultApprovalSteps(),
+        };
+        addRequest(newRequest);
+
+        // Update with pending adjustment
+        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+          ...fy,
+          updatedAt: new Date().toISOString(),
+          costCenters: fy.costCenters.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return {
+              ...cc,
+              lineItems: cc.lineItems.map((item) => {
+                if (item.id !== lineItemId) return item;
+                return {
+                  ...item,
+                  budgetValues: updatedBudgetValues,
+                  adjustmentStatus: 'pending' as const,
+                  adjustmentRequestId: requestId,
+                  adjustmentBeforeValues: oldBudgetValues,
+                  adjustmentSheet: 'budget' as const,
+                };
+              }),
+            };
+          }),
+        }));
+
+        toast({
+          title: 'Approval required',
+          description: `Increase of ${formatCurrency(delta)} requires approval. A spend request has been created.`,
+        });
+      } else {
+        // Normal edit without approval
+        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+          ...fy,
+          updatedAt: new Date().toISOString(),
+          costCenters: fy.costCenters.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return {
+              ...cc,
+              lineItems: cc.lineItems.map((item) => {
+                if (item.id !== lineItemId) return item;
+                return {
+                  ...item,
+                  budgetValues: updatedBudgetValues,
+                };
+              }),
+            };
+          }),
+        }));
+      }
 
       // Add audit entry
       if (oldValue !== newValue) {
@@ -500,7 +609,7 @@ export default function Budget() {
         setAuditLog((prev) => [entry, ...prev].slice(0, 50));
       }
     },
-    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]
+    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, addRequest]
   );
 
   const handleDeleteLineItem = useCallback(
