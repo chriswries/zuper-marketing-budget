@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -29,7 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, ExternalLink } from 'lucide-react';
 import {
   CostCenter,
   LineItem,
@@ -65,6 +66,10 @@ interface SheetTableProps {
   lockedMonths?: Set<Month>;
   renderCostCenterFYMeta?: (costCenter: CostCenter, spent: number) => React.ReactNode;
   renderGrandTotalFYMeta?: (grandTotal: number) => React.ReactNode;
+  // Focus props for deep linking
+  focusCostCenterId?: string;
+  focusLineItemId?: string;
+  onFocusLineItemNotFound?: () => void;
 }
 
 const formatCurrency = (value: number): string => {
@@ -93,10 +98,53 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound }: SheetTableProps) {
+  const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
+  const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
+  const focusHandled = useRef(false);
+
+  // Focus/scroll/highlight logic
+  useEffect(() => {
+    if (focusLineItemId && !focusHandled.current) {
+      // First check if the line item exists
+      const lineItemExists = costCenters.some((cc) =>
+        cc.lineItems.some((item) => item.id === focusLineItemId)
+      );
+
+      if (!lineItemExists) {
+        onFocusLineItemNotFound?.();
+        focusHandled.current = true;
+        return;
+      }
+
+      // Expand the cost center containing this line item
+      if (focusCostCenterId) {
+        setExpandedIds((prev) => {
+          const next = new Set(prev);
+          next.add(focusCostCenterId);
+          return next;
+        });
+      }
+
+      // Scroll and highlight after a brief delay to ensure DOM is updated
+      setTimeout(() => {
+        const element = document.getElementById(`line-item-${focusLineItemId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedLineItemId(focusLineItemId);
+          // Remove highlight after 4 seconds
+          setTimeout(() => {
+            setHighlightedLineItemId(null);
+          }, 4000);
+        }
+      }, 100);
+
+      focusHandled.current = true;
+    }
+  }, [focusLineItemId, focusCostCenterId, costCenters, onFocusLineItemNotFound]);
 
   // Determine if editing is enabled (supports forecastValues and budgetValues)
   const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange;
@@ -288,15 +336,41 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         costCenter.lineItems.map((item) => {
                           const itemFYTotal = calculateFYTotal(item[valueType]);
 
+                          const isHighlighted = highlightedLineItemId === item.id;
+                          const pendingRequestId = item.approvalStatus === 'pending' 
+                            ? item.approvalRequestId 
+                            : item.adjustmentStatus === 'pending' 
+                              ? item.adjustmentRequestId 
+                              : null;
+
                           return (
-                            <TableRow key={item.id} className="hover:bg-muted/20">
+                            <TableRow 
+                              key={item.id} 
+                              id={`line-item-${item.id}`}
+                              className={`hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
+                            >
                               <TableCell className="sticky left-0 bg-background z-10">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      Approval pending
-                                    </Badge>
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="secondary" className="text-xs">
+                                        Approval pending
+                                      </Badge>
+                                      {pendingRequestId && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/requests/${pendingRequestId}`);
+                                          }}
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   )}
                                   {item.isContracted && (
                                     <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">

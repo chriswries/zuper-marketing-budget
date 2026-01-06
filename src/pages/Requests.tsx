@@ -14,8 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Info } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Search, Info, FileSpreadsheet } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
+import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { MONTH_LABELS } from '@/types/budget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -24,8 +31,32 @@ type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 export default function Requests() {
   const navigate = useNavigate();
   const { requests } = useRequests();
+  const { setSelectedFiscalYearId } = useFiscalYearBudget();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleViewInSheet = (request: typeof requests[0]) => {
+    if (!request.originSheet || !request.originLineItemId) return;
+
+    // If there's a fiscal year, select it first
+    if (request.originFiscalYearId) {
+      setSelectedFiscalYearId(request.originFiscalYearId);
+    }
+
+    const params = new URLSearchParams();
+    if (request.originCostCenterId) params.set('focusCostCenterId', request.originCostCenterId);
+    params.set('focusLineItemId', request.originLineItemId);
+
+    if (request.originSheet === 'budget') {
+      navigate(`/budget?${params.toString()}`);
+    } else {
+      // For forecast, handle legacy mode
+      if (request.originFiscalYearId === null) {
+        params.set('forecastMode', 'legacy');
+      }
+      navigate(`/forecast?${params.toString()}`);
+    }
+  };
 
   const filteredRequests = useMemo(() => {
     return requests
@@ -130,6 +161,7 @@ export default function Requests() {
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Date Range</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -154,6 +186,30 @@ export default function Requests() {
                     </TableCell>
                     <TableCell>
                       {new Date(request.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {request.originSheet && request.originLineItemId && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewInSheet(request);
+                                }}
+                              >
+                                <FileSpreadsheet className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View in {request.originSheet === 'budget' ? 'Budget' : 'Forecast'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

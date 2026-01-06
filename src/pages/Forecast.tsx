@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
@@ -93,12 +94,24 @@ const formatTimestamp = (isoString: string): string => {
 };
 
 export default function Forecast() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { requests, addRequest, updateRequest } = useRequests();
   const { selectedFiscalYear, selectedFiscalYearId } = useFiscalYearBudget();
   const { settings: adminSettings } = useAdminSettings();
   
+  // Read query params for focus and mode override
+  const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
+  const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
+  const forecastModeParam = searchParams.get('forecastMode'); // 'legacy' | 'fy' | null
+
   // Determine if we should use FY-specific forecast or legacy
-  const isActiveFY = selectedFiscalYear?.status === 'active';
+  // Allow forecastMode param to override
+  const defaultIsActiveFY = selectedFiscalYear?.status === 'active';
+  const isActiveFY = forecastModeParam === 'legacy' 
+    ? false 
+    : forecastModeParam === 'fy' 
+      ? defaultIsActiveFY 
+      : defaultIsActiveFY;
   const fyId = selectedFiscalYearId;
 
   // Initialize cost centers based on active FY or legacy
@@ -119,6 +132,16 @@ export default function Forecast() {
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set(['feb', 'mar']));
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+
+  const handleFocusLineItemNotFound = useCallback(() => {
+    toast({
+      title: 'Line item not found',
+      description: 'This line item no longer exists (may have been rejected or deleted).',
+      variant: 'destructive',
+    });
+    // Clear the focus params
+    setSearchParams({});
+  }, [setSearchParams]);
 
   // Track the current FY mode for display
   const usingLegacyForecast = useMemo(() => {
@@ -262,7 +285,7 @@ export default function Forecast() {
     const startMonth: Month = monthsWithSpend[0] ?? 'feb';
     const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
 
-    // Create the spend request
+    // Create the spend request with origin metadata
     const requestId = crypto.randomUUID();
     const newRequest = {
       id: requestId,
@@ -277,6 +300,12 @@ export default function Forecast() {
       status: 'pending' as const,
       createdAt: new Date().toISOString(),
       approvalSteps: createDefaultApprovalSteps(),
+      // Origin metadata for deep linking
+      originSheet: 'forecast' as const,
+      originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
+      originCostCenterId: costCenterId,
+      originLineItemId: lineItem.id,
+      originKind: 'new_line_item' as const,
     };
     addRequest(newRequest);
 
@@ -296,7 +325,7 @@ export default function Forecast() {
         };
       })
     );
-  }, [addRequest, costCenters]);
+  }, [addRequest, costCenters, isActiveFY, selectedFiscalYearId]);
 
   const handleDeleteLineItem = useCallback(({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
     // Find the line item to check if we need to cancel a request
@@ -368,7 +397,7 @@ export default function Forecast() {
       const startMonth: Month = monthsWithSpend[0] ?? 'feb';
       const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
 
-      // Create the spend request
+      // Create the spend request with origin metadata
       const requestId = crypto.randomUUID();
       const newRequest = {
         id: requestId,
@@ -383,6 +412,12 @@ export default function Forecast() {
         status: 'pending' as const,
         createdAt: new Date().toISOString(),
         approvalSteps: createDefaultApprovalSteps(),
+        // Origin metadata for deep linking
+        originSheet: 'forecast' as const,
+        originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
+        originCostCenterId: costCenterId,
+        originLineItemId: lineItemId,
+        originKind: 'adjustment' as const,
       };
       addRequest(newRequest);
 
@@ -592,6 +627,9 @@ export default function Forecast() {
         onCellChange={handleCellChange}
         onDeleteLineItem={handleDeleteLineItem}
         lockedMonths={lockedMonths}
+        focusCostCenterId={focusCostCenterId}
+        focusLineItemId={focusLineItemId}
+        onFocusLineItemNotFound={handleFocusLineItemNotFound}
       />
 
       <AddLineItemDialog
