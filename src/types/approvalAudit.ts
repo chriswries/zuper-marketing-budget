@@ -6,7 +6,8 @@ export type ApprovalAuditAction =
   | 'approved_step'
   | 'rejected_step'
   | 'reset'
-  | 'final_approved';
+  | 'final_approved'
+  | 'notified_next_approver';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 

@@ -113,6 +113,7 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   rejected_step: 'Rejected',
   reset: 'Reset to draft',
   final_approved: 'Fully approved',
+  notified_next_approver: 'Notification copied',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
@@ -135,6 +136,13 @@ export function formatAuditEvent(event: ApprovalAuditEvent): string {
   if (event.action === 'approved_step' || event.action === 'rejected_step') {
     const stepLabel = event.stepLevel ? stepLabels[event.stepLevel] : '';
     return `${roleLabel} ${actionLabel.toLowerCase()} ${stepLabel} step`;
+  }
+  
+  if (event.action === 'notified_next_approver' && event.meta) {
+    const channel = event.meta.channel === 'slack' ? 'Slack' : 'Email';
+    const part = event.meta.part === 'message' ? 'message' : event.meta.part === 'subject' ? 'subject' : 'body';
+    const stepLabel = event.stepLevel ? stepLabels[event.stepLevel] : '';
+    return `${roleLabel} copied ${channel} ${part} for ${stepLabel} step`;
   }
   
   return `${roleLabel} ${actionLabel.toLowerCase()}`;
