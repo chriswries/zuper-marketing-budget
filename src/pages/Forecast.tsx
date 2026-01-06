@@ -129,7 +129,7 @@ export default function Forecast() {
     return loadLegacyForecastState();
   });
 
-  const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set(['feb', 'mar']));
+  const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set());
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 

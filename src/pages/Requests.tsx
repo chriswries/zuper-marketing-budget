@@ -37,7 +37,7 @@ export default function Requests() {
   const { requests } = useRequests();
   const { setSelectedFiscalYearId } = useFiscalYearBudget();
   const { currentRole } = useCurrentUserRole();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [needsMyApproval, setNeedsMyApproval] = useState(false);
 
