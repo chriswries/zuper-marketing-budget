@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,8 +34,10 @@ import {
   VarianceCostCenterRow,
   VarianceLineItemRow,
 } from '@/lib/budgetForecastVariance';
+import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 type SortOption = 'variance_abs' | 'variance_pct' | 'alpha';
 
@@ -195,6 +197,97 @@ export default function VarianceReport() {
     navigate(`/forecast?focusCostCenterId=${ccId}&focusLineItemId=${itemId}`);
   };
   
+  const handleExportCsv = useCallback(() => {
+    if (!filteredReport || !selectedFiscalYear) {
+      toast({ title: 'Export failed', description: 'No data to export', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      // Build rows from filtered data
+      const rows: Record<string, unknown>[] = [];
+      
+      for (const cc of filteredReport.costCenters) {
+        for (const item of cc.lineItems) {
+          const row: Record<string, unknown> = {
+            fiscalYearId: selectedFiscalYearId,
+            fiscalYearName: selectedFiscalYear.name,
+            costCenterId: item.costCenterId,
+            costCenterName: item.costCenterName,
+            lineItemId: item.lineItemId,
+            lineItemName: item.name,
+            vendorName: item.vendorName || '',
+            isContracted: item.isContracted,
+            status: item.status,
+          };
+          
+          if (showMonthly) {
+            // Add monthly variance columns
+            for (const month of MONTHS) {
+              row[`variance_${month}`] = item.varianceByMonth[month];
+            }
+          } else {
+            row.budgetFY = item.budgetTotal;
+            row.forecastFY = item.forecastTotal;
+          }
+          
+          row.varianceFY = item.variance;
+          row.variancePct = item.variancePct; // null stays as empty in CSV
+          
+          rows.push(row);
+        }
+      }
+      
+      // Define columns based on showMonthly
+      const baseColumns: CsvColumn[] = [
+        { key: 'fiscalYearId', header: 'Fiscal Year ID' },
+        { key: 'fiscalYearName', header: 'Fiscal Year Name' },
+        { key: 'costCenterId', header: 'Cost Center ID' },
+        { key: 'costCenterName', header: 'Cost Center Name' },
+        { key: 'lineItemId', header: 'Line Item ID' },
+        { key: 'lineItemName', header: 'Line Item Name' },
+        { key: 'vendorName', header: 'Vendor Name' },
+        { key: 'isContracted', header: 'Is Contracted' },
+        { key: 'status', header: 'Status' },
+      ];
+      
+      let columns: CsvColumn[];
+      
+      if (showMonthly) {
+        const monthColumns: CsvColumn[] = MONTHS.map(month => ({
+          key: `variance_${month}`,
+          header: `Variance ${MONTH_LABELS[month]}`,
+        }));
+        columns = [
+          ...baseColumns,
+          ...monthColumns,
+          { key: 'varianceFY', header: 'Variance FY' },
+          { key: 'variancePct', header: 'Variance %' },
+        ];
+      } else {
+        columns = [
+          ...baseColumns,
+          { key: 'budgetFY', header: 'Budget FY' },
+          { key: 'forecastFY', header: 'Forecast FY' },
+          { key: 'varianceFY', header: 'Variance FY' },
+          { key: 'variancePct', header: 'Variance %' },
+        ];
+      }
+      
+      // Generate filename
+      const fyName = selectedFiscalYear.name.replace(/[^a-zA-Z0-9]/g, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = `variance_report_${fyName}_${dateStr}.csv`;
+      
+      downloadCsv(filename, rows, columns);
+      
+      toast({ title: 'CSV exported', description: `Downloaded ${filename}` });
+    } catch (error) {
+      console.error('CSV export error:', error);
+      toast({ title: 'Export failed', description: 'An error occurred while exporting', variant: 'destructive' });
+    }
+  }, [filteredReport, selectedFiscalYear, selectedFiscalYearId, showMonthly]);
+  
   // Render empty states
   if (!initialized) {
     return (
@@ -262,10 +355,16 @@ export default function VarianceReport() {
   
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Budget vs Forecast Variance"
-        description={`Comparing approved budget against current forecast for ${selectedFiscalYear.name}`}
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Budget vs Forecast Variance"
+          description={`Comparing approved budget against current forecast for ${selectedFiscalYear.name}`}
+        />
+        <Button onClick={handleExportCsv} variant="outline" className="gap-2">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
+      </div>
       
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
