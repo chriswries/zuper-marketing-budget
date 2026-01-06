@@ -1,14 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
+import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
-import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
+import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import {
   Sheet,
@@ -18,7 +20,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarPlus, FileSpreadsheet, History, Plus } from 'lucide-react';
+import { CalendarPlus, FileSpreadsheet, History, Plus, Settings2 } from 'lucide-react';
 
 const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
 
@@ -73,7 +75,102 @@ export default function Budget() {
   const { requests, addRequest, updateRequest } = useRequests();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+  const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+
+  // Compute remaining amounts for each cost center and grand total
+  const remainingAmounts = useMemo(() => {
+    if (!selectedFiscalYear) return { byCostCenter: new Map<string, number>(), grandTotal: 0 };
+
+    const byCostCenter = new Map<string, number>();
+    let totalSpent = 0;
+
+    for (const cc of selectedFiscalYear.costCenters) {
+      const spent = cc.lineItems.reduce((sum, item) => sum + calculateFYTotal(item.budgetValues), 0);
+      totalSpent += spent;
+      byCostCenter.set(cc.id, cc.annualLimit - spent);
+    }
+
+    return {
+      byCostCenter,
+      grandTotal: selectedFiscalYear.targetBudget - totalSpent,
+    };
+  }, [selectedFiscalYear]);
+
+  // Render meta for cost center FY Total cell
+  const renderCostCenterFYMeta = useCallback((cc: CostCenter) => {
+    const remaining = remainingAmounts.byCostCenter.get(cc.id) ?? 0;
+    if (remaining >= 0) {
+      return (
+        <Badge variant="secondary" className="text-xs mt-1">
+          Remaining: {formatCurrency(remaining)}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="destructive" className="text-xs mt-1">
+        Over by: {formatCurrency(Math.abs(remaining))}
+      </Badge>
+    );
+  }, [remainingAmounts]);
+
+  // Render meta for grand total FY Total cell
+  const renderGrandTotalFYMeta = useCallback(() => {
+    const remaining = remainingAmounts.grandTotal;
+    if (remaining >= 0) {
+      return (
+        <Badge variant="secondary" className="text-xs mt-1">
+          Remaining: {formatCurrency(remaining)}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="destructive" className="text-xs mt-1">
+        Over by: {formatCurrency(Math.abs(remaining))}
+      </Badge>
+    );
+  }, [remainingAmounts]);
+
+  // Handle saving allocations
+  const handleSaveAllocations = useCallback(
+    (payload: {
+      targetBudget: number;
+      costCenters: { id: string; name: string; annualLimit: number; isNew?: boolean }[];
+      deletedIds: string[];
+    }) => {
+      if (!selectedFiscalYear || !selectedFiscalYearId) return;
+
+      updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
+        // Build new cost centers array preserving existing lineItems
+        const newCostCenters: CostCenter[] = payload.costCenters.map((updated) => {
+          const existing = fy.costCenters.find((cc) => cc.id === updated.id);
+          if (existing && !updated.isNew) {
+            return {
+              ...existing,
+              name: updated.name,
+              annualLimit: updated.annualLimit,
+            };
+          }
+          // New cost center
+          return {
+            id: updated.id,
+            name: updated.name,
+            ownerId: null,
+            annualLimit: updated.annualLimit,
+            lineItems: [],
+          };
+        });
+
+        return {
+          ...fy,
+          targetBudget: payload.targetBudget,
+          costCenters: newCostCenters,
+          updatedAt: new Date().toISOString(),
+        };
+      });
+    },
+    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]
+  );
 
   // Load audit log when FY changes
   useEffect(() => {
@@ -361,6 +458,11 @@ export default function Budget() {
             Add line item
           </Button>
 
+          <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            Edit allocations
+          </Button>
+
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -427,6 +529,8 @@ export default function Budget() {
         showEmptyCostCenters={true}
         onCellChange={handleCellChange}
         onDeleteLineItem={handleDeleteLineItem}
+        renderCostCenterFYMeta={renderCostCenterFYMeta}
+        renderGrandTotalFYMeta={renderGrandTotalFYMeta}
       />
 
       <AddLineItemDialog
@@ -435,6 +539,13 @@ export default function Budget() {
         costCenters={selectedFiscalYear.costCenters}
         lockedMonths={new Set()} // No locked months for Budget
         onCreateLineItem={handleCreateLineItem}
+      />
+
+      <EditAllocationsDialog
+        open={editAllocationsOpen}
+        onOpenChange={setEditAllocationsOpen}
+        fiscalYearBudget={selectedFiscalYear}
+        onSave={handleSaveAllocations}
       />
     </div>
   );
