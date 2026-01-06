@@ -293,7 +293,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="sticky left-0 bg-background z-10">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
-                                  {item.approvalStatus === 'pending' && (
+                                  {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && (
                                     <Badge variant="secondary" className="text-xs">
                                       Approval pending
                                     </Badge>
