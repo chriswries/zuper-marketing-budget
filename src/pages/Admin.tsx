@@ -1,12 +1,30 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
-import { CalendarPlus } from "lucide-react";
+import { useAdminSettings } from "@/contexts/AdminSettingsContext";
+import { CalendarPlus, ShieldCheck } from "lucide-react";
 
 export default function Admin() {
   const [wizardOpen, setWizardOpen] = useState(false);
+  const { settings, updateSettings } = useAdminSettings();
+
+  const handleAbsoluteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value) && value >= 0) {
+      updateSettings({ increaseApprovalAbsoluteUsd: value });
+    }
+  };
+
+  const handlePercentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value) && value >= 0 && value <= 100) {
+      updateSettings({ increaseApprovalPercent: value });
+    }
+  };
 
   return (
     <div>
@@ -30,6 +48,64 @@ export default function Admin() {
                 Start FY Budget
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Approval Thresholds</CardTitle>
+            </div>
+            <CardDescription>
+              Approval is required when an inline edit increases the FY total by more than
+              max($threshold, %threshold of old FY total). Only increases trigger approvals.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="absolute-threshold">Approval threshold ($)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    id="absolute-threshold"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={settings.increaseApprovalAbsoluteUsd}
+                    onChange={handleAbsoluteChange}
+                    className="pl-7"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Minimum dollar increase that triggers approval
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="percent-threshold">Approval threshold (%)</Label>
+                <div className="relative">
+                  <Input
+                    id="percent-threshold"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={settings.increaseApprovalPercent}
+                    onChange={handlePercentChange}
+                    className="pr-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Percentage of old FY total used as threshold
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+              Example: With ${settings.increaseApprovalAbsoluteUsd.toLocaleString()} and {settings.increaseApprovalPercent}%, 
+              a line item with $100,000 FY total would require approval for increases over ${Math.max(settings.increaseApprovalAbsoluteUsd, 100000 * (settings.increaseApprovalPercent / 100)).toLocaleString()}.
+            </p>
           </CardContent>
         </Card>
 

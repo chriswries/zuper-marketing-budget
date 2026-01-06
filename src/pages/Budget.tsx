@@ -15,7 +15,8 @@ import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues,
 import { AuditEntry } from '@/types/audit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
-import { shouldTriggerIncreaseApproval } from '@/lib/lineItemApprovalThreshold';
+import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { toast } from '@/hooks/use-toast';
 import {
   Sheet,
@@ -117,6 +118,7 @@ function getStepIcon(status: 'pending' | 'approved' | 'rejected') {
 export default function Budget() {
   const { selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget } = useFiscalYearBudget();
   const { requests, addRequest, updateRequest } = useRequests();
+  const { settings: adminSettings } = useAdminSettings();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
@@ -514,8 +516,9 @@ export default function Budget() {
       const newTotal = calculateFYTotal(updatedBudgetValues);
 
       // Check if this triggers an approval workflow
-      if (shouldTriggerIncreaseApproval(oldTotal, newTotal)) {
+      if (shouldTriggerIncreaseApproval(oldTotal, newTotal, adminSettings)) {
         const delta = newTotal - oldTotal;
+        const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
         const vendorName = lineItem.vendor?.name ?? '—';
 
         // Find start/end months
@@ -566,7 +569,7 @@ export default function Budget() {
 
         toast({
           title: 'Approval required',
-          description: `Increase of ${formatCurrency(delta)} requires approval. A spend request has been created.`,
+          description: `Increase of ${formatCurrency(delta)} exceeds threshold of ${formatCurrency(threshold)}. A spend request has been created.`,
         });
       } else {
         // Normal edit without approval

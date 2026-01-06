@@ -28,7 +28,8 @@ import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
-import { shouldTriggerIncreaseApproval } from '@/lib/lineItemApprovalThreshold';
+import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { toast } from '@/hooks/use-toast';
 
 // Deep clone cost centers to avoid mutating mock data
@@ -94,6 +95,7 @@ const formatTimestamp = (isoString: string): string => {
 export default function Forecast() {
   const { requests, addRequest, updateRequest } = useRequests();
   const { selectedFiscalYear, selectedFiscalYearId } = useFiscalYearBudget();
+  const { settings: adminSettings } = useAdminSettings();
   
   // Determine if we should use FY-specific forecast or legacy
   const isActiveFY = selectedFiscalYear?.status === 'active';
@@ -356,8 +358,9 @@ export default function Forecast() {
     const newTotal = calculateFYTotal(updatedForecastValues);
 
     // Check if this triggers an approval workflow
-    if (shouldTriggerIncreaseApproval(oldTotal, newTotal)) {
+    if (shouldTriggerIncreaseApproval(oldTotal, newTotal, adminSettings)) {
       const delta = newTotal - oldTotal;
+      const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
       const vendorName = lineItem.vendor?.name ?? '—';
 
       // Find start/end months
@@ -406,7 +409,7 @@ export default function Forecast() {
 
       toast({
         title: 'Approval required',
-        description: `Increase of ${formatCurrency(delta)} requires approval. A spend request has been created.`,
+        description: `Increase of ${formatCurrency(delta)} exceeds threshold of ${formatCurrency(threshold)}. A spend request has been created.`,
       });
     } else {
       // Normal edit without approval
