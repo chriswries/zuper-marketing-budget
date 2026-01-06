@@ -20,9 +20,16 @@ import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
+import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import {
+  loadApprovalAudit,
+  appendApprovalAudit,
+  formatAuditEvent,
+  formatAuditTimestamp,
+} from '@/lib/approvalAuditStore';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -133,6 +140,7 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
 
   // Focus props from URL params
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
@@ -310,10 +318,19 @@ export default function Budget() {
         ],
       },
     }));
-  }, [selectedFiscalYearId, canSubmit, updateFiscalYearBudget]);
+
+    // Append audit event
+    appendApprovalAudit('budget', selectedFiscalYearId, {
+      action: 'submitted_for_approval',
+      actorRole: currentRole,
+    });
+    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+  }, [selectedFiscalYearId, canSubmit, updateFiscalYearBudget, currentRole]);
 
   const handleApproveNextStep = useCallback(() => {
     if (!selectedFiscalYearId || !selectedFiscalYear) return;
+
+    const stepLevel = nextPendingBudgetStep?.level;
 
     updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
       const steps = [...fy.approval.steps];
@@ -351,10 +368,32 @@ export default function Budget() {
         },
       };
     });
-  }, [selectedFiscalYearId, selectedFiscalYear, updateFiscalYearBudget]);
+
+    // Append audit event for step approval
+    appendApprovalAudit('budget', selectedFiscalYearId, {
+      action: 'approved_step',
+      actorRole: currentRole,
+      stepLevel: stepLevel as 'cmo' | 'finance',
+    });
+
+    // Check if this was the final step
+    const steps = selectedFiscalYear.approval?.steps ?? [];
+    const pendingCount = steps.filter((s) => s.status === 'pending').length;
+    if (pendingCount === 1) {
+      // This was the last pending step, append final_approved
+      appendApprovalAudit('budget', selectedFiscalYearId, {
+        action: 'final_approved',
+        actorRole: currentRole,
+      });
+    }
+
+    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+  }, [selectedFiscalYearId, selectedFiscalYear, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
 
   const handleReject = useCallback(() => {
     if (!selectedFiscalYearId) return;
+
+    const stepLevel = nextPendingBudgetStep?.level;
 
     updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
       const steps = [...fy.approval.steps];
@@ -379,7 +418,15 @@ export default function Budget() {
         },
       };
     });
-  }, [selectedFiscalYearId, updateFiscalYearBudget]);
+
+    // Append audit event
+    appendApprovalAudit('budget', selectedFiscalYearId, {
+      action: 'rejected_step',
+      actorRole: currentRole,
+      stepLevel: stepLevel as 'cmo' | 'finance',
+    });
+    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+  }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
 
   const handleResetToDraft = useCallback(() => {
     if (!selectedFiscalYearId) return;
@@ -399,14 +446,23 @@ export default function Budget() {
         rejectedAt: undefined,
       },
     }));
-  }, [selectedFiscalYearId, updateFiscalYearBudget]);
+
+    // Append audit event
+    appendApprovalAudit('budget', selectedFiscalYearId, {
+      action: 'reset',
+      actorRole: currentRole,
+    });
+    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+  }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole]);
 
   // Load audit log when FY changes
   useEffect(() => {
     if (selectedFiscalYearId) {
       setAuditLog(loadBudgetAuditLog(selectedFiscalYearId));
+      setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
     } else {
       setAuditLog([]);
+      setApprovalAuditEvents([]);
     }
   }, [selectedFiscalYearId]);
 
@@ -1041,6 +1097,43 @@ export default function Budget() {
                   </TooltipContent>
                 )}
               </Tooltip>
+            )}
+          </div>
+
+          {/* Approval Activity */}
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <History className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Approval Activity</span>
+            </div>
+            {approvalAuditEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No approval activity yet</p>
+            ) : (
+              <ScrollArea className="max-h-48">
+                <div className="space-y-2">
+                  {approvalAuditEvents.map((event) => {
+                    const actionIcon = {
+                      created: <CalendarPlus className="h-3.5 w-3.5 text-muted-foreground" />,
+                      submitted_for_approval: <Send className="h-3.5 w-3.5 text-blue-500" />,
+                      approved_step: <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />,
+                      rejected_step: <XCircle className="h-3.5 w-3.5 text-destructive" />,
+                      reset: <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />,
+                      final_approved: <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />,
+                    };
+                    return (
+                      <div key={event.id} className="flex items-start gap-3 text-sm">
+                        <div className="mt-0.5">{actionIcon[event.action]}</div>
+                        <div className="flex-1">
+                          <div className="font-medium">{formatAuditEvent(event)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatAuditTimestamp(event.timestamp)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             )}
           </div>
         </CardContent>
