@@ -156,6 +156,13 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
         annualLimit: Math.round(cc.amount),
         lineItems: [],
       })),
+      approval: {
+        status: 'draft',
+        steps: [
+          { level: 'cmo', status: 'pending' },
+          { level: 'finance', status: 'pending' },
+        ],
+      },
       createdAt: now,
       updatedAt: now,
     };

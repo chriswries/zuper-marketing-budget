@@ -2,16 +2,19 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
-import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
+import { saveForecastForFY } from '@/lib/forecastStore';
+import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import {
   Sheet,
   SheetContent,
@@ -20,7 +23,22 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarPlus, FileSpreadsheet, History, Plus, Settings2 } from 'lucide-react';
+import {
+  CalendarPlus,
+  FileSpreadsheet,
+  History,
+  Plus,
+  Settings2,
+  Send,
+  Check,
+  X,
+  RotateCcw,
+  Lock,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react';
 
 const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
 
@@ -70,6 +88,30 @@ function createEmptyMonthlyValues(): MonthlyValues {
   };
 }
 
+function getApprovalStatusBadge(status: BudgetApprovalStatus) {
+  switch (status) {
+    case 'draft':
+      return <Badge variant="secondary">Draft</Badge>;
+    case 'pending':
+      return <Badge variant="outline" className="border-amber-500 text-amber-600">Pending Approval</Badge>;
+    case 'approved':
+      return <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>;
+    case 'rejected':
+      return <Badge variant="destructive">Rejected</Badge>;
+  }
+}
+
+function getStepIcon(status: 'pending' | 'approved' | 'rejected') {
+  switch (status) {
+    case 'pending':
+      return <Clock className="h-4 w-4 text-muted-foreground" />;
+    case 'approved':
+      return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+    case 'rejected':
+      return <XCircle className="h-4 w-4 text-destructive" />;
+  }
+}
+
 export default function Budget() {
   const { selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget } = useFiscalYearBudget();
   const { requests, addRequest, updateRequest } = useRequests();
@@ -77,6 +119,45 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+
+  // Check if budget is editable
+  const isEditable = useMemo(() => {
+    if (!selectedFiscalYear) return false;
+    const status = selectedFiscalYear.approval?.status ?? 'draft';
+    return status === 'draft' || status === 'rejected';
+  }, [selectedFiscalYear]);
+
+  // Check if allocations are balanced
+  const allocationsBalanced = useMemo(() => {
+    if (!selectedFiscalYear) return false;
+    const totalAllocated = selectedFiscalYear.costCenters.reduce(
+      (sum, cc) => sum + cc.annualLimit,
+      0
+    );
+    return Math.abs(totalAllocated - selectedFiscalYear.targetBudget) <= 1;
+  }, [selectedFiscalYear]);
+
+  // Check if any line items are pending approval
+  const hasPendingLineItems = useMemo(() => {
+    if (!selectedFiscalYear) return false;
+    return selectedFiscalYear.costCenters.some((cc) =>
+      cc.lineItems.some((item) => item.approvalStatus === 'pending')
+    );
+  }, [selectedFiscalYear]);
+
+  // Compute submission blockers
+  const submissionBlockers = useMemo(() => {
+    const blockers: string[] = [];
+    if (!allocationsBalanced) {
+      blockers.push('Allocations must balance to target budget');
+    }
+    if (hasPendingLineItems) {
+      blockers.push('All line items must be approved before submission');
+    }
+    return blockers;
+  }, [allocationsBalanced, hasPendingLineItems]);
+
+  const canSubmit = submissionBlockers.length === 0;
 
   // Compute remaining amounts for each cost center and grand total
   const remainingAmounts = useMemo(() => {
@@ -171,6 +252,116 @@ export default function Budget() {
     },
     [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]
   );
+
+  // Approval workflow handlers
+  const handleSubmitForApproval = useCallback(() => {
+    if (!selectedFiscalYearId || !canSubmit) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+      ...fy,
+      updatedAt: new Date().toISOString(),
+      approval: {
+        ...fy.approval,
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        approvedAt: undefined,
+        rejectedAt: undefined,
+        steps: [
+          { level: 'cmo', status: 'pending' },
+          { level: 'finance', status: 'pending' },
+        ],
+      },
+    }));
+  }, [selectedFiscalYearId, canSubmit, updateFiscalYearBudget]);
+
+  const handleApproveNextStep = useCallback(() => {
+    if (!selectedFiscalYearId || !selectedFiscalYear) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
+      const steps = [...fy.approval.steps];
+      const pendingIndex = steps.findIndex((s) => s.status === 'pending');
+
+      if (pendingIndex === -1) return fy;
+
+      steps[pendingIndex] = {
+        ...steps[pendingIndex],
+        status: 'approved',
+        updatedAt: new Date().toISOString(),
+      };
+
+      const allApproved = steps.every((s) => s.status === 'approved');
+      const now = new Date().toISOString();
+
+      if (allApproved) {
+        // Create forecast from approved budget
+        const forecastCostCenters = createForecastCostCentersFromBudget({
+          ...fy,
+          approval: { ...fy.approval, steps },
+        });
+        saveForecastForFY(fy.id, forecastCostCenters);
+      }
+
+      return {
+        ...fy,
+        updatedAt: now,
+        status: allApproved ? 'active' : fy.status,
+        approval: {
+          ...fy.approval,
+          steps,
+          status: allApproved ? 'approved' : 'pending',
+          approvedAt: allApproved ? now : undefined,
+        },
+      };
+    });
+  }, [selectedFiscalYearId, selectedFiscalYear, updateFiscalYearBudget]);
+
+  const handleReject = useCallback(() => {
+    if (!selectedFiscalYearId) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
+      const steps = [...fy.approval.steps];
+      const pendingIndex = steps.findIndex((s) => s.status === 'pending');
+
+      if (pendingIndex !== -1) {
+        steps[pendingIndex] = {
+          ...steps[pendingIndex],
+          status: 'rejected',
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      return {
+        ...fy,
+        updatedAt: new Date().toISOString(),
+        approval: {
+          ...fy.approval,
+          steps,
+          status: 'rejected',
+          rejectedAt: new Date().toISOString(),
+        },
+      };
+    });
+  }, [selectedFiscalYearId, updateFiscalYearBudget]);
+
+  const handleResetToDraft = useCallback(() => {
+    if (!selectedFiscalYearId) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+      ...fy,
+      updatedAt: new Date().toISOString(),
+      status: 'planning',
+      approval: {
+        status: 'draft',
+        steps: [
+          { level: 'cmo', status: 'pending' },
+          { level: 'finance', status: 'pending' },
+        ],
+        submittedAt: undefined,
+        approvedAt: undefined,
+        rejectedAt: undefined,
+      },
+    }));
+  }, [selectedFiscalYearId, updateFiscalYearBudget]);
 
   // Load audit log when FY changes
   useEffect(() => {
@@ -444,24 +635,30 @@ export default function Budget() {
     );
   }
 
+  const approvalStatus = selectedFiscalYear.approval?.status ?? 'draft';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader
           title={`Budget — ${selectedFiscalYear.name}`}
-          description={`Original annual budget (${selectedFiscalYear.status}). Target: $${selectedFiscalYear.targetBudget.toLocaleString()}`}
+          description={`Original annual budget (${selectedFiscalYear.status}). Target: ${formatCurrency(selectedFiscalYear.targetBudget)}`}
         />
 
         <div className="flex items-center gap-2">
-          <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add line item
-          </Button>
+          {isEditable && (
+            <>
+              <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add line item
+              </Button>
 
-          <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            Edit allocations
-          </Button>
+              <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
+                <Settings2 className="h-4 w-4" />
+                Edit allocations
+              </Button>
+            </>
+          )}
 
           <Sheet>
             <SheetTrigger asChild>
@@ -522,10 +719,115 @@ export default function Budget() {
         </div>
       </div>
 
+      {/* Budget Approval Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-medium">Budget Approval</CardTitle>
+            {getApprovalStatusBadge(approvalStatus)}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Step timeline */}
+          <div className="flex items-center gap-6">
+            {selectedFiscalYear.approval?.steps.map((step, idx) => (
+              <div key={step.level} className="flex items-center gap-2">
+                {getStepIcon(step.status)}
+                <div>
+                  <div className="text-sm font-medium capitalize">{step.level}</div>
+                  {step.updatedAt && (
+                    <div className="text-xs text-muted-foreground">
+                      {formatTimestamp(step.updatedAt)}
+                    </div>
+                  )}
+                </div>
+                {idx < selectedFiscalYear.approval.steps.length - 1 && (
+                  <div className="w-8 h-px bg-border ml-2" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Submission blockers */}
+          {(approvalStatus === 'draft' || approvalStatus === 'rejected') && submissionBlockers.length > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <ul className="list-disc list-inside">
+                  {submissionBlockers.map((blocker, idx) => (
+                    <li key={idx}>{blocker}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Locking banner */}
+          {(approvalStatus === 'pending' || approvalStatus === 'approved') && (
+            <Alert>
+              <Lock className="h-4 w-4" />
+              <AlertDescription>
+                Budget is {approvalStatus === 'approved' ? 'approved and locked' : 'under approval'}.
+                {approvalStatus === 'pending' && ' Reset to draft to make changes.'}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {(approvalStatus === 'draft' || approvalStatus === 'rejected') && (
+              <Button
+                onClick={handleSubmitForApproval}
+                disabled={!canSubmit}
+                size="sm"
+                className="gap-2"
+              >
+                <Send className="h-4 w-4" />
+                Submit for approval
+              </Button>
+            )}
+
+            {approvalStatus === 'pending' && (
+              <>
+                <Button
+                  onClick={handleApproveNextStep}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Check className="h-4 w-4" />
+                  Approve next step
+                </Button>
+                <Button
+                  onClick={handleReject}
+                  variant="destructive"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Reject
+                </Button>
+              </>
+            )}
+
+            {(approvalStatus === 'pending' || approvalStatus === 'rejected') && (
+              <Button
+                onClick={handleResetToDraft}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset to draft
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <SheetTable
         costCenters={selectedFiscalYear.costCenters}
         valueType="budgetValues"
-        editable={true}
+        editable={isEditable}
         showEmptyCostCenters={true}
         onCellChange={handleCellChange}
         onDeleteLineItem={handleDeleteLineItem}

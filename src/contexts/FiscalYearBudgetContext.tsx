@@ -1,7 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { CostCenter } from '@/types/budget';
 
-export type FiscalYearStatus = 'planning' | 'pending_cmo' | 'pending_finance' | 'approved';
+export type FiscalYearStatus = 'planning' | 'active' | 'closed';
+
+export type BudgetApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+export type BudgetApprovalLevel = 'cmo' | 'finance';
+
+export interface BudgetApprovalStep {
+  level: BudgetApprovalLevel;
+  status: 'pending' | 'approved' | 'rejected';
+  updatedAt?: string;
+}
+
+export interface BudgetApproval {
+  status: BudgetApprovalStatus;
+  steps: BudgetApprovalStep[];
+  submittedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+}
 
 export interface FiscalYearBudget {
   id: string;
@@ -12,6 +29,7 @@ export interface FiscalYearBudget {
   status: FiscalYearStatus;
   targetBudget: number;
   costCenters: CostCenter[];
+  approval: BudgetApproval;
   createdAt: string; // ISO
   updatedAt: string; // ISO
 }
