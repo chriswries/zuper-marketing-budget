@@ -63,6 +63,8 @@ interface SheetTableProps {
   onCellChange?: (args: CellChangeArgs) => void;
   onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
   lockedMonths?: Set<Month>;
+  renderCostCenterFYMeta?: (costCenter: CostCenter, spent: number) => React.ReactNode;
+  renderGrandTotalFYMeta?: (grandTotal: number) => React.ReactNode;
 }
 
 const formatCurrency = (value: number): string => {
@@ -91,7 +93,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta }: SheetTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
@@ -275,7 +277,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                           </TableCell>
                         ))}
                         <TableCell className="text-right tabular-nums font-semibold bg-muted/50">
-                          {formatCurrency(fyTotal)}
+                          <div>{formatCurrency(fyTotal)}</div>
+                          {renderCostCenterFYMeta?.(costCenter, fyTotal)}
                         </TableCell>
                         {canDelete && <TableCell></TableCell>}
                       </TableRow>
@@ -438,7 +441,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                     </TableCell>
                   ))}
                   <TableCell className="text-right tabular-nums bg-primary/10">
-                    {formatCurrency(grandFYTotal)}
+                    <div>{formatCurrency(grandFYTotal)}</div>
+                    {renderGrandTotalFYMeta?.(grandFYTotal)}
                   </TableCell>
                   {canDelete && <TableCell></TableCell>}
                 </TableRow>
