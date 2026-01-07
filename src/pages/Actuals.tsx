@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
 import { FileSpreadsheet, Upload, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable } from '@/components/sheet/SheetTable';
@@ -8,6 +7,8 @@ import { mockCostCenters } from '@/data/mock-budget-data';
 import { loadLatestActualsImport, clearLatestActualsImport } from '@/lib/actualsImportStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
+import { formatDateTime } from '@/lib/dateTime';
 import type { ActualsImportBatch } from '@/types/actualsImport';
 import type { CostCenter, MONTHS } from '@/types/budget';
 
@@ -22,6 +23,7 @@ function formatCurrency(value: number): string {
 
 export default function Actuals() {
   const navigate = useNavigate();
+  const { settings: adminSettings } = useAdminSettings();
   const [importBatch, setImportBatch] = useState<ActualsImportBatch | null>(null);
 
   useEffect(() => {
@@ -104,7 +106,7 @@ export default function Actuals() {
                 <span>File: <span className="font-medium text-foreground">{importBatch.fileName}</span></span>
               )}
               <span>Posted: <span className="font-medium text-foreground">
-                {format(new Date(importBatch.createdAt), 'MMM d, yyyy h:mm a')}
+                {formatDateTime(importBatch.createdAt, adminSettings.timeZone)}
               </span></span>
               <span>Transactions: <span className="font-medium text-foreground">
                 {importBatch.transactionCount.toLocaleString()}
