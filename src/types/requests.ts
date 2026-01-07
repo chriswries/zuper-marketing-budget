@@ -33,6 +33,8 @@ export interface SpendRequest {
   originCostCenterId?: string;
   originLineItemId?: string;
   originKind?: OriginKind;
+  // Line item name for display
+  lineItemName?: string;
 }
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
