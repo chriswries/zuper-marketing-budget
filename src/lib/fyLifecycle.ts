@@ -122,8 +122,8 @@ export function hardDeleteFiscalYear(
   setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void,
   adminOverrideEnabled: boolean
 ): HardDeleteResult | null {
-  // Defensive guard: hard delete requires Admin Override Mode
-  if (!adminOverrideEnabled) {
+  // Defensive guard: hard delete requires Admin Override Mode AND admin role
+  if (!adminOverrideEnabled || role !== 'admin') {
     return null;
   }
   const fyId = fiscalYear.id;
