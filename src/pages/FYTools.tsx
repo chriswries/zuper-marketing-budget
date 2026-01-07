@@ -227,7 +227,7 @@ export default function FYTools() {
       requests,
       deleteFiscalYearBudget,
       setRequests,
-      true // adminOverrideEnabled - explicit gate
+      isAdminOverrideEnabled
     );
 
     if (!result) {
