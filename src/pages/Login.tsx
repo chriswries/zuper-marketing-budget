@@ -33,23 +33,40 @@ export default function Login() {
 
   // Check if signup is allowed (only for bootstrapping)
   useEffect(() => {
+    let mounted = true;
     async function checkSignupAllowed() {
       try {
         const { data, error } = await supabase.rpc('allow_self_signup');
+        if (!mounted) return;
         if (error) {
           console.error('Error checking signup status:', error);
+          // Default to false on error - admin must create accounts
           setSignupAllowed(false);
         } else {
           setSignupAllowed(data === true);
         }
       } catch (err) {
         console.error('Error checking signup status:', err);
-        setSignupAllowed(false);
+        if (mounted) setSignupAllowed(false);
       } finally {
-        setCheckingSignup(false);
+        if (mounted) setCheckingSignup(false);
       }
     }
+    // Add a timeout fallback in case RPC hangs
+    const timeout = setTimeout(() => {
+      if (mounted && checkingSignup) {
+        console.warn('Signup check timed out, defaulting to disabled');
+        setSignupAllowed(false);
+        setCheckingSignup(false);
+      }
+    }, 3000);
+    
     checkSignupAllowed();
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Redirect if already authenticated
