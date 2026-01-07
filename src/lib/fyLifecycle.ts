@@ -111,6 +111,7 @@ export interface HardDeleteResult {
 
 /**
  * Hard delete a fiscal year and all associated data (destructive).
+ * Returns null if adminOverrideEnabled is false (guard).
  */
 export function hardDeleteFiscalYear(
   fiscalYear: FiscalYearBudget,
@@ -118,8 +119,13 @@ export function hardDeleteFiscalYear(
   justification: string,
   allRequests: SpendRequest[],
   deleteFiscalYearBudget: (id: string) => void,
-  setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void
-): HardDeleteResult {
+  setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void,
+  adminOverrideEnabled: boolean
+): HardDeleteResult | null {
+  // Defensive guard: hard delete requires Admin Override Mode
+  if (!adminOverrideEnabled) {
+    return null;
+  }
   const fyId = fiscalYear.id;
   const fyName = fiscalYear.name;
 

@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
 import { useRequests } from "@/contexts/RequestsContext";
@@ -61,6 +61,7 @@ export default function FYTools() {
   const { fiscalYears, updateFiscalYearBudget, deleteFiscalYearBudget } = useFiscalYearBudget();
   const { requests, setRequests } = useRequests();
   const { settings } = useAdminSettings();
+  const { toast } = useToast();
 
   const [selectedFYId, setSelectedFYId] = useState<string>("");
   const [bundle, setBundle] = useState<FiscalYearBundleV1 | null>(null);
@@ -170,10 +171,16 @@ export default function FYTools() {
 
     if (archiveAction === 'archive') {
       archiveFiscalYear(selectedFY, currentRole, archiveJustification.trim(), updateFiscalYearBudget);
-      toast.success(`${selectedFY.name} has been archived.`);
+      toast({
+        title: "Fiscal Year Archived",
+        description: `${selectedFY.name} has been archived.`,
+      });
     } else {
       restoreFiscalYear(selectedFY, currentRole, archiveJustification.trim(), updateFiscalYearBudget);
-      toast.success(`${selectedFY.name} has been restored.`);
+      toast({
+        title: "Fiscal Year Restored",
+        description: `${selectedFY.name} has been restored.`,
+      });
     }
 
     setArchiveDialogOpen(false);
@@ -184,6 +191,15 @@ export default function FYTools() {
 
   // Hard delete handlers
   const handleOpenDeleteDialog = () => {
+    // Guard: cannot open dialog if override is off
+    if (!isAdminOverrideEnabled) {
+      toast({
+        title: "Admin Override Required",
+        description: "Enable Admin Override Mode to delete a fiscal year.",
+        variant: "destructive",
+      });
+      return;
+    }
     setDeleteJustification("");
     setDeleteConfirmation("");
     setDeleteDialogOpen(true);
@@ -194,18 +210,40 @@ export default function FYTools() {
   const handleHardDelete = () => {
     if (!selectedFY || !deleteJustification.trim() || !isDeleteConfirmationValid) return;
 
+    // Defensive guard: must have override enabled
+    if (!isAdminOverrideEnabled) {
+      toast({
+        title: "Admin Override Required",
+        description: "Cannot delete fiscal year without Admin Override Mode enabled.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const result = hardDeleteFiscalYear(
       selectedFY,
       currentRole,
       deleteJustification.trim(),
       requests,
       deleteFiscalYearBudget,
-      setRequests
+      setRequests,
+      true // adminOverrideEnabled - explicit gate
     );
 
-    toast.success(
-      `${selectedFY.name} and all associated data deleted. Removed ${result.deletedRequestIds.length} requests.`
-    );
+    if (!result) {
+      // hardDeleteFiscalYear returned null (guard failed)
+      toast({
+        title: "Delete Failed",
+        description: "Admin Override Mode must be enabled to delete a fiscal year.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Fiscal Year Deleted",
+      description: `${selectedFY.name} and all associated data deleted. Removed ${result.deletedRequestIds.length} requests.`,
+    });
 
     setDeleteDialogOpen(false);
     setSelectedFYId("");
