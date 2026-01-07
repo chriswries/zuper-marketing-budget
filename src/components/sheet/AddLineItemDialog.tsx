@@ -50,6 +50,7 @@ export function AddLineItemDialog({
   const [vendorName, setVendorName] = useState('');
   const [isContracted, setIsContracted] = useState(false);
   const [isAccrual, setIsAccrual] = useState(false);
+  const [isSoftwareSubscription, setIsSoftwareSubscription] = useState(false);
   const [scheduleType, setScheduleType] = useState<ScheduleType>('one-time');
 
   // Schedule fields
@@ -170,6 +171,7 @@ export function AddLineItemDialog({
     setVendorName('');
     setIsContracted(false);
     setIsAccrual(false);
+    setIsSoftwareSubscription(false);
     setScheduleType('one-time');
     setOneTimeMonth('');
     setOneTimeAmount('');
@@ -196,6 +198,7 @@ export function AddLineItemDialog({
       ownerId: null,
       isContracted,
       isAccrual,
+      isSoftwareSubscription,
       budgetValues: createEmptyMonthlyValues(),
       forecastValues,
       actualValues: createEmptyMonthlyValues(),
@@ -261,7 +264,7 @@ export function AddLineItemDialog({
           </div>
 
           {/* Flags */}
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="contracted"
@@ -280,6 +283,16 @@ export function AddLineItemDialog({
               />
               <Label htmlFor="accrual" className="cursor-pointer">
                 Accrual
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="software-subscription"
+                checked={isSoftwareSubscription}
+                onCheckedChange={(checked) => setIsSoftwareSubscription(checked === true)}
+              />
+              <Label htmlFor="software-subscription" className="cursor-pointer">
+                Software Subscription
               </Label>
             </div>
           </div>

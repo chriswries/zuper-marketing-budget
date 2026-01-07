@@ -48,6 +48,7 @@ export interface LineItem {
   ownerId: string | null; // User ID of owner
   isContracted: boolean;
   isAccrual: boolean;
+  isSoftwareSubscription: boolean;
   contractStartDate?: string;
   contractEndDate?: string;
   autoRenew?: boolean;
