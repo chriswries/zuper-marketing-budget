@@ -70,7 +70,7 @@ type FilterTab = 'all' | 'unmatched' | 'matched';
 export default function ActualsMatching() {
   const { toast } = useToast();
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId, selectedFiscalYear } = useFiscalYearBudget();
-  const { settings } = useAdminSettings();
+  const { settings: adminSettings } = useAdminSettings();
   const { currentRole } = useCurrentUserRole();
 
   const canEdit = currentRole === 'admin' || currentRole === 'finance';
@@ -542,7 +542,7 @@ export default function ActualsMatching() {
                           return (
                             <TableRow key={txn.id}>
                               <TableCell className="whitespace-nowrap">
-                                {formatDate(txn.txnDate, settings.timeZone)}
+                                {formatDate(txn.txnDate, adminSettings.timeZone)}
                               </TableCell>
                               <TableCell className="font-medium max-w-[200px] truncate">
                                 {txn.merchantName}

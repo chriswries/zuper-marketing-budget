@@ -55,6 +55,7 @@ export interface RollupSummary {
   matchedTotal: number;
   unmatchedCount: number;
   unmatchedTotal: number;
+  orphanedMatchCount: number; // Matches pointing to deleted CC/LI
 }
 
 export interface ActualsRollupResult {
@@ -95,6 +96,7 @@ export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupR
   }
 
   // Initialize rollup accumulators
+  // Use composite key for lineItemRollups to avoid collisions
   const lineItemRollups = new Map<string, LineItemRollup>();
   const costCenterRollups = new Map<string, CostCenterRollup>();
 
@@ -102,6 +104,7 @@ export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupR
   let matchedTotal = 0;
   let unmatchedCount = 0;
   let unmatchedTotal = 0;
+  let orphanedMatchCount = 0;
 
   for (const txn of transactions) {
     const match = matchesByTxnId[txn.id];
@@ -112,25 +115,33 @@ export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupR
       continue;
     }
 
-    matchedCount++;
-    matchedTotal += txn.amount;
-
-    const monthKey = isoDateToMonthKey(txn.txnDate);
     const { costCenterId, lineItemId } = match;
 
-    // Get cost center and line item info
+    // Get cost center and line item info BEFORE counting as matched
     const ccInfo = costCenterMap.get(costCenterId);
     const liInfo = ccInfo?.lineItems.get(lineItemId);
 
     if (!ccInfo || !liInfo) {
-      // Invalid match (orphaned reference), treat as unmatched for safety
-      console.warn(`Invalid match for txn ${txn.id}: CC=${costCenterId}, LI=${lineItemId}`);
+      // Invalid match (orphaned reference) - treat as UNMATCHED, not "dropped"
+      console.warn(`Orphaned match for txn ${txn.id}: CC=${costCenterId}, LI=${lineItemId}`);
+      orphanedMatchCount++;
+      unmatchedCount++;
+      unmatchedTotal += txn.amount;
       continue;
     }
 
+    // Valid match - now count it
+    matchedCount++;
+    matchedTotal += txn.amount;
+
+    const monthKey = isoDateToMonthKey(txn.txnDate);
+
+    // Use composite key to prevent collisions across cost centers
+    const lineItemKey = `${costCenterId}::${lineItemId}`;
+
     // Update line item rollup
-    if (!lineItemRollups.has(lineItemId)) {
-      lineItemRollups.set(lineItemId, {
+    if (!lineItemRollups.has(lineItemKey)) {
+      lineItemRollups.set(lineItemKey, {
         costCenterId,
         costCenterName: ccInfo.name,
         lineItemId,
@@ -140,7 +151,7 @@ export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupR
         actualTotal: 0,
       });
     }
-    const liRollup = lineItemRollups.get(lineItemId)!;
+    const liRollup = lineItemRollups.get(lineItemKey)!;
     liRollup.actualByMonth[monthKey] += txn.amount;
     liRollup.actualTotal += txn.amount;
 
@@ -166,6 +177,7 @@ export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupR
       matchedTotal,
       unmatchedCount,
       unmatchedTotal,
+      orphanedMatchCount,
     },
   };
 }
