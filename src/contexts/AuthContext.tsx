@@ -103,13 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // THEN check for existing session
     const initializeAuth = async () => {
       try {
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        }
         setSession(existingSession);
         setUser(existingSession?.user ?? null);
         
         if (existingSession?.user) {
           await loadProfile(existingSession.user.id);
         }
+      } catch (err) {
+        console.error('Error initializing auth:', err);
       } finally {
         setSessionLoading(false);
       }
