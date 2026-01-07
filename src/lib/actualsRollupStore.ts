@@ -64,14 +64,12 @@ export function recomputeAndSaveActualsRollup(
 
 /**
  * Get existing rollup or compute and save a fresh one.
+ * For the Actuals view, we always recompute to ensure freshness.
  */
 export function getOrBuildActualsRollup(
   fiscalYearId: string,
   fiscalYear: FiscalYearBudget
 ): ActualsRollupResult {
-  const existing = loadActualsRollup(fiscalYearId);
-  if (existing) {
-    return existing.rollup;
-  }
+  // Always recompute to ensure actuals view is fresh
   return recomputeAndSaveActualsRollup(fiscalYearId, fiscalYear);
 }
