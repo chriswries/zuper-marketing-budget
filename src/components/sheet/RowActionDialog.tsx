@@ -12,13 +12,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { LineItem } from '@/types/budget';
 
-export type RowActionType = 'cancel_request' | 'delete_line_item';
+export type RowActionType = 'cancel_request' | 'delete_line_item' | 'withdraw_request';
 
 export interface RowActionData {
   type: RowActionType;
   costCenterId: string;
   lineItem: LineItem;
-  targetRequestId?: string; // For cancel_request, the request being cancelled
+  targetRequestId?: string; // For cancel_request or withdraw_request, the request being cancelled/withdrawn
 }
 
 interface RowActionDialogProps {
@@ -46,17 +46,25 @@ export function RowActionDialog({
   }, [open, data]);
 
   const handleSubmit = () => {
-    if (!justification.trim()) return;
+    // Withdraw allows empty justification
+    if (data?.type !== 'withdraw_request' && !justification.trim()) return;
     onSubmit(justification.trim());
   };
 
   if (!data) return null;
 
   const isCancel = data.type === 'cancel_request';
-  const title = isCancel ? 'Cancel Request' : 'Delete Line Item';
-  const description = isCancel
-    ? `This will cancel the pending approval request for "${data.lineItem.name}".`
-    : `This will delete "${data.lineItem.name}" from the forecast.`;
+  const isWithdraw = data.type === 'withdraw_request';
+  const title = isWithdraw
+    ? 'Withdraw Request'
+    : isCancel 
+      ? 'Cancel Request' 
+      : 'Delete Line Item';
+  const description = isWithdraw
+    ? `This will withdraw the pending deletion request for "${data.lineItem.name}".`
+    : isCancel
+      ? `This will cancel the pending approval request for "${data.lineItem.name}".`
+      : `This will delete "${data.lineItem.name}" from the forecast.`;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
@@ -68,13 +76,15 @@ export function RowActionDialog({
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="justification">Justification *</Label>
+            <Label htmlFor="justification">Justification {isWithdraw ? '(optional)' : '*'}</Label>
             <Textarea
               ref={textareaRef}
               id="justification"
-              placeholder={isCancel 
-                ? 'Why are you cancelling this request?' 
-                : 'Why are you deleting this line item?'}
+              placeholder={isWithdraw
+                ? 'Why are you withdrawing this request? (optional)'
+                : isCancel 
+                  ? 'Why are you cancelling this request?' 
+                  : 'Why are you deleting this line item?'}
               value={justification}
               onChange={(e) => setJustification(e.target.value)}
               rows={3}
@@ -89,9 +99,9 @@ export function RowActionDialog({
           <Button
             variant="destructive"
             onClick={handleSubmit}
-            disabled={!justification.trim()}
+            disabled={!isWithdraw && !justification.trim()}
           >
-            {isCancel ? 'Cancel Request' : 'Delete'}
+            {isWithdraw ? 'Withdraw' : isCancel ? 'Cancel Request' : 'Delete'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -170,11 +170,42 @@ export function resolveCancelRequestApproved(
 }
 
 /**
- * Resolve a cancel_request when REJECTED.
- * - Clear cancellation flags on line item; original request continues
+ * Resolve a cancel_request when REJECTED or CANCELLED.
+ * - Clear cancellation flags on line item
+ * - Restore the target request from snapshot if available
  */
-export function resolveCancelRequestRejected(cancelRequest: SpendRequest): ResolutionResult {
-  const { originCostCenterId, originLineItemId } = cancelRequest;
+export function resolveCancelRequestRejected(
+  cancelRequest: SpendRequest,
+  updateTargetRequest: (id: string, updater: (r: SpendRequest) => SpendRequest) => void
+): ResolutionResult {
+  const { originCostCenterId, originLineItemId, targetRequestId, targetRequestSnapshot } = cancelRequest;
+
+  // Restore the target request if we have snapshot
+  if (targetRequestId && targetRequestSnapshot) {
+    updateTargetRequest(targetRequestId, (r) => ({
+      ...r,
+      status: targetRequestSnapshot.status,
+      approvalSteps: targetRequestSnapshot.approvalSteps,
+    }));
+    
+    // Log audit event
+    appendApprovalAudit('request', targetRequestId, {
+      action: 'approved_step', // Using existing action type
+      actorRole: 'admin', // System action
+      meta: { restoredBy: cancelRequest.id, reason: 'cancel_request was rejected/cancelled' },
+    });
+  } else if (targetRequestId) {
+    // No snapshot - restore to pending with default steps
+    updateTargetRequest(targetRequestId, (r) => ({
+      ...r,
+      status: 'pending' as const,
+      approvalSteps: r.approvalSteps.map((step) => ({
+        ...step,
+        status: 'pending' as const,
+        updatedAt: undefined,
+      })),
+    }));
+  }
 
   if (!originCostCenterId || !originLineItemId) {
     return { resolved: true };
@@ -302,7 +333,7 @@ export function resolveForecastRowActionRequest(
       return true;
     }
     if (isRejected) {
-      resolveCancelRequestRejected(request);
+      resolveCancelRequestRejected(request, updateRequest);
       return true;
     }
   }
