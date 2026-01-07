@@ -14,7 +14,10 @@ export type ApprovalAuditAction =
   | 'admin_override_force_cancel'
   | 'admin_override_force_approve'
   | 'admin_override_force_reject'
-  | 'admin_override_soft_delete';
+  | 'admin_override_soft_delete'
+  | 'fy_archived'
+  | 'fy_restored'
+  | 'fy_hard_deleted';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 

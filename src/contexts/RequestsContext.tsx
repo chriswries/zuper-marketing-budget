@@ -7,6 +7,7 @@ interface RequestsContextType {
   addRequest: (request: SpendRequest) => void;
   getRequest: (id: string) => SpendRequest | undefined;
   updateRequest: (id: string, updater: (r: SpendRequest) => SpendRequest) => void;
+  setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void;
 }
 
 const RequestsContext = createContext<RequestsContextType | undefined>(undefined);
@@ -89,7 +90,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <RequestsContext.Provider value={{ requests, addRequest, getRequest, updateRequest }}>
+    <RequestsContext.Provider value={{ requests, addRequest, getRequest, updateRequest, setRequests }}>
       {children}
     </RequestsContext.Provider>
   );

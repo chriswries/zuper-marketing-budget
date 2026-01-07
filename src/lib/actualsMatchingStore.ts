@@ -156,3 +156,14 @@ export function removeMerchantRule(
   saveActualsMatching(fiscalYearId, data);
   return removed;
 }
+
+/**
+ * Delete all matching data for a fiscal year.
+ */
+export function deleteActualsMatchingForFY(fiscalYearId: string): void {
+  try {
+    localStorage.removeItem(getStorageKey(fiscalYearId));
+  } catch (error) {
+    console.error('Failed to delete actuals matching from localStorage:', error);
+  }
+}

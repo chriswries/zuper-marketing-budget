@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { CostCenter } from '@/types/budget';
 
-export type FiscalYearStatus = 'planning' | 'active' | 'closed';
+export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
 export type BudgetApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 export type BudgetApprovalLevel = 'cmo' | 'finance';
@@ -32,6 +32,11 @@ export interface FiscalYearBudget {
   approval: BudgetApproval;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  // Archive metadata
+  archivedAt?: string;
+  archivedByRole?: string;
+  archivedJustification?: string;
+  previousStatusBeforeArchive?: FiscalYearStatus;
 }
 
 interface FiscalYearBudgetContextValue {
@@ -43,6 +48,7 @@ interface FiscalYearBudgetContextValue {
   setSelectedFiscalYearId: (id: string | null) => void;
   createFiscalYearBudget: (draft: FiscalYearBudget) => void;
   updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => void;
+  deleteFiscalYearBudget: (id: string) => void;
 }
 
 const FiscalYearBudgetContext = createContext<FiscalYearBudgetContextValue | null>(null);
@@ -111,6 +117,14 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     );
   }, []);
 
+  const deleteFiscalYearBudget = useCallback((id: string) => {
+    setFiscalYears((prev) => prev.filter((fy) => fy.id !== id));
+    // Clear selection if deleted FY was selected
+    if (selectedFiscalYearId === id) {
+      setSelectedFiscalYearIdState(null);
+    }
+  }, [selectedFiscalYearId]);
+
   const selectedFiscalYear = fiscalYears.find((fy) => fy.id === selectedFiscalYearId) ?? null;
 
   const value: FiscalYearBudgetContextValue = {
@@ -122,6 +136,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     setSelectedFiscalYearId,
     createFiscalYearBudget,
     updateFiscalYearBudget,
+    deleteFiscalYearBudget,
   };
 
   return (
