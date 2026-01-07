@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs, RowActionArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
+import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
@@ -30,7 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Lock, History, Plus, Info } from 'lucide-react';
+import { Lock, History, Plus, Info, ShieldAlert } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
@@ -40,6 +41,7 @@ import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { formatAuditTimestamp } from '@/lib/dateTime';
+import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 import { toast } from '@/hooks/use-toast';
 
 // Deep clone cost centers to avoid mutating mock data

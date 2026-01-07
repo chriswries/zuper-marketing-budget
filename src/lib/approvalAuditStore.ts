@@ -115,6 +115,9 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   reset: 'Reset to draft',
   final_approved: 'Fully approved',
   notified_next_approver: 'Notification copied',
+  admin_override_cell_edit: 'Admin override: cell edit',
+  admin_override_delete_line_item: 'Admin override: delete line item',
+  admin_override_cancel_linked_request: 'Admin override: cancel linked request',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
