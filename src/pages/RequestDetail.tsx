@@ -336,18 +336,46 @@ export default function RequestDetail() {
       });
       toast({ title: 'Request rejected', description: 'Request has been force rejected via admin override.' });
     } else if (type === 'soft_delete') {
-      updateRequest(id, (r): SpendRequest => ({
-        ...r,
-        deletedAt: now,
-        deletedByRole: 'admin',
-        deletedJustification: justification,
-      }));
-      appendApprovalAudit('request', id, {
-        action: 'admin_override_soft_delete',
-        actorRole: 'admin',
-        meta: { justification },
-      });
-      toast({ title: 'Request archived', description: 'Request has been soft deleted/archived.' });
+      // If request is still pending, force cancel first to resolve linked line items
+      if (request.status === 'pending') {
+        updateRequest(id, (r): SpendRequest => ({
+          ...r,
+          status: 'cancelled',
+          approvalSteps: r.approvalSteps.map((step) =>
+            step.status === 'pending'
+              ? { ...step, status: 'rejected' as const, updatedAt: now }
+              : step
+          ),
+          deletedAt: now,
+          deletedByRole: 'admin',
+          deletedJustification: justification,
+        }));
+        // Log both actions
+        appendApprovalAudit('request', id, {
+          action: 'admin_override_force_cancel',
+          actorRole: 'admin',
+          meta: { justification, reason: 'Auto-cancelled before archive to resolve linked line items' },
+        });
+        appendApprovalAudit('request', id, {
+          action: 'admin_override_soft_delete',
+          actorRole: 'admin',
+          meta: { justification, priorStatus: 'pending' },
+        });
+        toast({ title: 'Request cancelled & archived', description: 'Request was force cancelled and then archived to prevent stranded line items.' });
+      } else {
+        updateRequest(id, (r): SpendRequest => ({
+          ...r,
+          deletedAt: now,
+          deletedByRole: 'admin',
+          deletedJustification: justification,
+        }));
+        appendApprovalAudit('request', id, {
+          action: 'admin_override_soft_delete',
+          actorRole: 'admin',
+          meta: { justification },
+        });
+        toast({ title: 'Request archived', description: 'Request has been soft deleted/archived.' });
+      }
       navigate('/requests');
       return;
     }

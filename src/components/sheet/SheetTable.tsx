@@ -172,13 +172,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
   // Determine if editing is enabled (supports forecastValues and budgetValues)
   // Finance role is always read-only for sheet editing
-  // Admin with override enabled can edit
+  // Admin with override enabled can edit regardless of parent editable prop
   const isAdminOverride = currentUserRole === 'admin' && adminOverrideEnabled;
-  const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange && currentUserRole !== 'finance';
+  const baseEditable = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange && currentUserRole !== 'finance';
+  // effectiveEditable: true if normal editing allowed OR admin override is active
+  const effectiveEditable = (editable && baseEditable) || isAdminOverride;
+  // Legacy isEditable for any code that still references it
+  const isEditable = effectiveEditable;
   // Determine if row actions are enabled
   const hasRowActions = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onRowAction;
-  // Legacy canDelete for backwards compatibility
-  const canDelete = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onDeleteLineItem;
+  // Legacy canDelete for backwards compatibility - also respects admin override
+  const canDelete = ((editable && baseEditable) || isAdminOverride) && !!onDeleteLineItem;
   // Show action column if either new or legacy handler exists
   const showActionColumn = hasRowActions || canDelete;
 
