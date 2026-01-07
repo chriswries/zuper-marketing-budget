@@ -306,6 +306,7 @@ export default function Forecast() {
       originCostCenterId: costCenterId,
       originLineItemId: lineItem.id,
       originKind: 'new_line_item' as const,
+      lineItemName: lineItem.name,
     };
     addRequest(newRequest);
 
@@ -392,10 +393,10 @@ export default function Forecast() {
       const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
       const vendorName = lineItem.vendor?.name ?? '—';
 
-      // Find start/end months
-      const monthsWithSpend = MONTHS.filter((m) => updatedForecastValues[m] > 0);
-      const startMonth: Month = monthsWithSpend[0] ?? 'feb';
-      const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? 'feb';
+      // Find changed months (where delta != 0) for adjustment requests
+      const changedMonths = MONTHS.filter((m) => updatedForecastValues[m] !== oldForecastValues[m]);
+      const startMonth: Month = changedMonths[0] ?? 'feb';
+      const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
 
       // Create the spend request with origin metadata
       const requestId = crypto.randomUUID();
@@ -418,6 +419,7 @@ export default function Forecast() {
         originCostCenterId: costCenterId,
         originLineItemId: lineItemId,
         originKind: 'adjustment' as const,
+        lineItemName,
       };
       addRequest(newRequest);
 

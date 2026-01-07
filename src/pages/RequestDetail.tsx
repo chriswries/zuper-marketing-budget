@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,9 +19,10 @@ import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadshe
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { MONTH_LABELS } from '@/types/budget';
+import { MONTH_LABELS, CostCenter } from '@/types/budget';
 import { ApprovalStep, SpendRequest } from '@/types/requests';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
+import { loadForecastForFY } from '@/lib/forecastStore';
 import {
   loadApprovalAudit,
   appendApprovalAudit,
@@ -85,7 +86,7 @@ export default function RequestDetail() {
   const navigate = useNavigate();
   const { getRequest, updateRequest } = useRequests();
   const { currentRole } = useCurrentUserRole();
-  const { setSelectedFiscalYearId } = useFiscalYearBudget();
+  const { setSelectedFiscalYearId, fiscalYears } = useFiscalYearBudget();
 
   const request = id ? getRequest(id) : undefined;
   const [auditEvents, setAuditEvents] = useState<ApprovalAuditEvent[]>([]);
@@ -101,6 +102,40 @@ export default function RequestDetail() {
       setAuditEvents(loadApprovalAudit('request', id));
     }
   }, [id, request]);
+
+  // Compute line item name with fallback lookup
+  const lineItemName = useMemo(() => {
+    if (!request) return '—';
+    // Use stored lineItemName if available
+    if (request.lineItemName) return request.lineItemName;
+    // Fallback: try to look up from current data
+    if (request.originSheet && request.originCostCenterId && request.originLineItemId) {
+      let costCenters: CostCenter[] | undefined;
+      if (request.originSheet === 'budget' && request.originFiscalYearId) {
+        const fy = fiscalYears.find((f) => f.id === request.originFiscalYearId);
+        costCenters = fy?.costCenters;
+      } else if (request.originSheet === 'forecast') {
+        if (request.originFiscalYearId) {
+          costCenters = loadForecastForFY(request.originFiscalYearId) ?? undefined;
+        }
+      }
+      if (costCenters) {
+        const cc = costCenters.find((c) => c.id === request.originCostCenterId);
+        const item = cc?.lineItems.find((li) => li.id === request.originLineItemId);
+        if (item) return item.name;
+      }
+    }
+    return '—';
+  }, [request, fiscalYears]);
+
+  // Format date range - single month or range
+  const dateRangeDisplay = useMemo(() => {
+    if (!request) return '';
+    if (request.startMonth === request.endMonth) {
+      return MONTH_LABELS[request.startMonth];
+    }
+    return `${MONTH_LABELS[request.startMonth]} – ${MONTH_LABELS[request.endMonth]}`;
+  }, [request]);
 
   const refreshAuditEvents = useCallback(() => {
     if (id) {
@@ -336,6 +371,10 @@ export default function RequestDetail() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
+              <span className="text-muted-foreground">Line Item</span>
+              <span className="font-medium">{lineItemName}</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <Badge variant={statusVariant}>{request.status}</Badge>
             </div>
@@ -355,9 +394,7 @@ export default function RequestDetail() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Date Range</span>
-              <span className="font-medium">
-                {MONTH_LABELS[request.startMonth]} – {MONTH_LABELS[request.endMonth]}
-              </span>
+              <span className="font-medium">{dateRangeDisplay}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Contracted</span>
