@@ -15,7 +15,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadsheet, History, Send, Plus, Copy, Bell } from 'lucide-react';
+import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadsheet, History, Send, Plus, Copy, Bell, ShieldAlert, Ban, Trash2 } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
@@ -92,6 +93,13 @@ export default function RequestDetail() {
 
   const request = id ? getRequest(id) : undefined;
   const [auditEvents, setAuditEvents] = useState<ApprovalAuditEvent[]>([]);
+
+  // Admin override state
+  const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [pendingOverrideAction, setPendingOverrideAction] = useState<{
+    type: 'force_cancel' | 'force_approve' | 'force_reject' | 'soft_delete';
+  } | null>(null);
 
   // Load audit events and backfill created event if missing
   useEffect(() => {
@@ -257,6 +265,100 @@ export default function RequestDetail() {
     });
     refreshAuditEvents();
   };
+
+  // Admin Override Handlers
+  const handleOverrideActionClick = (type: 'force_cancel' | 'force_approve' | 'force_reject' | 'soft_delete') => {
+    setPendingOverrideAction({ type });
+    setOverrideDialogOpen(true);
+  };
+
+  const handleOverrideCancel = () => {
+    setOverrideDialogOpen(false);
+    setPendingOverrideAction(null);
+  };
+
+  const handleOverrideSubmit = (justification: string) => {
+    if (!id || !request || !pendingOverrideAction) return;
+
+    const { type } = pendingOverrideAction;
+    const now = new Date().toISOString();
+
+    if (type === 'force_cancel') {
+      updateRequest(id, (r): SpendRequest => ({
+        ...r,
+        status: 'cancelled',
+        approvalSteps: r.approvalSteps.map((step) =>
+          step.status === 'pending'
+            ? { ...step, status: 'rejected' as const, updatedAt: now }
+            : step
+        ),
+      }));
+      appendApprovalAudit('request', id, {
+        action: 'admin_override_force_cancel',
+        actorRole: 'admin',
+        meta: { justification },
+      });
+      toast({ title: 'Request cancelled', description: 'Request has been force cancelled via admin override.' });
+    } else if (type === 'force_approve') {
+      updateRequest(id, (r): SpendRequest => ({
+        ...r,
+        status: 'approved',
+        approvalSteps: r.approvalSteps.map((step) => ({
+          ...step,
+          status: 'approved' as const,
+          updatedAt: step.status === 'pending' ? now : step.updatedAt,
+        })),
+      }));
+      appendApprovalAudit('request', id, {
+        action: 'admin_override_force_approve',
+        actorRole: 'admin',
+        meta: { justification },
+      });
+      toast({ title: 'Request approved', description: 'Request has been force approved via admin override.' });
+    } else if (type === 'force_reject') {
+      // Reject the first pending step
+      let rejectedFirstPending = false;
+      updateRequest(id, (r): SpendRequest => ({
+        ...r,
+        status: 'rejected',
+        approvalSteps: r.approvalSteps.map((step) => {
+          if (step.status === 'pending' && !rejectedFirstPending) {
+            rejectedFirstPending = true;
+            return { ...step, status: 'rejected' as const, updatedAt: now };
+          }
+          return step;
+        }),
+      }));
+      appendApprovalAudit('request', id, {
+        action: 'admin_override_force_reject',
+        actorRole: 'admin',
+        meta: { justification },
+      });
+      toast({ title: 'Request rejected', description: 'Request has been force rejected via admin override.' });
+    } else if (type === 'soft_delete') {
+      updateRequest(id, (r): SpendRequest => ({
+        ...r,
+        deletedAt: now,
+        deletedByRole: 'admin',
+        deletedJustification: justification,
+      }));
+      appendApprovalAudit('request', id, {
+        action: 'admin_override_soft_delete',
+        actorRole: 'admin',
+        meta: { justification },
+      });
+      toast({ title: 'Request archived', description: 'Request has been soft deleted/archived.' });
+      navigate('/requests');
+      return;
+    }
+
+    setOverrideDialogOpen(false);
+    setPendingOverrideAction(null);
+    refreshAuditEvents();
+  };
+
+  // Check if request is soft-deleted
+  const isDeleted = !!request?.deletedAt;
 
   if (!request) {
     return (
@@ -481,7 +583,90 @@ export default function RequestDetail() {
             onAuditUpdated={refreshAuditEvents}
           />
         )}
+
+        {/* Admin Override Actions */}
+        {isAdminOverride && !isDeleted && (
+          <Card className="md:col-span-2 border-amber-500">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-500" />
+                <CardTitle className="text-lg text-amber-700 dark:text-amber-400">Admin Override Actions</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                These actions bypass normal approval workflows. All actions require justification and are logged.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOverrideActionClick('force_cancel')}
+                  disabled={request.status === 'cancelled'}
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  Force Cancel
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOverrideActionClick('force_approve')}
+                  disabled={request.status === 'approved'}
+                  className="text-green-600 hover:text-green-700"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Force Approve
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOverrideActionClick('force_reject')}
+                  disabled={request.status === 'rejected'}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Force Reject
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOverrideActionClick('soft_delete')}
+                  className="text-muted-foreground"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Archive/Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Deleted notice */}
+        {isDeleted && (
+          <Alert className="md:col-span-2 border-destructive">
+            <Trash2 className="h-4 w-4" />
+            <AlertDescription>
+              This request was archived on {formatDateTime(request.deletedAt!, adminSettings.timeZone)}.
+              {request.deletedJustification && (
+                <span className="block mt-1 text-muted-foreground">Reason: {request.deletedJustification}</span>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
+
+      <AdminOverrideDialog
+        open={overrideDialogOpen}
+        title={
+          pendingOverrideAction?.type === 'force_cancel' ? 'Force Cancel Request' :
+          pendingOverrideAction?.type === 'force_approve' ? 'Force Approve Request' :
+          pendingOverrideAction?.type === 'force_reject' ? 'Force Reject Request' :
+          'Archive/Delete Request'
+        }
+        description="This action bypasses the normal approval workflow. Please provide a justification for audit purposes."
+        onCancel={handleOverrideCancel}
+        onSubmit={handleOverrideSubmit}
+      />
     </div>
   );
 }

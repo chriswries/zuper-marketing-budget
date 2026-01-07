@@ -43,6 +43,10 @@ export default function Requests() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [needsMyApproval, setNeedsMyApproval] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // Admin override mode
+  const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
 
   const handleViewInSheet = (request: typeof requests[0]) => {
     if (!request.originSheet || !request.originLineItemId) return;
@@ -75,6 +79,10 @@ export default function Requests() {
   const filteredRequests = useMemo(() => {
     return requests
       .filter((request) => {
+        // Filter out deleted requests unless showDeleted is enabled
+        if (request.deletedAt && !showDeleted) {
+          return false;
+        }
         // Status filter
         if (statusFilter !== 'all' && request.status !== statusFilter) {
           return false;
@@ -95,7 +103,7 @@ export default function Requests() {
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [requests, statusFilter, searchQuery, needsMyApproval, currentRole]);
+  }, [requests, statusFilter, searchQuery, needsMyApproval, currentRole, showDeleted]);
 
   const isFiltered = statusFilter !== 'all' || searchQuery.trim() !== '' || needsMyApproval;
 
@@ -159,6 +167,18 @@ export default function Requests() {
             Needs my approval
           </Label>
         </div>
+        {isAdminOverride && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="showDeleted"
+              checked={showDeleted}
+              onCheckedChange={(checked) => setShowDeleted(!!checked)}
+            />
+            <Label htmlFor="showDeleted" className="cursor-pointer text-amber-600">
+              Show archived
+            </Label>
+          </div>
+        )}
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

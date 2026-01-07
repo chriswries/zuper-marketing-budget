@@ -41,6 +41,10 @@ export interface SpendRequest {
   targetRequestSnapshot?: { status: RequestStatus; approvalSteps: ApprovalStep[] };
   // For delete_line_item: track pending deletion
   deletionPending?: boolean;
+  // Soft delete fields (admin override)
+  deletedAt?: string;
+  deletedByRole?: string;
+  deletedJustification?: string;
 }
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
