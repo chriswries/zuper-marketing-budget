@@ -47,6 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
+import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
 import { loadActuals } from '@/lib/actualsStore';
 import {
@@ -73,6 +74,7 @@ export default function ActualsMatching() {
   const { settings: adminSettings } = useAdminSettings();
   const { currentRole } = useCurrentUserRole();
 
+  const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, adminSettings.showArchivedFiscalYears);
   const canEdit = currentRole === 'admin' || currentRole === 'finance';
 
   // Data state
@@ -393,7 +395,7 @@ export default function ActualsMatching() {
                   <SelectValue placeholder="Select fiscal year" />
                 </SelectTrigger>
                 <SelectContent>
-                  {fiscalYears.map((fy) => (
+                  {visibleFiscalYears.map((fy) => (
                     <SelectItem key={fy.id} value={fy.id}>
                       {fy.name}
                     </SelectItem>

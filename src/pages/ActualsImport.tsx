@@ -43,6 +43,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
+import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
 import { parseCsv } from '@/lib/csvParse';
 import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@/lib/actualsStore';
@@ -117,6 +118,8 @@ export default function ActualsImport() {
   const { settings: adminSettings } = useAdminSettings();
   const { currentRole } = useCurrentUserRole();
   const { toast } = useToast();
+  
+  const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, adminSettings.showArchivedFiscalYears);
 
   // Permission check
   const canImport = currentRole === 'admin' || currentRole === 'finance';
@@ -405,8 +408,8 @@ export default function ActualsImport() {
                   <SelectTrigger className="w-[280px]">
                     <SelectValue placeholder="Select fiscal year..." />
                   </SelectTrigger>
-                  <SelectContent>
-                    {fiscalYears.map(fy => (
+                <SelectContent>
+                    {visibleFiscalYears.map(fy => (
                       <SelectItem key={fy.id} value={fy.id}>
                         {fy.name} ({fy.status})
                       </SelectItem>

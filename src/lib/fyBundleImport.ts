@@ -1,12 +1,13 @@
 /**
  * Import Fiscal Year Bundle (FY-3).
- * Supports restore (no conflicts) and overwrite (admin override required) modes.
+ * Supports restore (no conflicts), overwrite (admin override required), and clone (remaps IDs) modes.
  */
 
-import type { FiscalYearBundleV1 } from '@/types/fyBundle';
+import type { FiscalYearBundleV1, ActualsMatchingBundle } from '@/types/fyBundle';
 import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import type { SpendRequest } from '@/types/requests';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
+import type { ApprovalActorRole, ApprovalAuditEvent } from '@/types/approvalAudit';
 import { validateFiscalYearBundle } from '@/lib/fyBundle';
 import { hardDeleteFiscalYear } from '@/lib/fyLifecycle';
 import { saveForecastForFY, clearForecastForFY } from '@/lib/forecastStore';
@@ -14,6 +15,7 @@ import { replaceActuals } from '@/lib/actualsStore';
 import { replaceActualsMatchingForFY } from '@/lib/actualsMatchingStore';
 import { deleteActualsRollupForFY } from '@/lib/actualsRollupStore';
 import { replaceApprovalAuditForEntity, appendApprovalAudit } from '@/lib/approvalAuditStore';
+import type { CostCenter, LineItem } from '@/types/budget';
 
 /**
  * Parse a JSON file uploaded by the user.
@@ -116,7 +118,7 @@ export function detectBundleConflicts(
   };
 }
 
-export type ImportMode = 'restore' | 'overwrite';
+export type ImportMode = 'restore' | 'overwrite' | 'clone';
 
 export interface ImportBundleArgs {
   bundle: FiscalYearBundleV1;
@@ -139,13 +141,212 @@ export interface ImportResult {
 }
 
 /**
+ * Map UserRole to ApprovalActorRole for audit logging.
+ */
+function toAuditActorRole(role: UserRole): ApprovalActorRole {
+  // UserRole and ApprovalActorRole have the same values
+  const validRoles: ApprovalActorRole[] = ['admin', 'manager', 'cmo', 'finance'];
+  if (validRoles.includes(role as ApprovalActorRole)) {
+    return role as ApprovalActorRole;
+  }
+  // Fallback (should not happen)
+  return 'admin';
+}
+
+/**
+ * Generate a new unique ID.
+ */
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * Clone a fiscal year bundle with remapped IDs to avoid conflicts.
+ * Creates new IDs for: FY, cost centers, line items, requests.
+ */
+export function cloneFiscalYearBundleV1(bundle: FiscalYearBundleV1): FiscalYearBundleV1 {
+  const originalFyId = bundle.fiscalYearId;
+  const newFiscalYearId = generateId();
+  
+  // Build ID mapping tables
+  const costCenterIdMap = new Map<string, string>();
+  const lineItemIdMap = new Map<string, string>();
+  const requestIdMap = new Map<string, string>();
+  
+  // Map cost center and line item IDs
+  for (const cc of bundle.fiscalYear.costCenters) {
+    const newCcId = generateId();
+    costCenterIdMap.set(cc.id, newCcId);
+    for (const li of cc.lineItems) {
+      lineItemIdMap.set(li.id, generateId());
+    }
+  }
+  
+  // Map request IDs
+  for (const req of bundle.requests) {
+    requestIdMap.set(req.id, generateId());
+  }
+  
+  // Helper to remap ID or return original if not in map
+  const remapCcId = (id: string | undefined): string | undefined => {
+    if (!id) return id;
+    return costCenterIdMap.get(id) ?? id;
+  };
+  
+  const remapLiId = (id: string | undefined): string | undefined => {
+    if (!id) return id;
+    return lineItemIdMap.get(id) ?? id;
+  };
+  
+  const remapRequestId = (id: string): string => {
+    return requestIdMap.get(id) ?? id;
+  };
+  
+  // Clone cost centers with new IDs
+  const clonedCostCenters: CostCenter[] = bundle.fiscalYear.costCenters.map(cc => {
+    const newCcId = costCenterIdMap.get(cc.id)!;
+    const clonedLineItems: LineItem[] = cc.lineItems.map(li => ({
+      ...li,
+      id: lineItemIdMap.get(li.id)!,
+    }));
+    return {
+      ...cc,
+      id: newCcId,
+      lineItems: clonedLineItems,
+    };
+  });
+  
+  // Clone fiscal year
+  const clonedFiscalYear: FiscalYearBudget = {
+    ...bundle.fiscalYear,
+    id: newFiscalYearId,
+    name: `${bundle.fiscalYear.name} (Imported Clone)`,
+    costCenters: clonedCostCenters,
+  };
+  
+  // Clone forecast if present
+  let clonedForecast: CostCenter[] | null = null;
+  if (bundle.forecast) {
+    clonedForecast = bundle.forecast.map(cc => {
+      const newCcId = costCenterIdMap.get(cc.id) ?? cc.id;
+      const clonedLineItems: LineItem[] = cc.lineItems.map(li => ({
+        ...li,
+        id: lineItemIdMap.get(li.id) ?? li.id,
+      }));
+      return {
+        ...cc,
+        id: newCcId,
+        lineItems: clonedLineItems,
+      };
+    });
+  }
+  
+  // Clone actuals matching with remapped IDs
+  const clonedMatching: ActualsMatchingBundle = {
+    matchesByTxnId: {},
+    rulesByMerchantKey: {},
+  };
+  
+  for (const [txnId, match] of Object.entries(bundle.actualsMatching.matchesByTxnId)) {
+    clonedMatching.matchesByTxnId[txnId] = {
+      ...match,
+      costCenterId: remapCcId(match.costCenterId) ?? match.costCenterId,
+      lineItemId: remapLiId(match.lineItemId),
+    };
+  }
+  
+  for (const [key, rule] of Object.entries(bundle.actualsMatching.rulesByMerchantKey)) {
+    clonedMatching.rulesByMerchantKey[key] = {
+      ...rule,
+      costCenterId: remapCcId(rule.costCenterId) ?? rule.costCenterId,
+      lineItemId: remapLiId(rule.lineItemId),
+    };
+  }
+  
+  // Clone requests with remapped IDs
+  const clonedRequests: SpendRequest[] = bundle.requests.map(req => {
+    const cloned: SpendRequest = {
+      ...req,
+      id: remapRequestId(req.id),
+    };
+    
+    // Remap any cost center/line item references in the request
+    if ('costCenterId' in cloned && typeof (cloned as any).costCenterId === 'string') {
+      (cloned as any).costCenterId = remapCcId((cloned as any).costCenterId);
+    }
+    if ('originCostCenterId' in cloned && typeof (cloned as any).originCostCenterId === 'string') {
+      (cloned as any).originCostCenterId = remapCcId((cloned as any).originCostCenterId);
+    }
+    if ('lineItemId' in cloned && typeof (cloned as any).lineItemId === 'string') {
+      (cloned as any).lineItemId = remapLiId((cloned as any).lineItemId);
+    }
+    if ('originLineItemId' in cloned && typeof (cloned as any).originLineItemId === 'string') {
+      (cloned as any).originLineItemId = remapLiId((cloned as any).originLineItemId);
+    }
+    if ('targetLineItemId' in cloned && typeof (cloned as any).targetLineItemId === 'string') {
+      (cloned as any).targetLineItemId = remapLiId((cloned as any).targetLineItemId);
+    }
+    
+    return cloned;
+  });
+  
+  // Clone approval audit events with remapped request IDs
+  const clonedAuditByRequestId: Record<string, ApprovalAuditEvent[]> = {};
+  for (const [oldRequestId, events] of Object.entries(bundle.approvalAuditEventsByRequestId)) {
+    const newRequestId = remapRequestId(oldRequestId);
+    clonedAuditByRequestId[newRequestId] = events.map(evt => {
+      const clonedEvt: ApprovalAuditEvent = {
+        ...evt,
+        entityId: newRequestId,
+      };
+      // Update meta if it contains IDs
+      if (evt.meta) {
+        const newMeta = { ...evt.meta };
+        if (typeof newMeta.requestId === 'string') {
+          newMeta.requestId = remapRequestId(newMeta.requestId as string);
+        }
+        if (typeof newMeta.costCenterId === 'string') {
+          newMeta.costCenterId = remapCcId(newMeta.costCenterId as string);
+        }
+        if (typeof newMeta.lineItemId === 'string') {
+          newMeta.lineItemId = remapLiId(newMeta.lineItemId as string);
+        }
+        clonedEvt.meta = newMeta;
+      }
+      return clonedEvt;
+    });
+  }
+  
+  // Notes
+  const clonedNotes = [...(bundle.notes ?? [])];
+  clonedNotes.push(`Imported as clone with remapped IDs. Original FY ID: ${originalFyId}, New FY ID: ${newFiscalYearId}`);
+  
+  return {
+    schemaVersion: bundle.schemaVersion,
+    exportedAt: bundle.exportedAt,
+    exportedByRole: bundle.exportedByRole,
+    fiscalYearId: newFiscalYearId,
+    fiscalYearName: `${bundle.fiscalYearName} (Imported Clone)`,
+    fiscalYear: clonedFiscalYear,
+    forecast: clonedForecast,
+    actualsTransactions: bundle.actualsTransactions, // Transaction IDs don't need remapping (stored per-FY)
+    actualsMatching: clonedMatching,
+    requests: clonedRequests,
+    approvalAuditEventsByRequestId: clonedAuditByRequestId,
+    fyAuditEvents: bundle.fyAuditEvents, // Will be stored under new FY ID
+    notes: clonedNotes,
+  };
+}
+
+/**
  * Import a FiscalYearBundleV1 into the app.
  * - Restore mode: only if no conflicts
  * - Overwrite mode: requires admin + override, FY must exist, no request ID conflicts
+ * - Clone mode: always allowed, remaps IDs to avoid conflicts
  */
 export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
   const {
-    bundle,
+    bundle: originalBundle,
     mode,
     justification,
     currentRole,
@@ -158,27 +359,30 @@ export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
   } = args;
 
   // 1. Validate bundle
-  const validation = validateFiscalYearBundle(bundle);
+  const validation = validateFiscalYearBundle(originalBundle);
   if (!validation.ok) {
     return { ok: false, errors: validation.errors };
   }
 
-  // 2. Detect conflicts
+  // 2. For clone mode, create cloned bundle with new IDs
+  const bundle = mode === 'clone' ? cloneFiscalYearBundleV1(originalBundle) : originalBundle;
+
+  // 3. Detect conflicts (after potential cloning)
   const conflicts = detectBundleConflicts(bundle, existingFiscalYears, existingRequests);
 
-  // 3. Mode-specific checks
+  // 4. Mode-specific checks
   if (mode === 'restore') {
     // Restore mode: fail if FY exists or request conflicts
     if (conflicts.fyIdExists) {
       return { 
         ok: false, 
-        errors: [`Fiscal year "${bundle.fiscalYearName}" (ID: ${bundle.fiscalYearId}) already exists. Use Overwrite mode or delete it first.`] 
+        errors: [`Fiscal year "${bundle.fiscalYearName}" (ID: ${bundle.fiscalYearId}) already exists. Use Overwrite or Clone mode.`] 
       };
     }
     if (conflicts.requestIdConflicts.length > 0) {
       return { 
         ok: false, 
-        errors: [`Request ID conflicts: ${conflicts.requestIdConflicts.join(', ')}. Cannot restore with conflicting request IDs.`] 
+        errors: [`Request ID conflicts: ${conflicts.requestIdConflicts.join(', ')}. Use Clone mode to import with new IDs.`] 
       };
     }
   } else if (mode === 'overwrite') {
@@ -190,7 +394,7 @@ export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
       return { ok: false, errors: ['Overwrite mode requires Admin Override Mode to be enabled.'] };
     }
     if (!conflicts.fyIdExists) {
-      return { ok: false, errors: ['Fiscal year does not exist. Use Restore mode for new imports.'] };
+      return { ok: false, errors: ['Fiscal year does not exist. Use Restore or Clone mode for new imports.'] };
     }
     if (conflicts.requestIdConflicts.length > 0) {
       return { 
@@ -219,10 +423,11 @@ export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
       return { ok: false, errors: ['Failed to delete existing fiscal year. Admin Override may be disabled.'] };
     }
   }
+  // Clone mode: no additional checks needed - IDs are already remapped
 
   const fyId = bundle.fiscalYearId;
 
-  // 4. Perform import writes
+  // 5. Perform import writes
   try {
     // a) Create/insert FY into FY store
     createFiscalYearBudget(bundle.fiscalYear);
@@ -258,10 +463,10 @@ export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
     // g) Clear rollup cache so it rebuilds
     deleteActualsRollupForFY(fyId);
 
-    // 5. Append import audit event
+    // 6. Append import audit event with correct actor role
     appendApprovalAudit('request', fyId, {
       action: 'fy_bundle_imported',
-      actorRole: 'admin',
+      actorRole: toAuditActorRole(currentRole),
       note: justification,
       meta: {
         mode,
