@@ -36,6 +36,7 @@ import { loadForecastForFY } from "@/lib/forecastStore";
 import { loadApprovalAudit } from "@/lib/approvalAuditStore";
 import { archiveFiscalYear, restoreFiscalYear, hardDeleteFiscalYear, getFYScopedRequests } from "@/lib/fyLifecycle";
 import { parseJsonFile, detectBundleConflicts, importFiscalYearBundleV1, type ImportMode, type BundleConflictResult } from "@/lib/fyBundleImport";
+import { getVisibleFiscalYears } from "@/lib/fiscalYearVisibility";
 import type { FiscalYearBundleV1, BundleValidationResult } from "@/types/fyBundle";
 import { 
   Package, 
@@ -423,23 +424,17 @@ export default function FYTools() {
                   <SelectValue placeholder="Select a fiscal year..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {fiscalYears.length === 0 ? (
+                  {visibleFiscalYears.length === 0 ? (
                     <SelectItem value="_none" disabled>
                       No fiscal years available
                     </SelectItem>
                   ) : (
-                    visibleFiscalYears.length === 0 ? (
-                      <SelectItem value="_none" disabled>
-                        No fiscal years available
+                    visibleFiscalYears.map((fy) => (
+                      <SelectItem key={fy.id} value={fy.id}>
+                        {fy.name} ({fy.status})
                       </SelectItem>
-                    ) : (
-                      visibleFiscalYears.map((fy) => (
-                        <SelectItem key={fy.id} value={fy.id}>
-                          {fy.name} ({fy.status})
-                        </SelectItem>
-                      ))
-                    )
-                  }
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -906,7 +901,7 @@ export default function FYTools() {
                       The imported FY will be named: <strong>{importBundle.fiscalYearName} (Imported Clone)</strong>
                     </AlertDescription>
                   </Alert>
-                )
+                )}
 
                 {/* Justification */}
                 <div className="space-y-2">
@@ -953,21 +948,6 @@ export default function FYTools() {
                       />
                     </div>
                   </>
-                )
-
-                {/* Overwrite confirmation */}
-                {importMode === 'overwrite' && importConflicts.requestIdConflicts.length === 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="overwrite-confirmation">
-                      Type <strong>OVERWRITE</strong> to confirm
-                    </Label>
-                    <Input
-                      id="overwrite-confirmation"
-                      placeholder="Type OVERWRITE"
-                      value={overwriteConfirmation}
-                      onChange={(e) => setOverwriteConfirmation(e.target.value)}
-                    />
-                  </div>
                 )}
               </>
             )}
