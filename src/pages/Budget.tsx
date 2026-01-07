@@ -176,12 +176,16 @@ export default function Budget() {
     setSearchParams({});
   }, [setSearchParams]);
 
-  // Check if budget is editable
+  // Finance role is read-only for sheet editing
+  const isFinance = currentRole === 'finance';
+
+  // Check if budget is editable (excludes finance role)
   const isEditable = useMemo(() => {
+    if (isFinance) return false; // Finance is read-only
     if (!selectedFiscalYear) return false;
     const status = selectedFiscalYear.approval?.status ?? 'draft';
     return status === 'draft' || status === 'rejected';
-  }, [selectedFiscalYear]);
+  }, [selectedFiscalYear, isFinance]);
 
   // Determine the next pending budget approval step
   const nextPendingBudgetStep = useMemo(() => {
@@ -944,7 +948,7 @@ export default function Budget() {
         />
 
         <div className="flex items-center gap-2">
-          {isEditable && (
+          {isEditable ? (
             <>
               <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -956,7 +960,37 @@ export default function Budget() {
                 Edit allocations
               </Button>
             </>
-          )}
+          ) : isFinance && (selectedFiscalYear.approval?.status === 'draft' || selectedFiscalYear.approval?.status === 'rejected') ? (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button size="sm" className="gap-2" disabled>
+                      <Plus className="h-4 w-4" />
+                      Add line item
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Finance is read-only</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button variant="outline" size="sm" disabled className="gap-2">
+                      <Settings2 className="h-4 w-4" />
+                      Edit allocations
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Finance is read-only</p>
+                </TooltipContent>
+              </Tooltip>
+            </>
+          ) : null}
 
           <Sheet>
             <SheetTrigger asChild>
