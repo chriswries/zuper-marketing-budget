@@ -118,6 +118,10 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   admin_override_cell_edit: 'Admin override: cell edit',
   admin_override_delete_line_item: 'Admin override: delete line item',
   admin_override_cancel_linked_request: 'Admin override: cancel linked request',
+  admin_override_force_cancel: 'Admin override: force cancel',
+  admin_override_force_approve: 'Admin override: force approve',
+  admin_override_force_reject: 'Admin override: force reject',
+  admin_override_soft_delete: 'Admin override: soft delete',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {

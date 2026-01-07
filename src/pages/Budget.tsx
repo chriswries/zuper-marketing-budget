@@ -1494,7 +1494,7 @@ export default function Budget() {
       <SheetTable
         costCenters={selectedFiscalYear.costCenters}
         valueType="budgetValues"
-        editable={isEditable}
+        editable={isEditable || isAdminOverride}
         showEmptyCostCenters={true}
         onCellChange={isFinance ? undefined : handleCellChange}
         onDeleteLineItem={isFinance ? undefined : handleDeleteLineItem}
@@ -1504,6 +1504,7 @@ export default function Budget() {
         focusCostCenterId={focusCostCenterId}
         focusLineItemId={focusLineItemId}
         onFocusLineItemNotFound={handleFocusLineItemNotFound}
+        adminOverrideEnabled={adminSettings.adminOverrideEnabled}
       />
 
       <AddLineItemDialog

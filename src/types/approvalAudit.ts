@@ -10,7 +10,11 @@ export type ApprovalAuditAction =
   | 'notified_next_approver'
   | 'admin_override_cell_edit'
   | 'admin_override_delete_line_item'
-  | 'admin_override_cancel_linked_request';
+  | 'admin_override_cancel_linked_request'
+  | 'admin_override_force_cancel'
+  | 'admin_override_force_approve'
+  | 'admin_override_force_reject'
+  | 'admin_override_soft_delete';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 

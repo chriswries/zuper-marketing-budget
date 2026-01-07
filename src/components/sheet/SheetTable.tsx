@@ -88,6 +88,8 @@ interface SheetTableProps {
   focusCostCenterId?: string;
   focusLineItemId?: string;
   onFocusLineItemNotFound?: () => void;
+  // Admin override mode - allows admin to edit/delete without normal restrictions
+  adminOverrideEnabled?: boolean;
 }
 
 const formatCurrency = (value: number): string => {
@@ -116,7 +118,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false }: SheetTableProps) {
   const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,6 +172,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
   // Determine if editing is enabled (supports forecastValues and budgetValues)
   // Finance role is always read-only for sheet editing
+  // Admin with override enabled can edit
+  const isAdminOverride = currentUserRole === 'admin' && adminOverrideEnabled;
   const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange && currentUserRole !== 'finance';
   // Determine if row actions are enabled
   const hasRowActions = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onRowAction;
@@ -558,10 +562,15 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const cellValue = item[valueType][month];
                                 // Only apply locked months logic for forecastValues (not budgetValues)
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
-                                // Lock cells during pending cancellation or deletion
-                                const isItemLocked = item.cancellationStatus === 'pending' || item.deletionStatus === 'pending';
+                                // Lock cells during pending cancellation or deletion (unless admin override)
+                                const isItemLocked = !isAdminOverride && (item.cancellationStatus === 'pending' || item.deletionStatus === 'pending');
+                                // Admin override bypasses pending approval locks
+                                const isPendingLocked = !isAdminOverride && (item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending');
                                 
-                                if (isEditable && !isMonthLocked && !isItemLocked) {
+                                // Admin override bypasses month locks too
+                                const effectiveMonthLocked = isAdminOverride ? false : isMonthLocked;
+                                
+                                if (isEditable && !effectiveMonthLocked && !isItemLocked && !isPendingLocked) {
                                   return (
                                     <EditableCell
                                       key={month}
@@ -712,8 +721,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                       );
                                     }
                                     
-                                    // Admin: disabled for other actions
-                                    if (currentUserRole === 'admin') {
+                                    // Admin: disabled for other actions UNLESS admin override is enabled
+                                    if (currentUserRole === 'admin' && !isAdminOverride) {
                                       return (
                                         <TooltipProvider>
                                           <Tooltip>
@@ -730,11 +739,43 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                               </span>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>Admin cannot modify line items</p>
+                                              <p>Admin cannot modify line items. Enable Admin Override Mode in settings.</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
                                       );
+                                    }
+                                    
+                                    // Admin with override: allow delete action (goes through parent handler)
+                                    if (currentUserRole === 'admin' && isAdminOverride) {
+                                      // Use legacy onDeleteLineItem for admin override delete
+                                      if (onDeleteLineItem) {
+                                        return (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-amber-600 hover:text-destructive"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteLineItem({
+                                                      costCenterId: costCenter.id,
+                                                      lineItemId: item.id,
+                                                    });
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                <p>Delete line item (Admin Override)</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        );
+                                      }
                                     }
                                     
                                     // Note: Contracted items CAN be deleted per spec - managers/CMO can initiate deletion

@@ -1202,14 +1202,16 @@ export default function Forecast() {
       <SheetTable
         costCenters={costCenters}
         valueType="forecastValues"
-        editable={isEditable}
-        onCellChange={isEditable ? handleCellChange : undefined}
+        editable={isEditable || isAdminOverride}
+        onCellChange={(isEditable || isAdminOverride) ? handleCellChange : undefined}
         onRowAction={handleRowAction}
+        onDeleteLineItem={isAdminOverride ? handleDeleteLineItem : undefined}
         currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
         lockedMonths={lockedMonths}
         focusCostCenterId={focusCostCenterId}
         focusLineItemId={focusLineItemId}
         onFocusLineItemNotFound={handleFocusLineItemNotFound}
+        adminOverrideEnabled={adminSettings.adminOverrideEnabled}
       />
 
       <AddLineItemDialog
