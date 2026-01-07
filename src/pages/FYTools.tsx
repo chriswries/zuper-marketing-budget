@@ -58,6 +58,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
+import { Copy } from "lucide-react";
 
 export default function FYTools() {
   const navigate = useNavigate();
@@ -92,6 +93,8 @@ export default function FYTools() {
   const [overwriteConfirmation, setOverwriteConfirmation] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+
+  const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, settings.showArchivedFiscalYears);
 
   const selectedFY = useMemo(() => 
     fiscalYears.find(fy => fy.id === selectedFYId) ?? null
@@ -295,7 +298,9 @@ export default function FYTools() {
       setImportConflicts(conflicts);
       
       // Auto-select mode based on conflicts
-      if (conflicts.fyIdExists && conflicts.requestIdConflicts.length === 0) {
+      if (conflicts.requestIdConflicts.length > 0) {
+        setImportMode('clone');
+      } else if (conflicts.fyIdExists && conflicts.requestIdConflicts.length === 0) {
         setImportMode('overwrite');
       } else {
         setImportMode('restore');
@@ -370,6 +375,7 @@ export default function FYTools() {
 
   const canRestore = importConflicts && !importConflicts.fyIdExists && importConflicts.requestIdConflicts.length === 0;
   const canOverwrite = importConflicts && importConflicts.fyIdExists && importConflicts.requestIdConflicts.length === 0 && isAdminOverrideEnabled;
+  const canClone = importConflicts && importConflicts.schemaOk;
 
   // Admin-only gate
   if (currentRole !== 'admin') {
@@ -422,12 +428,18 @@ export default function FYTools() {
                       No fiscal years available
                     </SelectItem>
                   ) : (
-                    fiscalYears.map((fy) => (
-                      <SelectItem key={fy.id} value={fy.id}>
-                        {fy.name} ({fy.status})
+                    visibleFiscalYears.length === 0 ? (
+                      <SelectItem value="_none" disabled>
+                        No fiscal years available
                       </SelectItem>
-                    ))
-                  )}
+                    ) : (
+                      visibleFiscalYears.map((fy) => (
+                        <SelectItem key={fy.id} value={fy.id}>
+                          {fy.name} ({fy.status})
+                        </SelectItem>
+                      ))
+                    )
+                  }
                 </SelectContent>
               </Select>
             </div>
@@ -850,48 +862,98 @@ export default function FYTools() {
                 )}
 
                 {/* Mode selector */}
-                {importConflicts.requestIdConflicts.length === 0 && (
-                  <div className="space-y-3">
-                    {canRestore && (
-                      <Button
-                        variant={importMode === 'restore' ? 'default' : 'outline'}
-                        className="w-full justify-start"
-                        onClick={() => setImportMode('restore')}
-                      >
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Restore from bundle (safe)
-                      </Button>
-                    )}
-                    {importConflicts.fyIdExists && (
-                      <Button
-                        variant={importMode === 'overwrite' ? 'destructive' : 'outline'}
-                        className="w-full justify-start"
-                        onClick={() => setImportMode('overwrite')}
-                        disabled={!isAdminOverrideEnabled}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Overwrite existing FY (destructive)
-                        {!isAdminOverrideEnabled && <span className="ml-2 text-xs">(requires Admin Override)</span>}
-                      </Button>
-                    )}
-                  </div>
-                )}
+                <div className="space-y-3">
+                  {canRestore && (
+                    <Button
+                      variant={importMode === 'restore' ? 'default' : 'outline'}
+                      className="w-full justify-start"
+                      onClick={() => setImportMode('restore')}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Restore from bundle (safe)
+                    </Button>
+                  )}
+                  {importConflicts.fyIdExists && (
+                    <Button
+                      variant={importMode === 'overwrite' ? 'destructive' : 'outline'}
+                      className="w-full justify-start"
+                      onClick={() => setImportMode('overwrite')}
+                      disabled={!isAdminOverrideEnabled || importConflicts.requestIdConflicts.length > 0}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Overwrite existing FY (destructive)
+                      {!isAdminOverrideEnabled && <span className="ml-2 text-xs">(requires Admin Override)</span>}
+                    </Button>
+                  )}
+                  {canClone && (
+                    <Button
+                      variant={importMode === 'clone' ? 'secondary' : 'outline'}
+                      className="w-full justify-start"
+                      onClick={() => setImportMode('clone')}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Import as Clone (new IDs)
+                    </Button>
+                  )}
+                </div>
+
+                {/* Clone mode info */}
+                {importMode === 'clone' && (
+                  <Alert className="border-blue-300 bg-blue-50">
+                    <Copy className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-700">
+                      This will create a new fiscal year with new IDs. It will not overwrite existing data.
+                      The imported FY will be named: <strong>{importBundle.fiscalYearName} (Imported Clone)</strong>
+                    </AlertDescription>
+                  </Alert>
+                )
 
                 {/* Justification */}
-                {importConflicts.requestIdConflicts.length === 0 && (
-                  <div className="space-y-2">
-                    <Label htmlFor="import-justification">
-                      Justification <span className="text-destructive">*</span>
-                    </Label>
-                    <Textarea
-                      id="import-justification"
-                      placeholder="Why are you importing this fiscal year?"
-                      value={importJustification}
-                      onChange={(e) => setImportJustification(e.target.value)}
-                      className="min-h-[60px]"
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="import-justification">
+                    Justification <span className="text-destructive">*</span>
+                  </Label>
+                  <Textarea
+                    id="import-justification"
+                    placeholder="Why are you importing this fiscal year?"
+                    value={importJustification}
+                    onChange={(e) => setImportJustification(e.target.value)}
+                    className="min-h-[60px]"
+                  />
+                </div>
+
+                {/* Overwrite confirmation with deletion impact */}
+                {importMode === 'overwrite' && (
+                  <>
+                    <Alert variant="destructive" className="border-destructive bg-destructive/10">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle className="text-destructive">Permanent Deletion Warning</AlertTitle>
+                      <AlertDescription className="text-destructive/90 space-y-2">
+                        <p>The following will be <strong>permanently deleted</strong> before importing:</p>
+                        <ul className="list-disc list-inside text-sm">
+                          <li><strong>{importBundle.fiscalYearName}</strong> (ID: {importBundle.fiscalYearId.slice(0, 8)}...)</li>
+                          <li>{importConflicts.summary.costCenters} cost centers, {importConflicts.summary.lineItems} line items</li>
+                          <li>Forecast: {importConflicts.summary.forecastIncluded ? 'Yes' : 'No'}</li>
+                          <li>{importConflicts.summary.actualsTxnCount} actuals transactions</li>
+                          <li>{importConflicts.summary.requestsCount} requests</li>
+                          <li>{importConflicts.summary.auditEventCount} audit events</li>
+                        </ul>
+                        <p className="font-semibold mt-2">This permanently deletes the existing FY and all associated data before importing.</p>
+                      </AlertDescription>
+                    </Alert>
+                    <div className="space-y-2">
+                      <Label htmlFor="overwrite-confirmation">
+                        Type <strong>OVERWRITE</strong> to confirm
+                      </Label>
+                      <Input
+                        id="overwrite-confirmation"
+                        placeholder="Type OVERWRITE"
+                        value={overwriteConfirmation}
+                        onChange={(e) => setOverwriteConfirmation(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )
 
                 {/* Overwrite confirmation */}
                 {importMode === 'overwrite' && importConflicts.requestIdConflicts.length === 0 && (
@@ -914,24 +976,34 @@ export default function FYTools() {
             <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
               Cancel
             </Button>
-            {importConflicts?.requestIdConflicts.length === 0 && (
-              <Button
-                variant={importMode === 'overwrite' ? 'destructive' : 'default'}
-                onClick={handleImport}
-                disabled={
-                  isImporting ||
-                  !importJustification.trim() ||
-                  (importMode === 'overwrite' && overwriteConfirmation !== 'OVERWRITE') ||
-                  (importMode === 'restore' && !canRestore) ||
-                  (importMode === 'overwrite' && !canOverwrite)
-                }
-              >
-                {isImporting ? 'Importing...' : (importMode === 'overwrite' ? 'Overwrite & Import' : 'Import')}
-              </Button>
-            )}
+            <Button
+              variant={importMode === 'overwrite' ? 'destructive' : 'default'}
+              onClick={handleImport}
+              disabled={
+                isImporting ||
+                !importJustification.trim() ||
+                (importMode === 'overwrite' && overwriteConfirmation !== 'OVERWRITE') ||
+                (importMode === 'restore' && !canRestore) ||
+                (importMode === 'overwrite' && !canOverwrite) ||
+                (importMode === 'clone' && !canClone)
+              }
+            >
+              {isImporting ? 'Importing...' : (
+                importMode === 'overwrite' ? 'Overwrite & Import' : 
+                importMode === 'clone' ? 'Clone & Import' : 'Import'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 
+        Manual Test Checklist (FY-3 Tightening):
+        - [ ] Show/hide archived toggle: Toggle in Admin, verify FY dropdowns update everywhere
+        - [ ] Restore import: Export FY, delete it, import bundle using Restore
+        - [ ] Overwrite import: Enable Admin Override, import same bundle with Overwrite (verify deletion summary)
+        - [ ] Clone import: Import bundle when FY exists or request conflicts exist, verify new FY created
+      */}
     </div>
   );
 }

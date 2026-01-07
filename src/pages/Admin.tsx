@@ -17,7 +17,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link, ShieldAlert, Package } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link, ShieldAlert, Package, Eye } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -120,6 +120,36 @@ export default function Admin() {
                   ⚠️ Override mode is ON. All override actions require justification and are logged to the audit trail.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Show Archived Fiscal Years Toggle - Admin only */}
+        {currentRole === 'admin' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Eye className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Fiscal Year Visibility</CardTitle>
+              </div>
+              <CardDescription>
+                Control visibility of archived fiscal years across the application.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="show-archived-toggle">Show archived fiscal years in selectors</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Archived fiscal years are hidden by default. Enable to display them in FY dropdowns.
+                  </p>
+                </div>
+                <Switch
+                  id="show-archived-toggle"
+                  checked={settings.showArchivedFiscalYears}
+                  onCheckedChange={(checked) => updateSettings({ showArchivedFiscalYears: checked })}
+                />
+              </div>
             </CardContent>
           </Card>
         )}

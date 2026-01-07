@@ -26,6 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
+import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { getOrBuildActualsRollup, type StoredRollup } from '@/lib/actualsRollupStore';
 import type { ActualsRollupResult, LineItemRollup } from '@/lib/actualsRollup';
 import type { CostCenter, MonthlyValues, LineItem, MONTHS } from '@/types/budget';
@@ -44,6 +46,9 @@ type SortMode = 'alpha' | 'total';
 export default function Actuals() {
   const navigate = useNavigate();
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId, selectedFiscalYear } = useFiscalYearBudget();
+  const { settings } = useAdminSettings();
+  
+  const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, settings.showArchivedFiscalYears);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,7 +172,7 @@ export default function Actuals() {
                 <SelectValue placeholder="Select fiscal year" />
               </SelectTrigger>
               <SelectContent>
-                {fiscalYears.map((fy) => (
+                {visibleFiscalYears.map((fy) => (
                   <SelectItem key={fy.id} value={fy.id}>
                     {fy.name}
                   </SelectItem>

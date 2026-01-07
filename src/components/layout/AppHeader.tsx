@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/select";
 import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
+import { useAdminSettings } from "@/contexts/AdminSettingsContext";
+import { getVisibleFiscalYears } from "@/lib/fiscalYearVisibility";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Admin',
@@ -27,8 +29,10 @@ const roleBadgeColors: Record<UserRole, string> = {
 export function AppHeader() {
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId } = useFiscalYearBudget();
   const { currentRole } = useCurrentUserRole();
+  const { settings } = useAdminSettings();
 
-  const hasBudgets = fiscalYears.length > 0;
+  const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, settings.showArchivedFiscalYears);
+  const hasBudgets = visibleFiscalYears.length > 0;
 
   return (
     <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-4">
@@ -50,7 +54,7 @@ export function AppHeader() {
               <SelectValue placeholder="Select FY" />
             </SelectTrigger>
             <SelectContent>
-              {fiscalYears.map((fy) => (
+              {visibleFiscalYears.map((fy) => (
                 <SelectItem key={fy.id} value={fy.id}>
                   {fy.name}
                 </SelectItem>

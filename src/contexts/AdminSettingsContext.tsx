@@ -6,6 +6,7 @@ export interface AdminSettings {
   increaseApprovalPercent: number;
   timeZone: string;
   adminOverrideEnabled: boolean;
+  showArchivedFiscalYears: boolean;
 }
 
 const DEFAULT_SETTINGS: AdminSettings = {
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   increaseApprovalPercent: 5,
   timeZone: DEFAULT_TIME_ZONE,
   adminOverrideEnabled: false,
+  showArchivedFiscalYears: false,
 };
 
 const STORAGE_KEY = 'admin_settings_v1';
@@ -27,6 +29,7 @@ function loadSettings(): AdminSettings {
         increaseApprovalPercent: parsed.increaseApprovalPercent ?? DEFAULT_SETTINGS.increaseApprovalPercent,
         timeZone: parsed.timeZone ?? DEFAULT_SETTINGS.timeZone,
         adminOverrideEnabled: parsed.adminOverrideEnabled ?? DEFAULT_SETTINGS.adminOverrideEnabled,
+        showArchivedFiscalYears: parsed.showArchivedFiscalYears ?? DEFAULT_SETTINGS.showArchivedFiscalYears,
       };
     }
   } catch {
