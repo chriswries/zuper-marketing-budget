@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,6 +21,7 @@ interface AuthContextValue {
   profile: Profile | null;
   role: UserRole | null;
   loading: boolean;
+  profileLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -29,51 +30,70 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// Retry helper for profile fetch (handles trigger race on signup)
+async function fetchProfileWithRetry(userId: string, maxRetries = 5, delayMs = 200): Promise<Profile | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (data) {
+      return data as Profile;
+    }
+
+    if (error) {
+      console.error('Error fetching profile:', error);
+    }
+
+    // If not found and we have retries left, wait and try again
+    if (attempt < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  const fetchProfile = async (userId: string) => {
+  // Combined loading state
+  const loading = sessionLoading || profileLoading;
+
+  const loadProfile = useCallback(async (userId: string) => {
+    setProfileLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-
-      return data as Profile;
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-      return null;
-    }
-  };
-
-  const refreshProfile = async () => {
-    if (user) {
-      const profileData = await fetchProfile(user.id);
+      const profileData = await fetchProfileWithRetry(userId);
       setProfile(profileData);
+    } finally {
+      setProfileLoading(false);
     }
-  };
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      await loadProfile(user.id);
+    }
+  }, [user, loadProfile]);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+      async (event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
         
-        // Defer profile fetch to avoid deadlock
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id).then(setProfile);
-          }, 0);
+        if (newSession?.user) {
+          // Fetch profile immediately (no setTimeout) for SIGNED_IN and TOKEN_REFRESHED
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            await loadProfile(newSession.user.id);
+          }
         } else {
           setProfile(null);
         }
@@ -81,22 +101,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id).then((p) => {
-          setProfile(p);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        setSession(existingSession);
+        setUser(existingSession?.user ?? null);
+        
+        if (existingSession?.user) {
+          await loadProfile(existingSession.user.id);
+        }
+      } finally {
+        setSessionLoading(false);
       }
-    });
+    };
+
+    initializeAuth();
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [loadProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -134,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         role: profile?.role ?? null,
         loading,
+        profileLoading,
         signIn,
         signUp,
         signOut,

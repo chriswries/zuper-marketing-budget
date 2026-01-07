@@ -1,6 +1,6 @@
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ShieldX } from 'lucide-react';
+import { ShieldX, Loader2 } from 'lucide-react';
 
 interface RoleGuardProps {
   allowedRoles: UserRole[];
@@ -9,12 +9,18 @@ interface RoleGuardProps {
 }
 
 export function RoleGuard({ allowedRoles, children, fallback }: RoleGuardProps) {
-  const { role, loading } = useAuth();
+  const { role, loading, profileLoading, session } = useAuth();
 
-  if (loading) {
-    return null;
+  // Show loading while auth is initializing OR while we have a session but profile isn't loaded yet
+  if (loading || (session && profileLoading) || (session && role === null)) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
+  // Only show Access Denied when loading is complete AND role is known AND not allowed
   if (!role || !allowedRoles.includes(role)) {
     if (fallback) {
       return <>{fallback}</>;

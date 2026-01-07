@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, AlertCircle, DollarSign } from 'lucide-react';
+import { Loader2, AlertCircle, DollarSign, UserPlus } from 'lucide-react';
 import { z } from 'zod';
+import { toast } from 'sonner';
 
 const authSchema = z.object({
   email: z.string().trim().email('Please enter a valid email address'),
@@ -22,10 +24,33 @@ export default function Login() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+  const [signupAllowed, setSignupAllowed] = useState<boolean | null>(null);
+  const [checkingSignup, setCheckingSignup] = useState(true);
 
   const { signIn, signUp, session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Check if signup is allowed (only for bootstrapping)
+  useEffect(() => {
+    async function checkSignupAllowed() {
+      try {
+        const { data, error } = await supabase.rpc('allow_self_signup');
+        if (error) {
+          console.error('Error checking signup status:', error);
+          setSignupAllowed(false);
+        } else {
+          setSignupAllowed(data === true);
+        }
+      } catch (err) {
+        console.error('Error checking signup status:', err);
+        setSignupAllowed(false);
+      } finally {
+        setCheckingSignup(false);
+      }
+    }
+    checkSignupAllowed();
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -60,6 +85,14 @@ export default function Login() {
           }
         }
       } else {
+        // Guard signup - only allow if signupAllowed is true
+        if (!signupAllowed) {
+          toast.error('Account creation is managed by an admin.');
+          setError('Account creation is disabled. Please contact your administrator.');
+          setIsLoading(false);
+          return;
+        }
+
         const { error } = await signUp(email, password);
         if (error) {
           if (error.message.includes('User already registered')) {
@@ -79,7 +112,7 @@ export default function Login() {
     }
   };
 
-  if (loading) {
+  if (loading || checkingSignup) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -100,14 +133,100 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')}>
-          <TabsList className="mx-6 grid w-[calc(100%-48px)] grid-cols-2">
-            <TabsTrigger value="signin">Sign In</TabsTrigger>
-            <TabsTrigger value="signup">Sign Up</TabsTrigger>
-          </TabsList>
+        {signupAllowed ? (
+          // Show tabs when signup is allowed (bootstrapping)
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'signin' | 'signup')}>
+            <TabsList className="mx-6 grid w-[calc(100%-48px)] grid-cols-2">
+              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
 
+            <form onSubmit={handleSubmit}>
+              <CardContent className="space-y-4 pt-6">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {success && (
+                  <Alert className="border-green-200 bg-green-50 text-green-800">
+                    <AlertDescription>{success}</AlertDescription>
+                  </Alert>
+                )}
+
+                <TabsContent value="signin" className="m-0 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-signin">Email</Label>
+                    <Input
+                      id="email-signin"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password-signin">Password</Label>
+                    <Input
+                      id="password-signin"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="signup" className="m-0 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-signup">Email</Label>
+                    <Input
+                      id="email-signup"
+                      type="email"
+                      placeholder="you@company.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password-signup">Password</Label>
+                    <Input
+                      id="password-signup"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    By signing up, you agree to use this application for authorized purposes only.
+                    The first user to sign up will be granted admin privileges.
+                  </p>
+                </TabsContent>
+              </CardContent>
+
+              <CardFooter>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {activeTab === 'signin' ? 'Sign In' : 'Create Account'}
+                </Button>
+              </CardFooter>
+            </form>
+          </Tabs>
+        ) : (
+          // Sign-in only when signup is disabled
           <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4 pt-6">
+            <CardContent className="space-y-4">
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -121,73 +240,45 @@ export default function Login() {
                 </Alert>
               )}
 
-              <TabsContent value="signin" className="m-0 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-signin">Email</Label>
-                  <Input
-                    id="email-signin"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signin">Password</Label>
-                  <Input
-                    id="password-signin"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
-                    autoComplete="current-password"
-                  />
-                </div>
-              </TabsContent>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                />
+              </div>
 
-              <TabsContent value="signup" className="m-0 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-signup">Email</Label>
-                  <Input
-                    id="email-signup"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signup">Password</Label>
-                  <Input
-                    id="password-signup"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
-                    autoComplete="new-password"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  By signing up, you agree to use this application for authorized purposes only.
-                  The first user to sign up will be granted admin privileges.
-                </p>
-              </TabsContent>
+              <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground">
+                <UserPlus className="h-4 w-4 shrink-0" />
+                <span>Account creation is managed by an admin. Contact your administrator for access.</span>
+              </div>
             </CardContent>
 
             <CardFooter>
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {activeTab === 'signin' ? 'Sign In' : 'Create Account'}
+                Sign In
               </Button>
             </CardFooter>
           </form>
-        </Tabs>
+        )}
       </Card>
     </div>
   );
