@@ -167,3 +167,10 @@ export function deleteActualsMatchingForFY(fiscalYearId: string): void {
     console.error('Failed to delete actuals matching from localStorage:', error);
   }
 }
+
+/**
+ * Replace all matching data for a fiscal year (used by bundle import).
+ */
+export function replaceActualsMatchingForFY(fiscalYearId: string, data: ActualsMatchingData): void {
+  saveActualsMatching(fiscalYearId, data);
+}

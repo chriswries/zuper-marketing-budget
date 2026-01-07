@@ -17,7 +17,8 @@ export type ApprovalAuditAction =
   | 'admin_override_soft_delete'
   | 'fy_archived'
   | 'fy_restored'
-  | 'fy_hard_deleted';
+  | 'fy_hard_deleted'
+  | 'fy_bundle_imported';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
