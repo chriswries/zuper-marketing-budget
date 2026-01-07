@@ -40,11 +40,12 @@ import { ApprovalAuditEvent, ApprovalActorRole, ApprovalEntityType } from '@/typ
 import {
   loadAllApprovalAuditEvents,
   formatAuditEvent,
-  formatAuditTimestamp,
   APPROVAL_AUDIT_UPDATED_EVENT,
 } from '@/lib/approvalAuditStore';
+import { formatAuditTimestamp } from '@/lib/dateTime';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 
 type EntityFilter = 'all' | 'request' | 'budget';
 type CategoryFilter = 'all' | 'approvals' | 'notifications';
@@ -78,6 +79,7 @@ export default function ApprovalAudit() {
   const navigate = useNavigate();
   const { requests } = useRequests();
   const { fiscalYears, setSelectedFiscalYearId } = useFiscalYearBudget();
+  const { settings: adminSettings } = useAdminSettings();
 
   const [events, setEvents] = useState<ApprovalAuditEvent[]>(() => loadAllApprovalAuditEvents());
   
@@ -424,7 +426,7 @@ export default function ApprovalAudit() {
                     onClick={() => handleRowClick(event)}
                   >
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatAuditTimestamp(event.timestamp)}
+                      {formatAuditTimestamp(event.timestamp, adminSettings.timeZone)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs capitalize">

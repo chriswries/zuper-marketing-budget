@@ -15,7 +15,8 @@ import {
 import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
-import { CalendarPlus, ShieldCheck, UserCog, History } from "lucide-react";
+import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -159,6 +160,42 @@ export default function Admin() {
               Example: With ${settings.increaseApprovalAbsoluteUsd.toLocaleString()} and {settings.increaseApprovalPercent}%, 
               a line item with $100,000 FY total would require approval for increases over ${Math.max(settings.increaseApprovalAbsoluteUsd, 100000 * (settings.increaseApprovalPercent / 100)).toLocaleString()}.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Timezone Setting */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Timezone</CardTitle>
+            </div>
+            <CardDescription>
+              Set the timezone used for displaying all timestamps across the app.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="timezone-select">Display timezone</Label>
+              <Select 
+                value={settings.timeZone} 
+                onValueChange={(value) => updateSettings({ timeZone: value })}
+              >
+                <SelectTrigger id="timezone-select" className="w-[240px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                All timestamps in the app will be displayed in this timezone.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

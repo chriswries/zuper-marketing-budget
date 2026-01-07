@@ -39,6 +39,7 @@ import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
+import { formatAuditTimestamp } from '@/lib/dateTime';
 import { toast } from '@/hooks/use-toast';
 
 // Deep clone cost centers to avoid mutating mock data
@@ -91,15 +92,7 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-const formatTimestamp = (isoString: string): string => {
-  const date = new Date(isoString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
+// formatTimestamp is now handled by formatAuditTimestamp from dateTime.ts
 
 export default function Forecast() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -913,7 +906,7 @@ export default function Forecast() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground text-xs">
-                            {formatTimestamp(entry.timestamp)}
+                            {formatAuditTimestamp(entry.timestamp, adminSettings.timeZone)}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {entry.userName}

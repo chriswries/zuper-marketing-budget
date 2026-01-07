@@ -19,6 +19,7 @@ import { ArrowLeft, CheckCircle2, Clock, XCircle, RotateCcw, Info, FileSpreadshe
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { MONTH_LABELS, CostCenter } from '@/types/budget';
 import { ApprovalStep, SpendRequest } from '@/types/requests';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
@@ -28,7 +29,6 @@ import {
   appendApprovalAudit,
   ensureCreatedEventIfMissing,
   formatAuditEvent,
-  formatAuditTimestamp,
 } from '@/lib/approvalAuditStore';
 import {
   buildRequestSlackTemplate,
@@ -38,6 +38,7 @@ import {
   buildSheetUrl,
 } from '@/lib/notificationTemplates';
 import { copyText } from '@/lib/copyToClipboard';
+import { formatDate, formatDateTime, formatAuditTimestamp } from '@/lib/dateTime';
 import { toast } from '@/hooks/use-toast';
 
 const levelLabels: Record<string, string> = {
@@ -46,7 +47,7 @@ const levelLabels: Record<string, string> = {
   finance: 'Finance',
 };
 
-function ApprovalStepItem({ step }: { step: ApprovalStep }) {
+function ApprovalStepItem({ step, timeZone }: { step: ApprovalStep; timeZone: string }) {
   const statusIcon = {
     pending: <Clock className="h-4 w-4 text-muted-foreground" />,
     approved: <CheckCircle2 className="h-4 w-4 text-green-600" />,
@@ -61,7 +62,7 @@ function ApprovalStepItem({ step }: { step: ApprovalStep }) {
           <span className="font-medium">{levelLabels[step.level]}</span>
           {step.updatedAt && (
             <p className="text-xs text-muted-foreground">
-              {new Date(step.updatedAt).toLocaleString()}
+              {formatDateTime(step.updatedAt, timeZone)}
             </p>
           )}
         </div>
@@ -87,6 +88,7 @@ export default function RequestDetail() {
   const { getRequest, updateRequest } = useRequests();
   const { currentRole } = useCurrentUserRole();
   const { setSelectedFiscalYearId, fiscalYears } = useFiscalYearBudget();
+  const { settings: adminSettings } = useAdminSettings();
 
   const request = id ? getRequest(id) : undefined;
   const [auditEvents, setAuditEvents] = useState<ApprovalAuditEvent[]>([]);
@@ -294,7 +296,7 @@ export default function RequestDetail() {
     <div>
       <PageHeader
         title={`Request: ${request.vendorName}`}
-        description={`Created ${new Date(request.createdAt).toLocaleDateString()}`}
+        description={`Created ${formatDate(request.createdAt, adminSettings.timeZone)}`}
       >
         <div className="flex gap-2 flex-wrap">
           {hasOrigin && (
@@ -424,7 +426,7 @@ export default function RequestDetail() {
           </CardHeader>
           <CardContent>
             {request.approvalSteps.map((step, index) => (
-              <ApprovalStepItem key={index} step={step} />
+              <ApprovalStepItem key={index} step={step} timeZone={adminSettings.timeZone} />
             ))}
           </CardContent>
         </Card>
@@ -459,7 +461,7 @@ export default function RequestDetail() {
                         <div className="flex-1">
                           <div className="font-medium">{formatAuditEvent(event)}</div>
                           <div className="text-xs text-muted-foreground">
-                            {formatAuditTimestamp(event.timestamp)}
+                            {formatAuditTimestamp(event.timestamp, adminSettings.timeZone)}
                           </div>
                         </div>
                       </div>
