@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
+import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
@@ -132,6 +133,12 @@ export default function Forecast() {
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set());
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
+
+  // Justification dialog state
+  const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
+  const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentJustificationData | null>(null);
+  const [pendingUpdatedValues, setPendingUpdatedValues] = useState<MonthlyValues | null>(null);
+  const [pendingOldValues, setPendingOldValues] = useState<MonthlyValues | null>(null);
 
   const handleFocusLineItemNotFound = useCallback(() => {
     toast({
@@ -367,7 +374,6 @@ export default function Forecast() {
     const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
     if (!lineItem) return;
 
-    const costCenterName = costCenter?.name ?? '';
     const lineItemName = lineItem?.name ?? '';
 
     // Block edits if pending approval or adjustment
@@ -391,63 +397,22 @@ export default function Forecast() {
     if (shouldTriggerIncreaseApproval(oldTotal, newTotal, adminSettings)) {
       const delta = newTotal - oldTotal;
       const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
-      const vendorName = lineItem.vendor?.name ?? '—';
 
-      // Find changed months (where delta != 0) for adjustment requests
-      const changedMonths = MONTHS.filter((m) => updatedForecastValues[m] !== oldForecastValues[m]);
-      const startMonth: Month = changedMonths[0] ?? 'feb';
-      const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
-
-      // Create the spend request with origin metadata
-      const requestId = crypto.randomUUID();
-      const newRequest = {
-        id: requestId,
+      // Open justification dialog instead of immediately creating request
+      setPendingAdjustment({
         costCenterId,
-        costCenterName,
-        vendorName,
-        amount: Math.round(delta),
-        startMonth,
-        endMonth,
-        isContracted: lineItem.isContracted,
-        justification: `Forecast increase: ${lineItemName} (+${formatCurrency(delta)})`,
-        status: 'pending' as const,
-        createdAt: new Date().toISOString(),
-        approvalSteps: createDefaultApprovalSteps(),
-        // Origin metadata for deep linking
-        originSheet: 'forecast' as const,
-        originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
-        originCostCenterId: costCenterId,
-        originLineItemId: lineItemId,
-        originKind: 'adjustment' as const,
+        lineItemId,
         lineItemName,
-      };
-      addRequest(newRequest);
-
-      // Update with pending adjustment
-      setCostCenters((prev) =>
-        prev.map((cc) => {
-          if (cc.id !== costCenterId) return cc;
-          return {
-            ...cc,
-            lineItems: cc.lineItems.map((item) => {
-              if (item.id !== lineItemId) return item;
-              return {
-                ...item,
-                forecastValues: updatedForecastValues,
-                adjustmentStatus: 'pending' as const,
-                adjustmentRequestId: requestId,
-                adjustmentBeforeValues: oldForecastValues,
-                adjustmentSheet: 'forecast' as const,
-              };
-            }),
-          };
-        })
-      );
-
-      toast({
-        title: 'Approval required',
-        description: `Increase of ${formatCurrency(delta)} exceeds threshold of ${formatCurrency(threshold)}. A spend request has been created.`,
+        month,
+        oldValue,
+        newValue,
+        delta,
+        threshold,
+        sheet: 'forecast',
       });
+      setPendingUpdatedValues(updatedForecastValues);
+      setPendingOldValues(oldForecastValues);
+      setJustificationDialogOpen(true);
     } else {
       // Normal edit without approval
       setCostCenters((prev) =>
@@ -465,9 +430,101 @@ export default function Forecast() {
           };
         })
       );
-    }
 
-    // Add audit entry (only if value actually changed)
+      // Add audit entry (only if value actually changed)
+      if (oldValue !== newValue) {
+        const costCenterName = costCenter?.name ?? '';
+        const entry: AuditEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          userName: 'Marketing Admin',
+          sheet: 'forecast',
+          costCenterId,
+          costCenterName,
+          lineItemId,
+          lineItemName,
+          month,
+          oldValue,
+          newValue,
+        };
+
+        setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+      }
+    }
+  }, [costCenters, adminSettings]);
+
+  // Handle justification dialog cancel
+  const handleJustificationCancel = useCallback(() => {
+    setJustificationDialogOpen(false);
+    setPendingAdjustment(null);
+    setPendingUpdatedValues(null);
+    setPendingOldValues(null);
+  }, []);
+
+  // Handle justification dialog submit
+  const handleJustificationSubmit = useCallback((userJustification: string) => {
+    if (!pendingAdjustment || !pendingUpdatedValues || !pendingOldValues) return;
+
+    const { costCenterId, lineItemId, lineItemName, month, delta, oldValue, newValue } = pendingAdjustment;
+    const costCenter = costCenters.find((cc) => cc.id === costCenterId);
+    const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
+    if (!lineItem) return;
+
+    const costCenterName = costCenter?.name ?? '';
+    const vendorName = lineItem.vendor?.name ?? '—';
+
+    // Find changed months (where delta != 0) for adjustment requests
+    const changedMonths = MONTHS.filter((m) => pendingUpdatedValues[m] !== pendingOldValues[m]);
+    const startMonth: Month = changedMonths[0] ?? 'feb';
+    const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
+
+    // Create the spend request with origin metadata
+    const requestId = crypto.randomUUID();
+    const newRequest = {
+      id: requestId,
+      costCenterId,
+      costCenterName,
+      vendorName,
+      amount: Math.round(delta),
+      startMonth,
+      endMonth,
+      isContracted: lineItem.isContracted,
+      justification: `Forecast adjustment: ${userJustification}`,
+      status: 'pending' as const,
+      createdAt: new Date().toISOString(),
+      approvalSteps: createDefaultApprovalSteps(),
+      // Origin metadata for deep linking
+      originSheet: 'forecast' as const,
+      originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
+      originCostCenterId: costCenterId,
+      originLineItemId: lineItemId,
+      originKind: 'adjustment' as const,
+      lineItemName,
+    };
+    addRequest(newRequest);
+
+    // Update with pending adjustment
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            if (item.id !== lineItemId) return item;
+            return {
+              ...item,
+              forecastValues: pendingUpdatedValues,
+              adjustmentStatus: 'pending' as const,
+              adjustmentRequestId: requestId,
+              adjustmentBeforeValues: pendingOldValues,
+              adjustmentSheet: 'forecast' as const,
+            };
+          }),
+        };
+      })
+    );
+
+    // Add audit entry
     if (oldValue !== newValue) {
       const entry: AuditEntry = {
         id: crypto.randomUUID(),
@@ -485,7 +542,18 @@ export default function Forecast() {
 
       setAuditLog((prev) => [entry, ...prev].slice(0, 50));
     }
-  }, [costCenters, addRequest]);
+
+    toast({
+      title: 'Approval required',
+      description: `Increase of ${formatCurrency(delta)} exceeds threshold. A spend request has been created.`,
+    });
+
+    // Close dialog and reset state
+    setJustificationDialogOpen(false);
+    setPendingAdjustment(null);
+    setPendingUpdatedValues(null);
+    setPendingOldValues(null);
+  }, [pendingAdjustment, pendingUpdatedValues, pendingOldValues, costCenters, addRequest, isActiveFY, selectedFiscalYearId]);
 
   const toggleLockedMonth = (month: Month) => {
     setLockedMonths((prev) => {
@@ -640,6 +708,13 @@ export default function Forecast() {
         costCenters={costCenters}
         lockedMonths={lockedMonths}
         onCreateLineItem={handleCreateLineItem}
+      />
+
+      <AdjustmentJustificationDialog
+        open={justificationDialogOpen}
+        data={pendingAdjustment}
+        onCancel={handleJustificationCancel}
+        onSubmit={handleJustificationSubmit}
       />
     </div>
   );
