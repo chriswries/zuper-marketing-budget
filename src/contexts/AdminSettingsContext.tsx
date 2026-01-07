@@ -5,12 +5,14 @@ export interface AdminSettings {
   increaseApprovalAbsoluteUsd: number;
   increaseApprovalPercent: number;
   timeZone: string;
+  adminOverrideEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: AdminSettings = {
   increaseApprovalAbsoluteUsd: 5000,
   increaseApprovalPercent: 5,
   timeZone: DEFAULT_TIME_ZONE,
+  adminOverrideEnabled: false,
 };
 
 const STORAGE_KEY = 'admin_settings_v1';
@@ -24,6 +26,7 @@ function loadSettings(): AdminSettings {
         increaseApprovalAbsoluteUsd: parsed.increaseApprovalAbsoluteUsd ?? DEFAULT_SETTINGS.increaseApprovalAbsoluteUsd,
         increaseApprovalPercent: parsed.increaseApprovalPercent ?? DEFAULT_SETTINGS.increaseApprovalPercent,
         timeZone: parsed.timeZone ?? DEFAULT_SETTINGS.timeZone,
+        adminOverrideEnabled: parsed.adminOverrideEnabled ?? DEFAULT_SETTINGS.adminOverrideEnabled,
       };
     }
   } catch {

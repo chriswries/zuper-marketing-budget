@@ -7,7 +7,10 @@ export type ApprovalAuditAction =
   | 'rejected_step'
   | 'reset'
   | 'final_approved'
-  | 'notified_next_approver';
+  | 'notified_next_approver'
+  | 'admin_override_cell_edit'
+  | 'admin_override_delete_line_item'
+  | 'admin_override_cancel_linked_request';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 

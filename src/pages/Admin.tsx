@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link, ShieldAlert } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -87,6 +88,41 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Admin Override Mode - only visible to Admin */}
+        {currentRole === 'admin' && (
+          <Card className="border-amber-500/50 bg-amber-500/5">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-500" />
+                <CardTitle className="text-lg">Admin Override Mode</CardTitle>
+              </div>
+              <CardDescription>
+                Allows Marketing Admin to bypass approvals for edits/deletes. All actions are audited.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="override-toggle">Enable Override Mode</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, you can edit Budget/Forecast cells and delete line items without approval workflows.
+                  </p>
+                </div>
+                <Switch
+                  id="override-toggle"
+                  checked={settings.adminOverrideEnabled}
+                  onCheckedChange={(checked) => updateSettings({ adminOverrideEnabled: checked })}
+                />
+              </div>
+              {settings.adminOverrideEnabled && (
+                <p className="text-sm text-amber-600 bg-amber-100/50 dark:bg-amber-900/20 p-2 rounded">
+                  ⚠️ Override mode is ON. All override actions require justification and are logged to the audit trail.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-6">
