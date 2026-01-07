@@ -17,7 +17,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link, ShieldAlert } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link, ShieldAlert, Package } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -257,7 +257,7 @@ export default function Admin() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Link className="h-5 w-5 text-primary" />
+              <Link className="h-5 w-5 text-primary" aria-hidden="true" />
               <CardTitle className="text-lg">Actuals Matching</CardTitle>
             </div>
             <CardDescription>
@@ -270,6 +270,26 @@ export default function Admin() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* FY Tools - Admin only */}
+        {currentRole === 'admin' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">FY Tools</CardTitle>
+              </div>
+              <CardDescription>
+                Export fiscal year bundles for backup and archival.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/admin/fy-tools')}>
+                Open FY Tools
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Audit Log */}
         <Card>

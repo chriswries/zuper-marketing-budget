@@ -21,6 +21,7 @@ import ApprovalAudit from "./pages/ApprovalAudit";
 import VarianceReport from "./pages/VarianceReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
+import FYTools from "./pages/FYTools";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/actuals" element={<ActualsImport />} />
                     <Route path="/admin/actuals/match" element={<ActualsMatching />} />
+                    <Route path="/admin/fy-tools" element={<FYTools />} />
                     <Route path="/audit" element={<ApprovalAudit />} />
                     <Route path="/reports/variance" element={<VarianceReport />} />
                     <Route path="*" element={<NotFound />} />
