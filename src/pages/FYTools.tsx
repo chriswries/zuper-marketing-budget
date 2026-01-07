@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,6 +35,7 @@ import { loadActualsMatching } from "@/lib/actualsMatchingStore";
 import { loadForecastForFY } from "@/lib/forecastStore";
 import { loadApprovalAudit } from "@/lib/approvalAuditStore";
 import { archiveFiscalYear, restoreFiscalYear, hardDeleteFiscalYear, getFYScopedRequests } from "@/lib/fyLifecycle";
+import { parseJsonFile, detectBundleConflicts, importFiscalYearBundleV1, type ImportMode, type BundleConflictResult } from "@/lib/fyBundleImport";
 import type { FiscalYearBundleV1, BundleValidationResult } from "@/types/fyBundle";
 import { 
   Package, 
@@ -51,14 +52,17 @@ import {
   Archive,
   ArchiveRestore,
   Trash2,
-  ShieldAlert
+  ShieldAlert,
+  Upload,
+  FileUp,
+  AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function FYTools() {
   const navigate = useNavigate();
   const { currentRole } = useCurrentUserRole();
-  const { fiscalYears, updateFiscalYearBudget, deleteFiscalYearBudget } = useFiscalYearBudget();
+  const { fiscalYears, updateFiscalYearBudget, deleteFiscalYearBudget, createFiscalYearBudget, setSelectedFiscalYearId } = useFiscalYearBudget();
   const { requests, setRequests } = useRequests();
   const { settings } = useAdminSettings();
   const { toast } = useToast();
@@ -77,6 +81,17 @@ export default function FYTools() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteJustification, setDeleteJustification] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
+  // Import state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBundle, setImportBundle] = useState<FiscalYearBundleV1 | null>(null);
+  const [importConflicts, setImportConflicts] = useState<BundleConflictResult | null>(null);
+  const [importJustification, setImportJustification] = useState("");
+  const [importMode, setImportMode] = useState<ImportMode>('restore');
+  const [overwriteConfirmation, setOverwriteConfirmation] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const selectedFY = useMemo(() => 
     fiscalYears.find(fy => fy.id === selectedFYId) ?? null
@@ -249,6 +264,112 @@ export default function FYTools() {
     setSelectedFYId("");
     navigate('/admin');
   };
+
+  // Import handlers
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportBundle(null);
+    setImportConflicts(null);
+    setImportJustification("");
+    setOverwriteConfirmation("");
+    setImportMode('restore');
+
+    try {
+      const parsed = await parseJsonFile(file);
+      const conflicts = detectBundleConflicts(parsed, fiscalYears, requests);
+      
+      if (!conflicts.schemaOk) {
+        toast({
+          title: "Invalid Bundle",
+          description: conflicts.validationErrors[0] || "Bundle validation failed.",
+          variant: "destructive",
+        });
+        setImportFile(null);
+        return;
+      }
+
+      setImportBundle(parsed as FiscalYearBundleV1);
+      setImportConflicts(conflicts);
+      
+      // Auto-select mode based on conflicts
+      if (conflicts.fyIdExists && conflicts.requestIdConflicts.length === 0) {
+        setImportMode('overwrite');
+      } else {
+        setImportMode('restore');
+      }
+
+      setImportDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Parse Error",
+        description: error instanceof Error ? error.message : "Failed to parse JSON file.",
+        variant: "destructive",
+      });
+      setImportFile(null);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImport = () => {
+    if (!importBundle || !importJustification.trim()) return;
+    if (importMode === 'overwrite' && overwriteConfirmation !== 'OVERWRITE') return;
+
+    setIsImporting(true);
+    try {
+      const result = importFiscalYearBundleV1({
+        bundle: importBundle,
+        mode: importMode,
+        justification: importJustification.trim(),
+        currentRole,
+        adminOverrideEnabled: isAdminOverrideEnabled,
+        existingFiscalYears: fiscalYears,
+        existingRequests: requests,
+        createFiscalYearBudget,
+        deleteFiscalYearBudget,
+        setRequests,
+      });
+
+      if (!result.ok) {
+        toast({
+          title: "Import Failed",
+          description: result.errors?.[0] || "Unknown error during import.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Import Successful",
+        description: `${importBundle.fiscalYearName} has been imported successfully.`,
+      });
+
+      // Select the imported FY
+      if (result.fiscalYearId) {
+        setSelectedFiscalYearId(result.fiscalYearId);
+        setSelectedFYId(result.fiscalYearId);
+      }
+
+      // Reset import state
+      setImportDialogOpen(false);
+      setImportFile(null);
+      setImportBundle(null);
+      setImportConflicts(null);
+      setImportJustification("");
+      setOverwriteConfirmation("");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const canRestore = importConflicts && !importConflicts.fyIdExists && importConflicts.requestIdConflicts.length === 0;
+  const canOverwrite = importConflicts && importConflicts.fyIdExists && importConflicts.requestIdConflicts.length === 0 && isAdminOverrideEnabled;
 
   // Admin-only gate
   if (currentRole !== 'admin') {
@@ -439,6 +560,36 @@ export default function FYTools() {
           </Card>
         )}
 
+        {/* Import FY Bundle Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Import FY Bundle</CardTitle>
+            </div>
+            <CardDescription>
+              Restore a fiscal year from a previously exported JSON bundle. 
+              Includes budget, forecast, actuals, requests, and audit events.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="import-file">Select Bundle File (.json)</Label>
+              <Input
+                ref={fileInputRef}
+                id="import-file"
+                type="file"
+                accept=".json"
+                onChange={handleFileSelect}
+                className="cursor-pointer"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              The file will be validated and you'll see a preview before importing.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Archive/Restore Section */}
         {selectedFY && (
           <Card>
@@ -609,6 +760,175 @@ export default function FYTools() {
             >
               Permanently Delete
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Bundle Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileUp className="h-5 w-5" />
+              Import FY Bundle
+            </DialogTitle>
+            <DialogDescription>
+              Review and import the selected fiscal year bundle.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {importBundle && importConflicts && (
+              <>
+                {/* Bundle Info */}
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{importBundle.fiscalYearName}</span>
+                    <Badge variant="outline">v{importBundle.schemaVersion}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Exported: {format(new Date(importBundle.exportedAt), 'MMM d, yyyy h:mm a')}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex items-center gap-1">
+                      <Database className="h-3 w-3" />
+                      <span>{importConflicts.summary.costCenters} cost centers</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <FileText className="h-3 w-3" />
+                      <span>{importConflicts.summary.lineItems} line items</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Receipt className="h-3 w-3" />
+                      <span>{importConflicts.summary.actualsTxnCount} transactions</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <ClipboardList className="h-3 w-3" />
+                      <span>{importConflicts.summary.requestsCount} requests</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conflict Status */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {importConflicts.fyIdExists ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    <span className="text-sm">
+                      {importConflicts.fyIdExists 
+                        ? 'Fiscal year already exists (will overwrite)'
+                        : 'No existing fiscal year with this ID'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {importConflicts.requestIdConflicts.length > 0 ? (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                    <span className="text-sm">
+                      {importConflicts.requestIdConflicts.length > 0
+                        ? `${importConflicts.requestIdConflicts.length} request ID conflicts (cannot import)`
+                        : 'No request ID conflicts'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Request conflict details */}
+                {importConflicts.requestIdConflicts.length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Cannot Import</AlertTitle>
+                    <AlertDescription>
+                      The bundle contains requests with IDs that conflict with existing requests.
+                      Conflicting IDs: {importConflicts.requestIdConflicts.slice(0, 3).join(', ')}
+                      {importConflicts.requestIdConflicts.length > 3 && ` and ${importConflicts.requestIdConflicts.length - 3} more`}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Mode selector */}
+                {importConflicts.requestIdConflicts.length === 0 && (
+                  <div className="space-y-3">
+                    {canRestore && (
+                      <Button
+                        variant={importMode === 'restore' ? 'default' : 'outline'}
+                        className="w-full justify-start"
+                        onClick={() => setImportMode('restore')}
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Restore from bundle (safe)
+                      </Button>
+                    )}
+                    {importConflicts.fyIdExists && (
+                      <Button
+                        variant={importMode === 'overwrite' ? 'destructive' : 'outline'}
+                        className="w-full justify-start"
+                        onClick={() => setImportMode('overwrite')}
+                        disabled={!isAdminOverrideEnabled}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Overwrite existing FY (destructive)
+                        {!isAdminOverrideEnabled && <span className="ml-2 text-xs">(requires Admin Override)</span>}
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Justification */}
+                {importConflicts.requestIdConflicts.length === 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="import-justification">
+                      Justification <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="import-justification"
+                      placeholder="Why are you importing this fiscal year?"
+                      value={importJustification}
+                      onChange={(e) => setImportJustification(e.target.value)}
+                      className="min-h-[60px]"
+                    />
+                  </div>
+                )}
+
+                {/* Overwrite confirmation */}
+                {importMode === 'overwrite' && importConflicts.requestIdConflicts.length === 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="overwrite-confirmation">
+                      Type <strong>OVERWRITE</strong> to confirm
+                    </Label>
+                    <Input
+                      id="overwrite-confirmation"
+                      placeholder="Type OVERWRITE"
+                      value={overwriteConfirmation}
+                      onChange={(e) => setOverwriteConfirmation(e.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              Cancel
+            </Button>
+            {importConflicts?.requestIdConflicts.length === 0 && (
+              <Button
+                variant={importMode === 'overwrite' ? 'destructive' : 'default'}
+                onClick={handleImport}
+                disabled={
+                  isImporting ||
+                  !importJustification.trim() ||
+                  (importMode === 'overwrite' && overwriteConfirmation !== 'OVERWRITE') ||
+                  (importMode === 'restore' && !canRestore) ||
+                  (importMode === 'overwrite' && !canOverwrite)
+                }
+              >
+                {isImporting ? 'Importing...' : (importMode === 'overwrite' ? 'Overwrite & Import' : 'Import')}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

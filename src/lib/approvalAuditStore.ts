@@ -125,6 +125,7 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   fy_archived: 'Fiscal year archived',
   fy_restored: 'Fiscal year restored',
   fy_hard_deleted: 'Fiscal year hard deleted',
+  fy_bundle_imported: 'Fiscal year bundle imported',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
@@ -199,6 +200,20 @@ export function removeApprovalAuditForEntity(
 ): void {
   const store = loadStore();
   delete store[entityType][entityId];
+  saveStore(store);
+  dispatchAuditUpdated();
+}
+
+/**
+ * Replace all audit events for a specific entity (used by bundle import).
+ */
+export function replaceApprovalAuditForEntity(
+  entityType: ApprovalEntityType,
+  entityId: string,
+  events: ApprovalAuditEvent[]
+): void {
+  const store = loadStore();
+  store[entityType][entityId] = events;
   saveStore(store);
   dispatchAuditUpdated();
 }
