@@ -169,7 +169,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   }, [focusLineItemId, focusCostCenterId, costCenters, onFocusLineItemNotFound]);
 
   // Determine if editing is enabled (supports forecastValues and budgetValues)
-  const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange;
+  // Finance role is always read-only for sheet editing
+  const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange && currentUserRole !== 'finance';
   // Determine if row actions are enabled
   const hasRowActions = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onRowAction;
   // Legacy canDelete for backwards compatibility
@@ -599,6 +600,31 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                     const hasCancellationPending = item.cancellationStatus === 'pending';
                                     const hasDeletionPending = item.deletionStatus === 'pending';
                                     
+                                    // Finance role: always disabled for all actions
+                                    if (currentUserRole === 'finance') {
+                                      return (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                                  disabled
+                                                >
+                                                  {isPending ? <XCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                                </Button>
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>Finance is read-only</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    }
+                                    
                                     // Check withdraw for pending deletion/cancellation FIRST (before disabling)
                                     if (hasDeletionPending || hasCancellationPending) {
                                       const withdrawTargetId = hasDeletionPending ? item.deletionRequestId : item.cancellationRequestId;
@@ -686,8 +712,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                       );
                                     }
                                     
-                                    // Admin/Finance: disabled for other actions
-                                    if (currentUserRole === 'admin' || currentUserRole === 'finance') {
+                                    // Admin: disabled for other actions
+                                    if (currentUserRole === 'admin') {
                                       return (
                                         <TooltipProvider>
                                           <Tooltip>
@@ -704,7 +730,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                               </span>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>{currentUserRole === 'finance' ? 'Finance is read-only' : 'Admin cannot modify line items'}</p>
+                                              <p>Admin cannot modify line items</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
