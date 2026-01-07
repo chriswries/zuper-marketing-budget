@@ -1,0 +1,171 @@
+/**
+ * Actuals rollup computation.
+ * Maps transactions to months and aggregates by cost center / line item.
+ */
+
+import type { Month, MONTHS } from '@/types/budget';
+import type { ActualsTransaction } from '@/types/actuals';
+import type { TransactionMatch } from './actualsMatchingStore';
+import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+
+// Month keys used in the app (calendar month -> key)
+const CALENDAR_MONTH_TO_KEY: Record<number, Month> = {
+  0: 'jan',  // January
+  1: 'feb',  // February
+  2: 'mar',  // March
+  3: 'apr',  // April
+  4: 'may',  // May
+  5: 'jun',  // June
+  6: 'jul',  // July
+  7: 'aug',  // August
+  8: 'sep',  // September
+  9: 'oct',  // October
+  10: 'nov', // November
+  11: 'dec', // December
+};
+
+/**
+ * Convert ISO date string to month key (jan, feb, etc.)
+ */
+export function isoDateToMonthKey(isoDate: string): Month {
+  const date = new Date(isoDate);
+  const monthIndex = date.getUTCMonth();
+  return CALENDAR_MONTH_TO_KEY[monthIndex];
+}
+
+export interface CostCenterRollup {
+  costCenterId: string;
+  costCenterName: string;
+  actualByMonth: Record<Month, number>;
+  actualTotal: number;
+}
+
+export interface LineItemRollup {
+  costCenterId: string;
+  costCenterName: string;
+  lineItemId: string;
+  lineItemName: string;
+  vendorName?: string;
+  actualByMonth: Record<Month, number>;
+  actualTotal: number;
+}
+
+export interface RollupSummary {
+  matchedCount: number;
+  matchedTotal: number;
+  unmatchedCount: number;
+  unmatchedTotal: number;
+}
+
+export interface ActualsRollupResult {
+  costCenters: CostCenterRollup[];
+  lineItems: LineItemRollup[];
+  summary: RollupSummary;
+}
+
+function createZeroMonthlyValues(): Record<Month, number> {
+  return {
+    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
+    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
+  };
+}
+
+interface BuildActualsRollupArgs {
+  fiscalYearId: string;
+  fiscalYear: FiscalYearBudget;
+  transactions: ActualsTransaction[];
+  matchesByTxnId: Record<string, TransactionMatch>;
+}
+
+/**
+ * Build actuals rollup from transactions and matches.
+ */
+export function buildActualsRollup(args: BuildActualsRollupArgs): ActualsRollupResult {
+  const { fiscalYear, transactions, matchesByTxnId } = args;
+
+  // Build lookup maps for cost centers and line items
+  const costCenterMap = new Map<string, { name: string; lineItems: Map<string, { name: string; vendorName?: string }> }>();
+  
+  for (const cc of fiscalYear.costCenters) {
+    const lineItemMap = new Map<string, { name: string; vendorName?: string }>();
+    for (const li of cc.lineItems) {
+      lineItemMap.set(li.id, { name: li.name, vendorName: li.vendor?.name });
+    }
+    costCenterMap.set(cc.id, { name: cc.name, lineItems: lineItemMap });
+  }
+
+  // Initialize rollup accumulators
+  const lineItemRollups = new Map<string, LineItemRollup>();
+  const costCenterRollups = new Map<string, CostCenterRollup>();
+
+  let matchedCount = 0;
+  let matchedTotal = 0;
+  let unmatchedCount = 0;
+  let unmatchedTotal = 0;
+
+  for (const txn of transactions) {
+    const match = matchesByTxnId[txn.id];
+
+    if (!match) {
+      unmatchedCount++;
+      unmatchedTotal += txn.amount;
+      continue;
+    }
+
+    matchedCount++;
+    matchedTotal += txn.amount;
+
+    const monthKey = isoDateToMonthKey(txn.txnDate);
+    const { costCenterId, lineItemId } = match;
+
+    // Get cost center and line item info
+    const ccInfo = costCenterMap.get(costCenterId);
+    const liInfo = ccInfo?.lineItems.get(lineItemId);
+
+    if (!ccInfo || !liInfo) {
+      // Invalid match (orphaned reference), treat as unmatched for safety
+      console.warn(`Invalid match for txn ${txn.id}: CC=${costCenterId}, LI=${lineItemId}`);
+      continue;
+    }
+
+    // Update line item rollup
+    if (!lineItemRollups.has(lineItemId)) {
+      lineItemRollups.set(lineItemId, {
+        costCenterId,
+        costCenterName: ccInfo.name,
+        lineItemId,
+        lineItemName: liInfo.name,
+        vendorName: liInfo.vendorName,
+        actualByMonth: createZeroMonthlyValues(),
+        actualTotal: 0,
+      });
+    }
+    const liRollup = lineItemRollups.get(lineItemId)!;
+    liRollup.actualByMonth[monthKey] += txn.amount;
+    liRollup.actualTotal += txn.amount;
+
+    // Update cost center rollup
+    if (!costCenterRollups.has(costCenterId)) {
+      costCenterRollups.set(costCenterId, {
+        costCenterId,
+        costCenterName: ccInfo.name,
+        actualByMonth: createZeroMonthlyValues(),
+        actualTotal: 0,
+      });
+    }
+    const ccRollup = costCenterRollups.get(costCenterId)!;
+    ccRollup.actualByMonth[monthKey] += txn.amount;
+    ccRollup.actualTotal += txn.amount;
+  }
+
+  return {
+    costCenters: Array.from(costCenterRollups.values()),
+    lineItems: Array.from(lineItemRollups.values()),
+    summary: {
+      matchedCount,
+      matchedTotal,
+      unmatchedCount,
+      unmatchedTotal,
+    },
+  };
+}
