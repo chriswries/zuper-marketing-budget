@@ -44,63 +44,60 @@ const App = () => (
                   <Routes>
                     {/* Public route */}
                     <Route path="/login" element={<Login />} />
-                    
+
                     {/* Protected routes */}
                     <Route
-                      path="/*"
                       element={
                         <ProtectedRoute>
-                          <AppLayout>
-                            <Routes>
-                              <Route path="/" element={<Navigate to="/budget" replace />} />
-                              <Route path="/budget" element={<Budget />} />
-                              <Route path="/forecast" element={<Forecast />} />
-                              <Route path="/actuals" element={<Actuals />} />
-                              <Route path="/requests" element={<Requests />} />
-                              <Route path="/requests/:id" element={<RequestDetail />} />
-                              <Route path="/reports" element={<Reports />} />
-                              <Route path="/tasks" element={<Tasks />} />
-                              <Route path="/import" element={<Import />} />
-                              <Route
-                                path="/admin"
-                                element={
-                                  <RoleGuard allowedRoles={['admin']}>
-                                    <Admin />
-                                  </RoleGuard>
-                                }
-                              />
-                              <Route
-                                path="/admin/actuals"
-                                element={
-                                  <RoleGuard allowedRoles={['admin', 'finance']}>
-                                    <ActualsImport />
-                                  </RoleGuard>
-                                }
-                              />
-                              <Route
-                                path="/admin/actuals/match"
-                                element={
-                                  <RoleGuard allowedRoles={['admin', 'finance']}>
-                                    <ActualsMatching />
-                                  </RoleGuard>
-                                }
-                              />
-                              <Route
-                                path="/admin/fy-tools"
-                                element={
-                                  <RoleGuard allowedRoles={['admin']}>
-                                    <FYTools />
-                                  </RoleGuard>
-                                }
-                              />
-                              <Route path="/audit" element={<ApprovalAudit />} />
-                              <Route path="/reports/variance" element={<VarianceReport />} />
-                              <Route path="*" element={<NotFound />} />
-                            </Routes>
-                          </AppLayout>
+                          <AppLayout />
                         </ProtectedRoute>
                       }
-                    />
+                    >
+                      <Route path="/" element={<Navigate to="/budget" replace />} />
+                      <Route path="/budget" element={<Budget />} />
+                      <Route path="/forecast" element={<Forecast />} />
+                      <Route path="/actuals" element={<Actuals />} />
+                      <Route path="/requests" element={<Requests />} />
+                      <Route path="/requests/:id" element={<RequestDetail />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/tasks" element={<Tasks />} />
+                      <Route path="/import" element={<Import />} />
+                      <Route
+                        path="/admin"
+                        element={
+                          <RoleGuard allowedRoles={['admin']}>
+                            <Admin />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route
+                        path="/admin/actuals"
+                        element={
+                          <RoleGuard allowedRoles={['admin', 'finance']}>
+                            <ActualsImport />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route
+                        path="/admin/actuals/match"
+                        element={
+                          <RoleGuard allowedRoles={['admin', 'finance']}>
+                            <ActualsMatching />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route
+                        path="/admin/fy-tools"
+                        element={
+                          <RoleGuard allowedRoles={['admin']}>
+                            <FYTools />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route path="/audit" element={<ApprovalAudit />} />
+                      <Route path="/reports/variance" element={<VarianceReport />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Route>
                   </Routes>
                 </RequestsProvider>
               </FiscalYearBudgetProvider>
