@@ -29,6 +29,7 @@ export function createForecastCostCentersFromBudget(fy: FiscalYearBudget): CostC
       ownerId: item.ownerId,
       isContracted: item.isContracted,
       isAccrual: item.isAccrual,
+      isSoftwareSubscription: item.isSoftwareSubscription ?? false,
       contractStartDate: item.contractStartDate,
       contractEndDate: item.contractEndDate,
       autoRenew: item.autoRenew,

@@ -30,7 +30,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink, ArrowUpDown } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   CostCenter,
   LineItem,
@@ -114,6 +121,10 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
   const [contractedOnly, setContractedOnly] = useState(false);
+  const [accrualOnly, setAccrualOnly] = useState(false);
+  const [softwareOnly, setSoftwareOnly] = useState(false);
+  const [costCenterSort, setCostCenterSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
+  const [lineItemSort, setLineItemSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
 
@@ -167,17 +178,22 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const showActionColumn = hasRowActions || canDelete;
 
   // Check if any filter is active
-  const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly;
+  const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly || accrualOnly || softwareOnly;
 
-  // Filter cost centers and line items
+  // Filter and sort cost centers and line items
   const filteredCostCenters = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
 
-    return costCenters
+    // First filter
+    let result = costCenters
       .map((cc) => {
         const filteredItems = cc.lineItems.filter((item) => {
           // Contracted filter
           if (contractedOnly && !item.isContracted) return false;
+          // Accrual filter
+          if (accrualOnly && !item.isAccrual) return false;
+          // Software subscription filter
+          if (softwareOnly && !item.isSoftwareSubscription) return false;
 
           // Search filter (name or vendor)
           if (query) {
@@ -189,7 +205,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
           return true;
         });
 
-        return { ...cc, lineItems: filteredItems };
+        // Sort line items
+        let sortedItems = [...filteredItems];
+        if (lineItemSort === 'name') {
+          sortedItems.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (lineItemSort === 'fy-high') {
+          sortedItems.sort((a, b) => calculateFYTotal(b[valueType]) - calculateFYTotal(a[valueType]));
+        } else if (lineItemSort === 'fy-low') {
+          sortedItems.sort((a, b) => calculateFYTotal(a[valueType]) - calculateFYTotal(b[valueType]));
+        }
+
+        return { ...cc, lineItems: sortedItems };
       })
       .filter((cc) => {
         // If filter is active, hide empty cost centers
@@ -199,7 +225,26 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         // Otherwise hide empty
         return cc.lineItems.length > 0;
       });
-  }, [costCenters, searchQuery, contractedOnly, hasActiveFilter, showEmptyCostCenters]);
+
+    // Sort cost centers
+    if (costCenterSort === 'name') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (costCenterSort === 'fy-high') {
+      result.sort((a, b) => {
+        const totalA = calculateFYTotal(calculateFilteredRollup(a.lineItems, valueType));
+        const totalB = calculateFYTotal(calculateFilteredRollup(b.lineItems, valueType));
+        return totalB - totalA;
+      });
+    } else if (costCenterSort === 'fy-low') {
+      result.sort((a, b) => {
+        const totalA = calculateFYTotal(calculateFilteredRollup(a.lineItems, valueType));
+        const totalB = calculateFYTotal(calculateFilteredRollup(b.lineItems, valueType));
+        return totalA - totalB;
+      });
+    }
+
+    return result;
+  }, [costCenters, searchQuery, contractedOnly, accrualOnly, softwareOnly, hasActiveFilter, showEmptyCostCenters, valueType, costCenterSort, lineItemSort]);
 
   // Compute grand total from visible data
   const grandTotal = useMemo(() => {
@@ -262,8 +307,66 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
             onCheckedChange={setContractedOnly}
           />
           <Label htmlFor="contracted-only" className="text-sm cursor-pointer">
-            Contracted only
+            Contracted
           </Label>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Switch
+            id="accrual-only"
+            checked={accrualOnly}
+            onCheckedChange={setAccrualOnly}
+          />
+          <Label htmlFor="accrual-only" className="text-sm cursor-pointer">
+            Accrual
+          </Label>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Switch
+            id="software-only"
+            checked={softwareOnly}
+            onCheckedChange={setSoftwareOnly}
+          />
+          <Label htmlFor="software-only" className="text-sm cursor-pointer">
+            Software
+          </Label>
+        </div>
+      </div>
+
+      {/* Sorting controls */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Sort:</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="cc-sort" className="text-sm whitespace-nowrap">Cost centers</Label>
+          <Select value={costCenterSort} onValueChange={(v) => setCostCenterSort(v as typeof costCenterSort)}>
+            <SelectTrigger id="cc-sort" className="w-[140px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default</SelectItem>
+              <SelectItem value="name">Name (A→Z)</SelectItem>
+              <SelectItem value="fy-high">FY Total (High→Low)</SelectItem>
+              <SelectItem value="fy-low">FY Total (Low→High)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="li-sort" className="text-sm whitespace-nowrap">Line items</Label>
+          <Select value={lineItemSort} onValueChange={(v) => setLineItemSort(v as typeof lineItemSort)}>
+            <SelectTrigger id="li-sort" className="w-[140px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default</SelectItem>
+              <SelectItem value="name">Name (A→Z)</SelectItem>
+              <SelectItem value="fy-high">FY Total (High→Low)</SelectItem>
+              <SelectItem value="fy-low">FY Total (Low→High)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -438,6 +541,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                   {item.isAccrual && (
                                     <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
                                       Accrual
+                                    </Badge>
+                                  )}
+                                  {item.isSoftwareSubscription && (
+                                    <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                      Software
                                     </Badge>
                                   )}
                                 </div>
