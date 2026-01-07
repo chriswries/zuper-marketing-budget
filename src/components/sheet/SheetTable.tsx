@@ -583,7 +583,9 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                     }
                                     
                                     // Determine action type and correct targetRequestId
-                                    const actionType = isPending ? 'cancel_request' : 'delete_line_item';
+                                    // For pending items: use withdraw_request (no new request created)
+                                    // For approved items: use delete_line_item
+                                    const actionType = isPending ? 'withdraw_request' : 'delete_line_item';
                                     // Fix: Choose targetRequestId based on which status is actually pending
                                     const targetRequestId = item.adjustmentStatus === 'pending'
                                       ? item.adjustmentRequestId
@@ -615,7 +617,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                               </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>{isPending ? 'Cancel request' : 'Delete line item'}</p>
+                                              <p>{isPending ? 'Withdraw request' : 'Delete line item'}</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>

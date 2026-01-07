@@ -467,9 +467,9 @@ export default function Forecast() {
         toast({ title: 'Deleted', description: 'Line item deleted; manager notified.' });
       }
     } else if (currentRole === 'manager') {
-      // Handle withdraw_request action
+      // Handle withdraw_request action - for pending approval/adjustment/deletion/cancellation
       if (type === 'withdraw_request' && targetRequestId) {
-        // Immediately cancel the pending deletion/cancellation request
+        // Immediately cancel the pending request
         updateRequest(targetRequestId, (request) => ({
           ...request,
           status: 'cancelled' as const,
@@ -480,10 +480,35 @@ export default function Forecast() {
           ),
         }));
         
-        // Clear flags on line item
+        // Handle line item side effects based on what was pending
         setCostCenters((prev) =>
           prev.map((cc) => {
             if (cc.id !== costCenterId) return cc;
+            
+            // If approvalStatus pending (new line item), remove the line item
+            if (lineItem.approvalStatus === 'pending') {
+              return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+            }
+            
+            // If adjustmentStatus pending, revert to before values
+            if (lineItem.adjustmentStatus === 'pending' && lineItem.adjustmentBeforeValues) {
+              return {
+                ...cc,
+                lineItems: cc.lineItems.map((item) =>
+                  item.id === lineItem.id
+                    ? {
+                        ...item,
+                        forecastValues: lineItem.adjustmentBeforeValues!,
+                        adjustmentStatus: undefined,
+                        adjustmentRequestId: undefined,
+                        adjustmentBeforeValues: undefined,
+                      }
+                    : item
+                ),
+              };
+            }
+            
+            // Otherwise clear deletion/cancellation flags only
             return {
               ...cc,
               lineItems: cc.lineItems.map((item) => {
@@ -497,6 +522,51 @@ export default function Forecast() {
                 };
               }),
             };
+          })
+        );
+        
+        toast({ title: 'Withdrawn', description: 'Request has been withdrawn.' });
+        setRowActionDialogOpen(false);
+        setPendingRowAction(null);
+        return;
+      }
+      
+      // Safety guard: if cancel_request is called on a pending item, treat as withdraw
+      if (type === 'cancel_request' && (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending') && targetRequestId) {
+        // Perform withdraw behavior instead
+        updateRequest(targetRequestId, (request) => ({
+          ...request,
+          status: 'cancelled' as const,
+          approvalSteps: request.approvalSteps.map((step) =>
+            step.status === 'pending'
+              ? { ...step, status: 'rejected' as const, updatedAt: new Date().toISOString() }
+              : step
+          ),
+        }));
+        
+        setCostCenters((prev) =>
+          prev.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            if (lineItem.approvalStatus === 'pending') {
+              return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+            }
+            if (lineItem.adjustmentStatus === 'pending' && lineItem.adjustmentBeforeValues) {
+              return {
+                ...cc,
+                lineItems: cc.lineItems.map((item) =>
+                  item.id === lineItem.id
+                    ? {
+                        ...item,
+                        forecastValues: lineItem.adjustmentBeforeValues!,
+                        adjustmentStatus: undefined,
+                        adjustmentRequestId: undefined,
+                        adjustmentBeforeValues: undefined,
+                      }
+                    : item
+                ),
+              };
+            }
+            return cc;
           })
         );
         
