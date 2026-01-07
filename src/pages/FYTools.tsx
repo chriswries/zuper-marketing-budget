@@ -1,8 +1,11 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -10,17 +13,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
 import { useRequests } from "@/contexts/RequestsContext";
+import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { buildFiscalYearBundleV1, validateFiscalYearBundle } from "@/lib/fyBundle";
 import { downloadJson, sanitizeFilename } from "@/lib/downloadJson";
 import { loadActuals } from "@/lib/actualsStore";
 import { loadActualsMatching } from "@/lib/actualsMatchingStore";
 import { loadForecastForFY } from "@/lib/forecastStore";
 import { loadApprovalAudit } from "@/lib/approvalAuditStore";
+import { archiveFiscalYear, restoreFiscalYear, hardDeleteFiscalYear, getFYScopedRequests } from "@/lib/fyLifecycle";
 import type { FiscalYearBundleV1, BundleValidationResult } from "@/types/fyBundle";
 import { 
   Package, 
@@ -33,23 +47,42 @@ import {
   Receipt,
   Link,
   ClipboardList,
-  History
+  History,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  ShieldAlert
 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function FYTools() {
+  const navigate = useNavigate();
   const { currentRole } = useCurrentUserRole();
-  const { fiscalYears } = useFiscalYearBudget();
-  const { requests } = useRequests();
+  const { fiscalYears, updateFiscalYearBudget, deleteFiscalYearBudget } = useFiscalYearBudget();
+  const { requests, setRequests } = useRequests();
+  const { settings } = useAdminSettings();
 
   const [selectedFYId, setSelectedFYId] = useState<string>("");
   const [bundle, setBundle] = useState<FiscalYearBundleV1 | null>(null);
   const [validation, setValidation] = useState<BundleValidationResult | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
 
+  // Archive/Restore dialog state
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [archiveAction, setArchiveAction] = useState<'archive' | 'restore'>('archive');
+  const [archiveJustification, setArchiveJustification] = useState("");
+
+  // Hard delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteJustification, setDeleteJustification] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
   const selectedFY = useMemo(() => 
     fiscalYears.find(fy => fy.id === selectedFYId) ?? null
   , [fiscalYears, selectedFYId]);
+
+  const isArchived = selectedFY?.status === 'archived';
+  const isAdminOverrideEnabled = settings.adminOverrideEnabled;
 
   // Compute summary for selected FY
   const summary = useMemo(() => {
@@ -70,16 +103,8 @@ export default function FYTools() {
     const matchingCount = Object.keys(matching.matchesByTxnId).length;
     const merchantRuleCount = Object.keys(matching.rulesByMerchantKey).length;
 
-    // Get all cost center IDs from this FY
-    const fyCostCenterIds = new Set(selectedFY.costCenters.map(cc => cc.id));
-
     // Count FY-scoped requests
-    const fyRequests = requests.filter(req => {
-      if (req.originFiscalYearId === selectedFY.id) return true;
-      if (req.costCenterId && fyCostCenterIds.has(req.costCenterId)) return true;
-      if (req.originCostCenterId && fyCostCenterIds.has(req.originCostCenterId)) return true;
-      return false;
-    });
+    const fyRequests = getFYScopedRequests(selectedFY, requests);
     const requestsCount = fyRequests.length;
 
     // Count audit events
@@ -133,6 +158,60 @@ export default function FYTools() {
     downloadJson(filename, bundle);
   };
 
+  // Archive/Restore handlers
+  const handleOpenArchiveDialog = (action: 'archive' | 'restore') => {
+    setArchiveAction(action);
+    setArchiveJustification("");
+    setArchiveDialogOpen(true);
+  };
+
+  const handleArchiveSubmit = () => {
+    if (!selectedFY || !archiveJustification.trim()) return;
+
+    if (archiveAction === 'archive') {
+      archiveFiscalYear(selectedFY, currentRole, archiveJustification.trim(), updateFiscalYearBudget);
+      toast.success(`${selectedFY.name} has been archived.`);
+    } else {
+      restoreFiscalYear(selectedFY, currentRole, archiveJustification.trim(), updateFiscalYearBudget);
+      toast.success(`${selectedFY.name} has been restored.`);
+    }
+
+    setArchiveDialogOpen(false);
+    // Clear bundle/validation since FY state changed
+    setBundle(null);
+    setValidation(null);
+  };
+
+  // Hard delete handlers
+  const handleOpenDeleteDialog = () => {
+    setDeleteJustification("");
+    setDeleteConfirmation("");
+    setDeleteDialogOpen(true);
+  };
+
+  const isDeleteConfirmationValid = deleteConfirmation === selectedFY?.name || deleteConfirmation === 'DELETE';
+
+  const handleHardDelete = () => {
+    if (!selectedFY || !deleteJustification.trim() || !isDeleteConfirmationValid) return;
+
+    const result = hardDeleteFiscalYear(
+      selectedFY,
+      currentRole,
+      deleteJustification.trim(),
+      requests,
+      deleteFiscalYearBudget,
+      setRequests
+    );
+
+    toast.success(
+      `${selectedFY.name} and all associated data deleted. Removed ${result.deletedRequestIds.length} requests.`
+    );
+
+    setDeleteDialogOpen(false);
+    setSelectedFYId("");
+    navigate('/admin');
+  };
+
   // Admin-only gate
   if (currentRole !== 'admin') {
     return (
@@ -156,7 +235,7 @@ export default function FYTools() {
     <div>
       <PageHeader
         title="FY Tools"
-        description="Export fiscal year data bundles for backup and archival."
+        description="Export, archive, and manage fiscal year data."
       />
 
       <div className="space-y-6">
@@ -165,11 +244,10 @@ export default function FYTools() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Export FY Bundle</CardTitle>
+              <CardTitle className="text-lg">Select Fiscal Year</CardTitle>
             </div>
             <CardDescription>
-              Select a fiscal year to build and download a complete data bundle including 
-              budget, forecast, actuals, matching rules, requests, and audit events.
+              Choose a fiscal year to export, archive, or delete.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -202,11 +280,17 @@ export default function FYTools() {
                   <h4 className="font-medium">{selectedFY.name}</h4>
                   <Badge variant={
                     selectedFY.status === 'active' ? 'default' : 
-                    selectedFY.status === 'closed' ? 'secondary' : 
+                    selectedFY.status === 'closed' ? 'secondary' :
+                    selectedFY.status === 'archived' ? 'outline' :
                     'outline'
                   }>
                     {selectedFY.status}
                   </Badge>
+                  {selectedFY.archivedAt && (
+                    <span className="text-xs text-muted-foreground">
+                      Archived {format(new Date(selectedFY.archivedAt), 'MMM d, yyyy')}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
@@ -241,74 +325,255 @@ export default function FYTools() {
                 </div>
               </div>
             )}
-
-            {/* Build Button */}
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleBuildPreview} 
-                disabled={!selectedFY || isBuilding}
-                variant="outline"
-              >
-                <FileCheck className="h-4 w-4 mr-2" />
-                {isBuilding ? 'Building...' : 'Build Bundle (Preview)'}
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
-        {/* Validation Results */}
-        {validation && (
+        {/* Export Bundle Section */}
+        {selectedFY && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                {validation.ok ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                )}
-                <CardTitle className="text-lg">
-                  {validation.ok ? 'Validation Passed' : 'Validation Errors'}
-                </CardTitle>
+                <Download className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Export FY Bundle</CardTitle>
               </div>
+              <CardDescription>
+                Build and download a complete data bundle including budget, forecast, actuals, 
+                matching rules, requests, and audit events.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {validation.ok ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Bundle is valid and ready for download.
-                  </p>
-                  {bundle && (
-                    <div className="text-sm space-y-1">
-                      <p><strong>Schema Version:</strong> {bundle.schemaVersion}</p>
-                      <p><strong>FY:</strong> {bundle.fiscalYearName}</p>
-                      <p><strong>Cost Centers:</strong> {bundle.fiscalYear.costCenters.length}</p>
-                      <p><strong>Forecast:</strong> {bundle.forecast ? 'Included' : 'Not available'}</p>
-                      <p><strong>Actuals Transactions:</strong> {bundle.actualsTransactions.length}</p>
-                      <p><strong>Requests:</strong> {bundle.requests.length}</p>
-                      <p><strong>Audit Events:</strong> {Object.values(bundle.approvalAuditEventsByRequestId).flat().length + (bundle.fyAuditEvents?.length ?? 0)}</p>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleBuildPreview} 
+                  disabled={!selectedFY || isBuilding}
+                  variant="outline"
+                >
+                  <FileCheck className="h-4 w-4 mr-2" />
+                  {isBuilding ? 'Building...' : 'Build Bundle (Preview)'}
+                </Button>
+              </div>
+
+              {/* Validation Results */}
+              {validation && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    {validation.ok ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-destructive" />
+                    )}
+                    <span className="font-medium">
+                      {validation.ok ? 'Validation Passed' : 'Validation Errors'}
+                    </span>
+                  </div>
+
+                  {validation.ok && bundle ? (
+                    <div className="space-y-3">
+                      <div className="text-sm space-y-1 text-muted-foreground">
+                        <p><strong>Schema Version:</strong> {bundle.schemaVersion}</p>
+                        <p><strong>FY:</strong> {bundle.fiscalYearName}</p>
+                        <p><strong>Cost Centers:</strong> {bundle.fiscalYear.costCenters.length}</p>
+                        <p><strong>Forecast:</strong> {bundle.forecast ? 'Included' : 'Not available'}</p>
+                        <p><strong>Actuals Transactions:</strong> {bundle.actualsTransactions.length}</p>
+                        <p><strong>Requests:</strong> {bundle.requests.length}</p>
+                        <p><strong>Audit Events:</strong> {Object.values(bundle.approvalAuditEventsByRequestId).flat().length + (bundle.fyAuditEvents?.length ?? 0)}</p>
+                      </div>
+                      <Button onClick={handleDownload}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download FY Bundle
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-destructive">
+                        The bundle has validation errors. Please review:
+                      </p>
+                      <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                        {validation.errors.map((err, i) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
-                  <Button onClick={handleDownload}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download FY Bundle
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-destructive">
-                    The bundle has validation errors. Please review:
-                  </p>
-                  <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-                    {validation.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
+
+        {/* Archive/Restore Section */}
+        {selectedFY && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Archive className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Archive / Restore</CardTitle>
+              </div>
+              <CardDescription>
+                Archived fiscal years are hidden from pickers by default but can still be exported.
+                This action is reversible.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isArchived ? (
+                <Button onClick={() => handleOpenArchiveDialog('restore')} variant="outline">
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Restore Fiscal Year
+                </Button>
+              ) : (
+                <Button onClick={() => handleOpenArchiveDialog('archive')} variant="outline">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive Fiscal Year
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Danger Zone: Hard Delete */}
+        {selectedFY && (
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-destructive" />
+                <CardTitle className="text-lg text-destructive">Danger Zone: Hard Delete</CardTitle>
+              </div>
+              <CardDescription>
+                Permanently delete this fiscal year and ALL associated data including forecast, 
+                actuals, matching rules, requests, and audit events. This action cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isAdminOverrideEnabled && (
+                <Alert>
+                  <ShieldAlert className="h-4 w-4" />
+                  <AlertTitle>Admin Override Required</AlertTitle>
+                  <AlertDescription>
+                    Enable Admin Override Mode in Admin settings to use this feature.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Button 
+                onClick={handleOpenDeleteDialog} 
+                variant="destructive"
+                disabled={!isAdminOverrideEnabled}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Hard Delete Fiscal Year
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Archive/Restore Dialog */}
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {archiveAction === 'archive' ? (
+                <Archive className="h-5 w-5" />
+              ) : (
+                <ArchiveRestore className="h-5 w-5" />
+              )}
+              {archiveAction === 'archive' ? 'Archive' : 'Restore'} {selectedFY?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {archiveAction === 'archive'
+                ? 'Archived fiscal years are hidden from pickers but remain exportable.'
+                : 'Restore this fiscal year to its previous status.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="archive-justification">
+                Justification <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="archive-justification"
+                placeholder={`Why are you ${archiveAction === 'archive' ? 'archiving' : 'restoring'} this fiscal year?`}
+                value={archiveJustification}
+                onChange={(e) => setArchiveJustification(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchiveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleArchiveSubmit} disabled={!archiveJustification.trim()}>
+              {archiveAction === 'archive' ? 'Archive' : 'Restore'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" />
+              Permanently Delete {selectedFY?.name}
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete all data associated with this fiscal year. 
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {summary && (
+              <div className="bg-destructive/10 rounded-lg p-3 text-sm space-y-1">
+                <p className="font-medium text-destructive">The following will be deleted:</p>
+                <ul className="list-disc list-inside text-muted-foreground">
+                  <li>{summary.costCenterCount} cost centers with {summary.lineItemCount} line items</li>
+                  <li>Forecast data {summary.forecastExists ? '(exists)' : '(none)'}</li>
+                  <li>{summary.actualsTxnCount} actuals transactions</li>
+                  <li>{summary.matchingCount} transaction matches, {summary.merchantRuleCount} merchant rules</li>
+                  <li>{summary.requestsCount} requests</li>
+                  <li>{summary.auditEventCount} audit events (for requests)</li>
+                </ul>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="delete-justification">
+                Justification <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="delete-justification"
+                placeholder="Why are you permanently deleting this fiscal year?"
+                value={deleteJustification}
+                onChange={(e) => setDeleteJustification(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirmation">
+                Type <strong>{selectedFY?.name}</strong> or <strong>DELETE</strong> to confirm
+              </Label>
+              <Input
+                id="delete-confirmation"
+                placeholder={`Type "${selectedFY?.name}" or "DELETE"`}
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleHardDelete}
+              disabled={!deleteJustification.trim() || !isDeleteConfirmationValid}
+            >
+              Permanently Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

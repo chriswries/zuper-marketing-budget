@@ -73,3 +73,14 @@ export function getOrBuildActualsRollup(
   // Always recompute to ensure actuals view is fresh
   return recomputeAndSaveActualsRollup(fiscalYearId, fiscalYear);
 }
+
+/**
+ * Delete actuals rollup cache for a fiscal year.
+ */
+export function deleteActualsRollupForFY(fiscalYearId: string): void {
+  try {
+    localStorage.removeItem(getStorageKey(fiscalYearId));
+  } catch (error) {
+    console.error('Failed to delete actuals rollup from localStorage:', error);
+  }
+}

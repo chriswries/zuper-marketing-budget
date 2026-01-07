@@ -122,6 +122,9 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   admin_override_force_approve: 'Admin override: force approve',
   admin_override_force_reject: 'Admin override: force reject',
   admin_override_soft_delete: 'Admin override: soft delete',
+  fy_archived: 'Fiscal year archived',
+  fy_restored: 'Fiscal year restored',
+  fy_hard_deleted: 'Fiscal year hard deleted',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
@@ -185,4 +188,17 @@ export const APPROVAL_AUDIT_UPDATED_EVENT = 'approval-audit-updated';
 
 function dispatchAuditUpdated(): void {
   window.dispatchEvent(new CustomEvent(APPROVAL_AUDIT_UPDATED_EVENT));
+}
+
+/**
+ * Remove all audit events for a specific entity.
+ */
+export function removeApprovalAuditForEntity(
+  entityType: ApprovalEntityType,
+  entityId: string
+): void {
+  const store = loadStore();
+  delete store[entityType][entityId];
+  saveStore(store);
+  dispatchAuditUpdated();
 }
