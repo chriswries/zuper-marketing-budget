@@ -52,6 +52,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allow_self_signup: { Args: never; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
