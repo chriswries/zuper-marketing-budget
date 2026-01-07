@@ -33,8 +33,8 @@ import {
   loadApprovalAudit,
   appendApprovalAudit,
   formatAuditEvent,
-  formatAuditTimestamp,
 } from '@/lib/approvalAuditStore';
+import { formatAuditTimestamp } from '@/lib/dateTime';
 import {
   buildBudgetSlackTemplate,
   buildBudgetEmailSubject,
@@ -103,15 +103,7 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-const formatTimestamp = (isoString: string): string => {
-  const date = new Date(isoString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
+// formatTimestamp is now handled by formatAuditTimestamp from dateTime.ts
 
 function createEmptyMonthlyValues(): MonthlyValues {
   return {
@@ -1022,7 +1014,7 @@ export default function Budget() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground text-xs">
-                            {formatTimestamp(entry.timestamp)}
+                            {formatAuditTimestamp(entry.timestamp, adminSettings.timeZone)}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {entry.userName}
@@ -1076,7 +1068,7 @@ export default function Budget() {
                   <div className="text-sm font-medium capitalize">{step.level}</div>
                   {step.updatedAt && (
                     <div className="text-xs text-muted-foreground">
-                      {formatTimestamp(step.updatedAt)}
+                      {formatAuditTimestamp(step.updatedAt, adminSettings.timeZone)}
                     </div>
                   )}
                 </div>
@@ -1245,7 +1237,7 @@ export default function Budget() {
                         <div className="flex-1">
                           <div className="font-medium">{formatAuditEvent(event)}</div>
                           <div className="text-xs text-muted-foreground">
-                            {formatAuditTimestamp(event.timestamp)}
+                            {formatAuditTimestamp(event.timestamp, adminSettings.timeZone)}
                           </div>
                         </div>
                       </div>

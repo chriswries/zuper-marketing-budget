@@ -26,9 +26,11 @@ import { Search, Info, FileSpreadsheet } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
+import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { MONTH_LABELS } from '@/types/budget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getNextPendingStep, getApproverLabel, canRoleApproveRequest } from '@/lib/requestApprovals';
+import { formatDate } from '@/lib/dateTime';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -37,6 +39,7 @@ export default function Requests() {
   const { requests } = useRequests();
   const { setSelectedFiscalYearId } = useFiscalYearBudget();
   const { currentRole } = useCurrentUserRole();
+  const { settings: adminSettings } = useAdminSettings();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [needsMyApproval, setNeedsMyApproval] = useState(false);
@@ -234,7 +237,7 @@ export default function Requests() {
                       {MONTH_LABELS[request.startMonth]} – {MONTH_LABELS[request.endMonth]}
                     </TableCell>
                     <TableCell>
-                      {new Date(request.createdAt).toLocaleDateString()}
+                      {formatDate(request.createdAt, adminSettings.timeZone)}
                     </TableCell>
                     <TableCell>
                       {request.originSheet && request.originLineItemId && (
