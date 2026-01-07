@@ -1282,8 +1282,9 @@ export default function Budget() {
         valueType="budgetValues"
         editable={isEditable}
         showEmptyCostCenters={true}
-        onCellChange={handleCellChange}
-        onDeleteLineItem={handleDeleteLineItem}
+        onCellChange={isFinance ? undefined : handleCellChange}
+        onDeleteLineItem={isFinance ? undefined : handleDeleteLineItem}
+        currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
         renderCostCenterFYMeta={renderCostCenterFYMeta}
         renderGrandTotalFYMeta={renderGrandTotalFYMeta}
         focusCostCenterId={focusCostCenterId}
