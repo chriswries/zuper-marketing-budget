@@ -24,8 +24,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Lock, History, Plus, Info } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
+import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
@@ -99,6 +105,11 @@ export default function Forecast() {
   const { requests, addRequest, updateRequest } = useRequests();
   const { selectedFiscalYear, selectedFiscalYearId } = useFiscalYearBudget();
   const { settings: adminSettings } = useAdminSettings();
+  const { currentRole } = useCurrentUserRole();
+  
+  // Finance role is read-only for sheet editing
+  const isFinance = currentRole === 'finance';
+  const isEditable = !isFinance;
   
   // Read query params for focus and mode override
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
@@ -580,10 +591,26 @@ export default function Forecast() {
         />
         
         <div className="flex items-center gap-2">
-          <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add line item
-          </Button>
+          {isEditable ? (
+            <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add line item
+            </Button>
+          ) : isFinance ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button size="sm" className="gap-2" disabled>
+                    <Plus className="h-4 w-4" />
+                    Add line item
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Finance is read-only</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -693,9 +720,9 @@ export default function Forecast() {
       <SheetTable
         costCenters={costCenters}
         valueType="forecastValues"
-        editable={true}
-        onCellChange={handleCellChange}
-        onDeleteLineItem={handleDeleteLineItem}
+        editable={isEditable}
+        onCellChange={isEditable ? handleCellChange : undefined}
+        onDeleteLineItem={isEditable ? handleDeleteLineItem : undefined}
         lockedMonths={lockedMonths}
         focusCostCenterId={focusCostCenterId}
         focusLineItemId={focusLineItemId}
