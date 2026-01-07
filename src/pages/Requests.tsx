@@ -30,7 +30,7 @@ import { MONTH_LABELS } from '@/types/budget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getNextPendingStep, getApproverLabel, canRoleApproveRequest } from '@/lib/requestApprovals';
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export default function Requests() {
   const navigate = useNavigate();
@@ -102,6 +102,8 @@ export default function Requests() {
         return 'default';
       case 'rejected':
         return 'destructive';
+      case 'cancelled':
+        return 'outline';
       default:
         return 'secondary';
     }
@@ -137,6 +139,7 @@ export default function Requests() {
             <TabsTrigger value="pending">Pending</TabsTrigger>
             <TabsTrigger value="approved">Approved</TabsTrigger>
             <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2">

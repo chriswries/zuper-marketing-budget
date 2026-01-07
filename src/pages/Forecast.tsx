@@ -198,100 +198,118 @@ export default function Forecast() {
   }, [costCenters, isActiveFY, fyId]);
 
   // Sync line item approval/adjustment status with request status
+  // Also reload from storage since the resolver modifies storage directly
   useEffect(() => {
-    setCostCenters((prev) => {
-      let changed = false;
+    // First, reload from storage to pick up any resolution changes
+    // (e.g., when cancel_request or delete_line_item is approved/rejected)
+    let freshData: CostCenter[] | null = null;
+    if (isActiveFY && fyId) {
+      freshData = loadForecastForFY(fyId);
+    } else {
+      freshData = loadLegacyForecastState();
+    }
+    
+    // Use fresh data if available, otherwise continue with current state
+    const baseData = freshData ?? costCenters;
+    
+    // Now apply local sync logic on top of the fresh data
+    let changed = false;
+    const updated = baseData.map((cc) => {
+      const updatedItems: LineItem[] = [];
       
-      const updated = prev.map((cc) => {
-        const updatedItems: LineItem[] = [];
-        
-        for (const item of cc.lineItems) {
-          // Handle NEW line item approval (approvalRequestId)
-          if (item.approvalRequestId) {
-            const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
-            if (linkedRequest) {
-              const isRejected = 
-                linkedRequest.status === 'rejected' ||
-                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+      for (const item of cc.lineItems) {
+        // Handle NEW line item approval (approvalRequestId)
+        if (item.approvalRequestId) {
+          const linkedRequest = requests.find((r) => r.id === item.approvalRequestId);
+          if (linkedRequest) {
+            const isRejected = 
+              linkedRequest.status === 'rejected' ||
+              linkedRequest.status === 'cancelled' ||
+              linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
 
-              if (isRejected) {
-                changed = true;
-                // Remove the line item for rejected NEW items
-                continue;
-              }
+            if (isRejected) {
+              changed = true;
+              // Remove the line item for rejected NEW items
+              continue;
+            }
 
-              const isApproved = 
-                linkedRequest.status === 'approved' ||
-                (linkedRequest.approvalSteps?.length > 0 && 
-                 linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+            const isApproved = 
+              linkedRequest.status === 'approved' ||
+              (linkedRequest.approvalSteps?.length > 0 && 
+               linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
 
-              if (isApproved && item.approvalStatus === 'pending') {
-                changed = true;
-                updatedItems.push({ ...item, approvalStatus: undefined });
-                continue;
-              }
+            if (isApproved && item.approvalStatus === 'pending') {
+              changed = true;
+              updatedItems.push({ ...item, approvalStatus: undefined });
+              continue;
             }
           }
+        }
 
-          // Handle ADJUSTMENT approval (adjustmentRequestId)
-          if (item.adjustmentRequestId) {
-            const linkedRequest = requests.find((r) => r.id === item.adjustmentRequestId);
-            if (linkedRequest) {
-              const isRejected = 
-                linkedRequest.status === 'rejected' ||
-                linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+        // Handle ADJUSTMENT approval (adjustmentRequestId)
+        if (item.adjustmentRequestId) {
+          const linkedRequest = requests.find((r) => r.id === item.adjustmentRequestId);
+          if (linkedRequest) {
+            const isRejected = 
+              linkedRequest.status === 'rejected' ||
+              linkedRequest.status === 'cancelled' ||
+              linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
 
-              if (isRejected && item.adjustmentBeforeValues && item.adjustmentSheet === 'forecast') {
-                changed = true;
-                // Revert values and clear adjustment fields
-                updatedItems.push({
-                  ...item,
-                  forecastValues: item.adjustmentBeforeValues,
-                  adjustmentStatus: undefined,
-                  adjustmentRequestId: undefined,
-                  adjustmentBeforeValues: undefined,
-                  adjustmentSheet: undefined,
-                });
-                continue;
-              }
+            if (isRejected && item.adjustmentBeforeValues && item.adjustmentSheet === 'forecast') {
+              changed = true;
+              // Revert values and clear adjustment fields
+              updatedItems.push({
+                ...item,
+                forecastValues: item.adjustmentBeforeValues,
+                adjustmentStatus: undefined,
+                adjustmentRequestId: undefined,
+                adjustmentBeforeValues: undefined,
+                adjustmentSheet: undefined,
+              });
+              continue;
+            }
 
-              const isApproved = 
-                linkedRequest.status === 'approved' ||
-                (linkedRequest.approvalSteps?.length > 0 && 
-                 linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+            const isApproved = 
+              linkedRequest.status === 'approved' ||
+              (linkedRequest.approvalSteps?.length > 0 && 
+               linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
 
-              if (isApproved && item.adjustmentStatus === 'pending') {
-                changed = true;
-                // Keep values, clear adjustment fields
-                updatedItems.push({
-                  ...item,
-                  adjustmentStatus: undefined,
-                  adjustmentRequestId: undefined,
-                  adjustmentBeforeValues: undefined,
-                  adjustmentSheet: undefined,
-                });
-                continue;
-              }
+            if (isApproved && item.adjustmentStatus === 'pending') {
+              changed = true;
+              // Keep values, clear adjustment fields
+              updatedItems.push({
+                ...item,
+                adjustmentStatus: undefined,
+                adjustmentRequestId: undefined,
+                adjustmentBeforeValues: undefined,
+                adjustmentSheet: undefined,
+              });
+              continue;
             }
           }
-
-          updatedItems.push(item);
         }
 
-        if (updatedItems.length !== cc.lineItems.length) {
-          return { ...cc, lineItems: updatedItems };
-        }
+        updatedItems.push(item);
+      }
 
-        const hasChangedItem = updatedItems.some((item, idx) => item !== cc.lineItems[idx]);
-        if (hasChangedItem) {
-          return { ...cc, lineItems: updatedItems };
-        }
+      if (updatedItems.length !== cc.lineItems.length) {
+        return { ...cc, lineItems: updatedItems };
+      }
 
-        return cc;
-      });
+      const hasChangedItem = updatedItems.some((item, idx) => item !== cc.lineItems[idx]);
+      if (hasChangedItem) {
+        return { ...cc, lineItems: updatedItems };
+      }
 
-      return changed || updated.some((cc, idx) => cc !== prev[idx]) ? updated : prev;
+      return cc;
     });
+
+    // Check if we need to update state
+    const needsUpdate = freshData !== null || changed || updated.some((cc, idx) => cc !== baseData[idx]);
+    if (needsUpdate) {
+      setCostCenters(updated);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests]);
 
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {

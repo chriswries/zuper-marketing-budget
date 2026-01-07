@@ -143,7 +143,7 @@ export default function RequestDetail() {
     }
   }, [id]);
 
-  const isFinalized = request?.status === 'approved' || request?.status === 'rejected';
+  const isFinalized = request?.status === 'approved' || request?.status === 'rejected' || request?.status === 'cancelled';
   const nextPendingStep = request?.approvalSteps.find((s) => s.status === 'pending');
   const hasPendingStep = !!nextPendingStep;
 
@@ -282,6 +282,8 @@ export default function RequestDetail() {
       ? 'default'
       : request.status === 'rejected'
       ? 'destructive'
+      : request.status === 'cancelled'
+      ? 'outline'
       : 'secondary';
 
   const disabledTooltip = currentRole === 'admin'

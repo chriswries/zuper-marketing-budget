@@ -1,7 +1,7 @@
 import { Month } from './budget';
 
 export type ApprovalLevel = 'manager' | 'cmo' | 'finance';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface ApprovalStep {
