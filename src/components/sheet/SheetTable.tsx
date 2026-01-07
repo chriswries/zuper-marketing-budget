@@ -485,14 +485,76 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               </TableCell>
                               {showActionColumn && (
                                 <TableCell className="text-center">
-                                  {(() => {
+{(() => {
                                     // Determine action type and permissions
                                     const isPending = item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending';
                                     const hasCancellationPending = item.cancellationStatus === 'pending';
                                     const hasDeletionPending = item.deletionStatus === 'pending';
                                     
-                                    // If cancellation or deletion is already pending, disable
-                                    if (hasCancellationPending || hasDeletionPending) {
+                                    // Check withdraw for pending deletion/cancellation FIRST (before disabling)
+                                    if (hasDeletionPending || hasCancellationPending) {
+                                      const withdrawTargetId = hasDeletionPending ? item.deletionRequestId : item.cancellationRequestId;
+                                      const tooltipLabel = hasDeletionPending ? 'Withdraw deletion request' : 'Withdraw cancellation request';
+                                      
+                                      // Manager can withdraw their own pending deletion/cancellation request
+                                      if (currentUserRole === 'manager') {
+                                        // Safety: if requestId is missing, show disabled with error tooltip
+                                        if (!withdrawTargetId) {
+                                          return (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <span>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                                      disabled
+                                                    >
+                                                      <XCircle className="h-4 w-4" />
+                                                    </Button>
+                                                  </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p>Missing request link</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          );
+                                        }
+                                        
+                                        return (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (onRowAction) {
+                                                      onRowAction({
+                                                        costCenterId: costCenter.id,
+                                                        lineItem: item,
+                                                        actionType: 'withdraw_request',
+                                                        targetRequestId: withdrawTargetId,
+                                                      });
+                                                    }
+                                                  }}
+                                                >
+                                                  <XCircle className="h-4 w-4" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                <p>{tooltipLabel}</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        );
+                                      }
+                                      
+                                      // Non-manager roles: show disabled with permission tooltip
                                       return (
                                         <TooltipProvider>
                                           <Tooltip>
@@ -504,19 +566,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                                   className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
                                                   disabled
                                                 >
-                                                  {isPending ? <XCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                                  <XCircle className="h-4 w-4" />
                                                 </Button>
                                               </span>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              <p>{hasCancellationPending ? 'Cancellation pending' : 'Deletion pending'}</p>
+                                              <p>Only Managers can withdraw pending requests</p>
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
                                       );
                                     }
                                     
-                                    // Admin/Finance: disabled
+                                    // Admin/Finance: disabled for other actions
                                     if (currentUserRole === 'admin' || currentUserRole === 'finance') {
                                       return (
                                         <TooltipProvider>
@@ -543,44 +605,6 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                     
                                     // Note: Contracted items CAN be deleted per spec - managers/CMO can initiate deletion
                                     // (The deletion goes through approval flow)
-                                    
-                                    // Check if this is a withdraw action for pending deletion/cancellation
-                                    const hasPendingDeletion = item.deletionStatus === 'pending';
-                                    const hasPendingCancellation = item.cancellationStatus === 'pending';
-                                    
-                                    // Manager can withdraw their own pending deletion/cancellation request
-                                    if ((hasPendingDeletion || hasPendingCancellation) && currentUserRole === 'manager') {
-                                      const withdrawTargetId = hasPendingDeletion ? item.deletionRequestId : item.cancellationRequestId;
-                                      return (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  if (onRowAction) {
-                                                    onRowAction({
-                                                      costCenterId: costCenter.id,
-                                                      lineItem: item,
-                                                      actionType: 'withdraw_request',
-                                                      targetRequestId: withdrawTargetId,
-                                                    });
-                                                  }
-                                                }}
-                                              >
-                                                <XCircle className="h-4 w-4" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>{hasPendingDeletion ? 'Withdraw deletion request' : 'Withdraw cancellation request'}</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      );
-                                    }
                                     
                                     // Determine action type and correct targetRequestId
                                     // For pending items: use withdraw_request (no new request created)
