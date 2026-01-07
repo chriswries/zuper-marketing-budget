@@ -149,15 +149,8 @@ export function formatAuditEvent(event: ApprovalAuditEvent): string {
   return `${roleLabel} ${actionLabel.toLowerCase()}`;
 }
 
-export function formatAuditTimestamp(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+// Re-export centralized formatAuditTimestamp for backward compatibility
+export { formatAuditTimestamp } from '@/lib/dateTime';
 
 // Global loader for all audit events across all entities
 export function loadAllApprovalAuditEvents(): ApprovalAuditEvent[] {

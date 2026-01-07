@@ -16,6 +16,8 @@ import type { ActualsImportBatch } from "@/types/actualsImport";
 import type { Month } from "@/types/budget";
 import { MONTH_LABELS } from "@/types/budget";
 import { formatUSD } from "@/lib/import";
+import { useAdminSettings } from "@/contexts/AdminSettingsContext";
+import { formatDate } from "@/lib/dateTime";
 import {
   saveLatestActualsImport,
   loadLatestActualsImport,
@@ -36,6 +38,7 @@ export function PostToActualsStep({
   onPosted,
 }: PostToActualsStepProps) {
   const navigate = useNavigate();
+  const { settings: adminSettings } = useAdminSettings();
   const [isPosted, setIsPosted] = useState(false);
   const [postedBatchId, setPostedBatchId] = useState<string | null>(null);
 
@@ -132,7 +135,7 @@ export function PostToActualsStep({
             <span>
               An existing import exists ({existingBatch.transactionCount}{" "}
               transactions from {existingBatch.fileName || "unknown file"},
-              posted {new Date(existingBatch.createdAt).toLocaleDateString()}).
+              posted {formatDate(existingBatch.createdAt, adminSettings.timeZone)}).
               Posting will overwrite it.
             </span>
             <Button
