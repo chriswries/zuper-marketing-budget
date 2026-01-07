@@ -8,6 +8,9 @@ import { RequestsProvider } from "@/contexts/RequestsContext";
 import { FiscalYearBudgetProvider } from "@/contexts/FiscalYearBudgetContext";
 import { AdminSettingsProvider } from "@/contexts/AdminSettingsContext";
 import { CurrentUserRoleProvider } from "@/contexts/CurrentUserRoleContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { RoleGuard } from "@/components/auth/RoleGuard";
 import Budget from "./pages/Budget";
 import Forecast from "./pages/Forecast";
 import Actuals from "./pages/Actuals";
@@ -22,6 +25,7 @@ import VarianceReport from "./pages/VarianceReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
 import FYTools from "./pages/FYTools";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,38 +33,81 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AdminSettingsProvider>
-        <CurrentUserRoleProvider>
-          <FiscalYearBudgetProvider>
-            <RequestsProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <AppLayout>
+      <BrowserRouter>
+        <AuthProvider>
+          <AdminSettingsProvider>
+            <CurrentUserRoleProvider>
+              <FiscalYearBudgetProvider>
+                <RequestsProvider>
+                  <Toaster />
+                  <Sonner />
                   <Routes>
-                    <Route path="/" element={<Navigate to="/budget" replace />} />
-                    <Route path="/budget" element={<Budget />} />
-                    <Route path="/forecast" element={<Forecast />} />
-                    <Route path="/actuals" element={<Actuals />} />
-                    <Route path="/requests" element={<Requests />} />
-                    <Route path="/requests/:id" element={<RequestDetail />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/tasks" element={<Tasks />} />
-                    <Route path="/import" element={<Import />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/admin/actuals" element={<ActualsImport />} />
-                    <Route path="/admin/actuals/match" element={<ActualsMatching />} />
-                    <Route path="/admin/fy-tools" element={<FYTools />} />
-                    <Route path="/audit" element={<ApprovalAudit />} />
-                    <Route path="/reports/variance" element={<VarianceReport />} />
-                    <Route path="*" element={<NotFound />} />
+                    {/* Public route */}
+                    <Route path="/login" element={<Login />} />
+                    
+                    {/* Protected routes */}
+                    <Route
+                      path="/*"
+                      element={
+                        <ProtectedRoute>
+                          <AppLayout>
+                            <Routes>
+                              <Route path="/" element={<Navigate to="/budget" replace />} />
+                              <Route path="/budget" element={<Budget />} />
+                              <Route path="/forecast" element={<Forecast />} />
+                              <Route path="/actuals" element={<Actuals />} />
+                              <Route path="/requests" element={<Requests />} />
+                              <Route path="/requests/:id" element={<RequestDetail />} />
+                              <Route path="/reports" element={<Reports />} />
+                              <Route path="/tasks" element={<Tasks />} />
+                              <Route path="/import" element={<Import />} />
+                              <Route
+                                path="/admin"
+                                element={
+                                  <RoleGuard allowedRoles={['admin']}>
+                                    <Admin />
+                                  </RoleGuard>
+                                }
+                              />
+                              <Route
+                                path="/admin/actuals"
+                                element={
+                                  <RoleGuard allowedRoles={['admin', 'finance']}>
+                                    <ActualsImport />
+                                  </RoleGuard>
+                                }
+                              />
+                              <Route
+                                path="/admin/actuals/match"
+                                element={
+                                  <RoleGuard allowedRoles={['admin', 'finance']}>
+                                    <ActualsMatching />
+                                  </RoleGuard>
+                                }
+                              />
+                              <Route
+                                path="/admin/fy-tools"
+                                element={
+                                  <RoleGuard allowedRoles={['admin']}>
+                                    <FYTools />
+                                  </RoleGuard>
+                                }
+                              />
+                              <Route path="/audit" element={<ApprovalAudit />} />
+                              <Route path="/reports/variance" element={<VarianceReport />} />
+                              <Route path="*" element={<NotFound />} />
+                            </Routes>
+                          </AppLayout>
+                        </ProtectedRoute>
+                      }
+                    />
                   </Routes>
-                </AppLayout>
-              </BrowserRouter>
-            </RequestsProvider>
-          </FiscalYearBudgetProvider>
-        </CurrentUserRoleProvider>
-      </AdminSettingsProvider>
+                </RequestsProvider>
+              </FiscalYearBudgetProvider>
+            </CurrentUserRoleProvider>
+          </AdminSettingsProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );

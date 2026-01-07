@@ -1,45 +1,25 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
+import { createContext, useContext, ReactNode } from 'react';
+import { useAuth, UserRole } from '@/contexts/AuthContext';
 
 interface CurrentUserRoleContextValue {
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
 }
 
-const STORAGE_KEY = 'current_user_role_v1';
-
 const CurrentUserRoleContext = createContext<CurrentUserRoleContextValue | undefined>(undefined);
 
-function loadFromStorage(): UserRole {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ['admin', 'manager', 'cmo', 'finance'].includes(stored)) {
-      return stored as UserRole;
-    }
-  } catch {
-    // Ignore
-  }
-  return 'admin';
-}
-
-function saveToStorage(role: UserRole): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, role);
-  } catch {
-    // Ignore
-  }
-}
+export type { UserRole };
 
 export function CurrentUserRoleProvider({ children }: { children: ReactNode }) {
-  const [currentRole, setCurrentRoleState] = useState<UserRole>(loadFromStorage);
-
-  useEffect(() => {
-    saveToStorage(currentRole);
-  }, [currentRole]);
-
-  const setCurrentRole = (role: UserRole) => {
-    setCurrentRoleState(role);
+  const { role } = useAuth();
+  
+  // Role is now derived from the database via AuthContext
+  // The setCurrentRole is a no-op since role comes from the DB
+  const currentRole: UserRole = role ?? 'manager';
+  
+  const setCurrentRole = (_role: UserRole) => {
+    // No-op: role is managed in the database, not localStorage
+    console.warn('setCurrentRole is deprecated. Role is now managed in the database.');
   };
 
   return (
