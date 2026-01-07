@@ -16,7 +16,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, UserCog, History, Globe } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -196,6 +196,24 @@ export default function Admin() {
                 All timestamps in the app will be displayed in this timezone.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Actuals Import */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Upload className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Actuals Import</CardTitle>
+            </div>
+            <CardDescription>
+              Import bank and Ramp transaction CSVs into a fiscal year.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => navigate('/admin/actuals')}>
+              Import Actuals
+            </Button>
           </CardContent>
         </Card>
 
