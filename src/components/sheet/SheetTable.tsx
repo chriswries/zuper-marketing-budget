@@ -449,8 +449,10 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const cellValue = item[valueType][month];
                                 // Only apply locked months logic for forecastValues (not budgetValues)
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
+                                // Lock cells during pending cancellation or deletion
+                                const isItemLocked = item.cancellationStatus === 'pending' || item.deletionStatus === 'pending';
                                 
-                                if (isEditable && !isMonthLocked) {
+                                if (isEditable && !isMonthLocked && !isItemLocked) {
                                   return (
                                     <EditableCell
                                       key={month}
@@ -472,7 +474,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 return (
                                   <TableCell 
                                     key={month} 
-                                    className={`text-right tabular-nums ${isMonthLocked ? 'bg-muted/40 cursor-not-allowed text-muted-foreground' : ''}`}
+                                    className={`text-right tabular-nums ${isMonthLocked || isItemLocked ? 'bg-muted/40 cursor-not-allowed text-muted-foreground' : ''}`}
                                   >
                                     {formatCurrency(cellValue)}
                                   </TableCell>
@@ -539,30 +541,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                       );
                                     }
                                     
-                                    // Contracted non-pending items cannot be deleted (except cancel pending requests)
-                                    if (item.isContracted && !isPending) {
-                                      return (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <span>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
-                                                  disabled
-                                                >
-                                                  <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                              </span>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>Contracted items cannot be deleted</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      );
-                                    }
+                                    // Note: Contracted items CAN be deleted per spec - managers/CMO can initiate deletion
+                                    // (The deletion goes through approval flow)
                                     
                                     // Manager or CMO: can perform actions
                                     const actionType = isPending ? 'cancel_request' : 'delete_line_item';

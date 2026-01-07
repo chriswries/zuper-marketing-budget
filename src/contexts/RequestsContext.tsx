@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { SpendRequest, ApprovalStep, createDefaultApprovalSteps } from '@/types/requests';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { SpendRequest, ApprovalStep, createDefaultApprovalSteps, RequestStatus } from '@/types/requests';
+import { resolveForecastRowActionRequest } from '@/lib/forecastRowActionResolver';
 
 interface RequestsContextType {
   requests: SpendRequest[];
@@ -50,8 +51,27 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  // Track previous statuses to detect transitions
+  const prevStatusesRef = useRef<Record<string, RequestStatus>>({});
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
+    
+    // Check for status transitions that need resolution
+    for (const request of requests) {
+      const prevStatus = prevStatusesRef.current[request.id];
+      if (prevStatus && prevStatus !== request.status) {
+        // Status changed - try to resolve row action requests
+        resolveForecastRowActionRequest(request, prevStatus, updateRequest);
+      }
+    }
+    
+    // Update previous statuses
+    const newStatuses: Record<string, RequestStatus> = {};
+    for (const request of requests) {
+      newStatuses[request.id] = request.status;
+    }
+    prevStatusesRef.current = newStatuses;
   }, [requests]);
 
   const addRequest = (request: SpendRequest) => {
