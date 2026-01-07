@@ -59,8 +59,8 @@ interface DeleteLineItemArgs {
 export interface RowActionArgs {
   costCenterId: string;
   lineItem: LineItem;
-  actionType: 'cancel_request' | 'delete_line_item';
-  targetRequestId?: string; // For cancellations, the request being cancelled
+  actionType: 'cancel_request' | 'delete_line_item' | 'withdraw_request';
+  targetRequestId?: string; // For cancellations/withdrawals, the request being cancelled/withdrawn
 }
 
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
@@ -544,9 +544,52 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                     // Note: Contracted items CAN be deleted per spec - managers/CMO can initiate deletion
                                     // (The deletion goes through approval flow)
                                     
-                                    // Manager or CMO: can perform actions
+                                    // Check if this is a withdraw action for pending deletion/cancellation
+                                    const hasPendingDeletion = item.deletionStatus === 'pending';
+                                    const hasPendingCancellation = item.cancellationStatus === 'pending';
+                                    
+                                    // Manager can withdraw their own pending deletion/cancellation request
+                                    if ((hasPendingDeletion || hasPendingCancellation) && currentUserRole === 'manager') {
+                                      const withdrawTargetId = hasPendingDeletion ? item.deletionRequestId : item.cancellationRequestId;
+                                      return (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (onRowAction) {
+                                                    onRowAction({
+                                                      costCenterId: costCenter.id,
+                                                      lineItem: item,
+                                                      actionType: 'withdraw_request',
+                                                      targetRequestId: withdrawTargetId,
+                                                    });
+                                                  }
+                                                }}
+                                              >
+                                                <XCircle className="h-4 w-4" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>{hasPendingDeletion ? 'Withdraw deletion request' : 'Withdraw cancellation request'}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    }
+                                    
+                                    // Determine action type and correct targetRequestId
                                     const actionType = isPending ? 'cancel_request' : 'delete_line_item';
-                                    const targetRequestId = item.approvalRequestId || item.adjustmentRequestId;
+                                    // Fix: Choose targetRequestId based on which status is actually pending
+                                    const targetRequestId = item.adjustmentStatus === 'pending'
+                                      ? item.adjustmentRequestId
+                                      : item.approvalStatus === 'pending'
+                                        ? item.approvalRequestId
+                                        : undefined;
                                     
                                     // If we have onRowAction, use the new flow
                                     if (onRowAction) {

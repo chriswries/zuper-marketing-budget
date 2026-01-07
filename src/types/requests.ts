@@ -37,6 +37,8 @@ export interface SpendRequest {
   lineItemName?: string;
   // For cancel_request: the request being cancelled
   targetRequestId?: string;
+  // Snapshot of target request for restore if cancel_request is rejected
+  targetRequestSnapshot?: { status: RequestStatus; approvalSteps: ApprovalStep[] };
   // For delete_line_item: track pending deletion
   deletionPending?: boolean;
 }

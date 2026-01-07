@@ -467,10 +467,72 @@ export default function Forecast() {
         toast({ title: 'Deleted', description: 'Line item deleted; manager notified.' });
       }
     } else if (currentRole === 'manager') {
+      // Handle withdraw_request action
+      if (type === 'withdraw_request' && targetRequestId) {
+        // Immediately cancel the pending deletion/cancellation request
+        updateRequest(targetRequestId, (request) => ({
+          ...request,
+          status: 'cancelled' as const,
+          approvalSteps: request.approvalSteps.map((step) =>
+            step.status === 'pending'
+              ? { ...step, status: 'rejected' as const, updatedAt: new Date().toISOString() }
+              : step
+          ),
+        }));
+        
+        // Clear flags on line item
+        setCostCenters((prev) =>
+          prev.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return {
+              ...cc,
+              lineItems: cc.lineItems.map((item) => {
+                if (item.id !== lineItem.id) return item;
+                return {
+                  ...item,
+                  deletionStatus: undefined,
+                  deletionRequestId: undefined,
+                  cancellationStatus: undefined,
+                  cancellationRequestId: undefined,
+                };
+              }),
+            };
+          })
+        );
+        
+        toast({ title: 'Withdrawn', description: 'Request has been withdrawn.' });
+        setRowActionDialogOpen(false);
+        setPendingRowAction(null);
+        return;
+      }
+      
       // Manager: create request with CMO+Finance steps
       const requestId = crypto.randomUUID();
       const vendorName = lineItem.vendor?.name ?? '—';
       const fyTotal = calculateFYTotal(lineItem.forecastValues);
+
+      // For cancel_request, snapshot and immediately cancel the target request
+      let targetRequestSnapshot: { status: 'pending' | 'approved' | 'rejected' | 'cancelled'; approvalSteps: typeof createCMOApprovalSteps extends () => infer R ? R : never } | undefined;
+      if (type === 'cancel_request' && targetRequestId) {
+        // Find the target request and snapshot it
+        const targetRequest = requests.find((r) => r.id === targetRequestId);
+        if (targetRequest) {
+          targetRequestSnapshot = {
+            status: targetRequest.status,
+            approvalSteps: JSON.parse(JSON.stringify(targetRequest.approvalSteps)),
+          };
+          // Immediately cancel the target request (removes from Pending queue)
+          updateRequest(targetRequestId, (request) => ({
+            ...request,
+            status: 'cancelled' as const,
+            approvalSteps: request.approvalSteps.map((step) =>
+              step.status === 'pending'
+                ? { ...step, status: 'rejected' as const, updatedAt: new Date().toISOString() }
+                : step
+            ),
+          }));
+        }
+      }
 
       addRequest({
         id: requestId,
@@ -489,9 +551,10 @@ export default function Forecast() {
         originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
         originCostCenterId: costCenterId,
         originLineItemId: lineItem.id,
-        originKind: type,
+        originKind: type as 'cancel_request' | 'delete_line_item',
         lineItemName: lineItem.name,
         targetRequestId: type === 'cancel_request' ? targetRequestId : undefined,
+        targetRequestSnapshot,
       });
 
       // Mark line item with pending status
@@ -516,7 +579,7 @@ export default function Forecast() {
 
     setRowActionDialogOpen(false);
     setPendingRowAction(null);
-  }, [pendingRowAction, costCenters, currentRole, updateRequest, addRequest, isActiveFY, selectedFiscalYearId]);
+  }, [pendingRowAction, costCenters, currentRole, updateRequest, addRequest, isActiveFY, selectedFiscalYearId, requests]);
 
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: ForecastCellChangeArgs) => {
     // Find the line item
