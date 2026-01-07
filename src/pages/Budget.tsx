@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
+import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
@@ -154,6 +155,12 @@ export default function Budget() {
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
+
+  // Justification dialog state
+  const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
+  const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentJustificationData | null>(null);
+  const [pendingUpdatedValues, setPendingUpdatedValues] = useState<MonthlyValues | null>(null);
+  const [pendingOldValues, setPendingOldValues] = useState<MonthlyValues | null>(null);
 
   // Focus props from URL params
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
@@ -598,7 +605,6 @@ export default function Budget() {
       const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
       if (!lineItem) return;
 
-      const costCenterName = costCenter?.name ?? '';
       const lineItemName = lineItem?.name ?? '';
 
       // Block edits if pending approval or adjustment
@@ -622,65 +628,22 @@ export default function Budget() {
       if (shouldTriggerIncreaseApproval(oldTotal, newTotal, adminSettings)) {
         const delta = newTotal - oldTotal;
         const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
-        const vendorName = lineItem.vendor?.name ?? '—';
 
-        // Find changed months (where delta != 0) for adjustment requests
-        const changedMonths = MONTHS.filter((m) => updatedBudgetValues[m] !== oldBudgetValues[m]);
-        const startMonth: Month = changedMonths[0] ?? 'feb';
-        const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
-
-        // Create the spend request with origin metadata
-        const requestId = crypto.randomUUID();
-        const newRequest = {
-          id: requestId,
+        // Open justification dialog instead of immediately creating request
+        setPendingAdjustment({
           costCenterId,
-          costCenterName,
-          vendorName,
-          amount: Math.round(delta),
-          startMonth,
-          endMonth,
-          isContracted: lineItem.isContracted,
-          justification: `Budget increase: ${lineItemName} (+${formatCurrency(delta)})`,
-          status: 'pending' as const,
-          createdAt: new Date().toISOString(),
-          approvalSteps: createDefaultApprovalSteps(),
-          // Origin metadata for deep linking
-          originSheet: 'budget' as const,
-          originFiscalYearId: selectedFiscalYearId,
-          originCostCenterId: costCenterId,
-          originLineItemId: lineItemId,
-          originKind: 'adjustment' as const,
+          lineItemId,
           lineItemName,
-        };
-        addRequest(newRequest);
-
-        // Update with pending adjustment
-        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-          ...fy,
-          updatedAt: new Date().toISOString(),
-          costCenters: fy.costCenters.map((cc) => {
-            if (cc.id !== costCenterId) return cc;
-            return {
-              ...cc,
-              lineItems: cc.lineItems.map((item) => {
-                if (item.id !== lineItemId) return item;
-                return {
-                  ...item,
-                  budgetValues: updatedBudgetValues,
-                  adjustmentStatus: 'pending' as const,
-                  adjustmentRequestId: requestId,
-                  adjustmentBeforeValues: oldBudgetValues,
-                  adjustmentSheet: 'budget' as const,
-                };
-              }),
-            };
-          }),
-        }));
-
-        toast({
-          title: 'Approval required',
-          description: `Increase of ${formatCurrency(delta)} exceeds threshold of ${formatCurrency(threshold)}. A spend request has been created.`,
+          month,
+          oldValue,
+          newValue,
+          delta,
+          threshold,
+          sheet: 'budget',
         });
+        setPendingUpdatedValues(updatedBudgetValues);
+        setPendingOldValues(oldBudgetValues);
+        setJustificationDialogOpen(true);
       } else {
         // Normal edit without approval
         updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
@@ -700,30 +663,136 @@ export default function Budget() {
             };
           }),
         }));
-      }
 
-      // Add audit entry
-      if (oldValue !== newValue) {
-        const entry: AuditEntry = {
-          id: crypto.randomUUID(),
-          timestamp: new Date().toISOString(),
-          userName: 'Marketing Admin',
-          sheet: 'budget',
-          fiscalYearId: selectedFiscalYearId,
-          costCenterId,
-          costCenterName,
-          lineItemId,
-          lineItemName,
-          month,
-          oldValue,
-          newValue,
-        };
+        // Add audit entry
+        if (oldValue !== newValue) {
+          const costCenterName = costCenter?.name ?? '';
+          const entry: AuditEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            userName: 'Marketing Admin',
+            sheet: 'budget',
+            fiscalYearId: selectedFiscalYearId,
+            costCenterId,
+            costCenterName,
+            lineItemId,
+            lineItemName,
+            month,
+            oldValue,
+            newValue,
+          };
 
-        setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+          setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+        }
       }
     },
-    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, addRequest]
+    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, adminSettings]
   );
+
+  // Handle justification dialog cancel
+  const handleJustificationCancel = useCallback(() => {
+    setJustificationDialogOpen(false);
+    setPendingAdjustment(null);
+    setPendingUpdatedValues(null);
+    setPendingOldValues(null);
+  }, []);
+
+  // Handle justification dialog submit
+  const handleJustificationSubmit = useCallback((userJustification: string) => {
+    if (!pendingAdjustment || !pendingUpdatedValues || !pendingOldValues || !selectedFiscalYearId) return;
+
+    const { costCenterId, lineItemId, lineItemName, month, delta, oldValue, newValue } = pendingAdjustment;
+    const costCenter = selectedFiscalYear?.costCenters.find((cc) => cc.id === costCenterId);
+    const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
+    if (!lineItem) return;
+
+    const costCenterName = costCenter?.name ?? '';
+    const vendorName = lineItem.vendor?.name ?? '—';
+
+    // Find changed months (where delta != 0) for adjustment requests
+    const changedMonths = MONTHS.filter((m) => pendingUpdatedValues[m] !== pendingOldValues[m]);
+    const startMonth: Month = changedMonths[0] ?? 'feb';
+    const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
+
+    // Create the spend request with origin metadata
+    const requestId = crypto.randomUUID();
+    const newRequest = {
+      id: requestId,
+      costCenterId,
+      costCenterName,
+      vendorName,
+      amount: Math.round(delta),
+      startMonth,
+      endMonth,
+      isContracted: lineItem.isContracted,
+      justification: `Budget adjustment: ${userJustification}`,
+      status: 'pending' as const,
+      createdAt: new Date().toISOString(),
+      approvalSteps: createDefaultApprovalSteps(),
+      // Origin metadata for deep linking
+      originSheet: 'budget' as const,
+      originFiscalYearId: selectedFiscalYearId,
+      originCostCenterId: costCenterId,
+      originLineItemId: lineItemId,
+      originKind: 'adjustment' as const,
+      lineItemName,
+    };
+    addRequest(newRequest);
+
+    // Update with pending adjustment
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+      ...fy,
+      updatedAt: new Date().toISOString(),
+      costCenters: fy.costCenters.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            if (item.id !== lineItemId) return item;
+            return {
+              ...item,
+              budgetValues: pendingUpdatedValues,
+              adjustmentStatus: 'pending' as const,
+              adjustmentRequestId: requestId,
+              adjustmentBeforeValues: pendingOldValues,
+              adjustmentSheet: 'budget' as const,
+            };
+          }),
+        };
+      }),
+    }));
+
+    // Add audit entry
+    if (oldValue !== newValue) {
+      const entry: AuditEntry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        userName: 'Marketing Admin',
+        sheet: 'budget',
+        fiscalYearId: selectedFiscalYearId,
+        costCenterId,
+        costCenterName,
+        lineItemId,
+        lineItemName,
+        month,
+        oldValue,
+        newValue,
+      };
+
+      setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+    }
+
+    toast({
+      title: 'Approval required',
+      description: `Increase of ${formatCurrency(delta)} exceeds threshold. A spend request has been created.`,
+    });
+
+    // Close dialog and reset state
+    setJustificationDialogOpen(false);
+    setPendingAdjustment(null);
+    setPendingUpdatedValues(null);
+    setPendingOldValues(null);
+  }, [pendingAdjustment, pendingUpdatedValues, pendingOldValues, selectedFiscalYear, selectedFiscalYearId, addRequest, updateFiscalYearBudget]);
 
   const handleDeleteLineItem = useCallback(
     ({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
@@ -1201,6 +1270,13 @@ export default function Budget() {
         onOpenChange={setEditAllocationsOpen}
         fiscalYearBudget={selectedFiscalYear}
         onSave={handleSaveAllocations}
+      />
+
+      <AdjustmentJustificationDialog
+        open={justificationDialogOpen}
+        data={pendingAdjustment}
+        onCancel={handleJustificationCancel}
+        onSubmit={handleJustificationSubmit}
       />
     </div>
   );
