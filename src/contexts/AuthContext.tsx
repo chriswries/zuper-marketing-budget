@@ -84,21 +84,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        
-        if (newSession?.user) {
-          // Fetch profile immediately (no setTimeout) for SIGNED_IN and TOKEN_REFRESHED
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            await loadProfile(newSession.user.id);
-          }
-        } else {
-          setProfile(null);
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Synchronous updates only inside the callback (prevents auth deadlocks)
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+
+      if (!newSession?.user) {
+        setProfile(null);
+        return;
       }
-    );
+
+      // Defer profile loading outside the callback; still “immediate” for UX
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        queueMicrotask(() => {
+          void loadProfile(newSession.user.id);
+        });
+      }
+    });
 
     // THEN check for existing session
     const initializeAuth = async () => {
