@@ -1,5 +1,4 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -8,27 +7,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
-import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { getVisibleFiscalYears } from "@/lib/fiscalYearVisibility";
-
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Admin',
-  manager: 'Manager',
-  cmo: 'CMO',
-  finance: 'Finance',
-};
-
-const roleBadgeColors: Record<UserRole, string> = {
-  admin: 'bg-primary text-primary-foreground',
-  manager: 'bg-amber-500 text-white',
-  cmo: 'bg-purple-600 text-white',
-  finance: 'bg-green-600 text-white',
-};
+import { UserMenu } from "@/components/auth/UserMenu";
 
 export function AppHeader() {
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId } = useFiscalYearBudget();
-  const { currentRole } = useCurrentUserRole();
   const { settings } = useAdminSettings();
 
   const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, settings.showArchivedFiscalYears);
@@ -65,9 +49,7 @@ export function AppHeader() {
           <span className="text-sm text-muted-foreground">No budgets created</span>
         )}
 
-        <Badge className={`hidden sm:flex ${roleBadgeColors[currentRole]}`}>
-          {roleLabels[currentRole]}
-        </Badge>
+        <UserMenu />
       </div>
     </header>
   );
