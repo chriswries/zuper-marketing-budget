@@ -5,7 +5,7 @@
  * Matching/rollups to line items is implemented in Track B Prompt B2.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
 import {
   Select,
   SelectContent,
@@ -37,7 +38,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
@@ -48,7 +49,6 @@ import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@
 import type { 
   ActualsTransaction, 
   ActualsSource, 
-  AmountSignMode, 
   ColumnMapping, 
   ParsedRow 
 } from '@/types/actuals';
@@ -116,6 +116,7 @@ export default function ActualsImport() {
   const { fiscalYears } = useFiscalYearBudget();
   const { settings: adminSettings } = useAdminSettings();
   const { currentRole } = useCurrentUserRole();
+  const { toast } = useToast();
 
   // Permission check
   const canImport = currentRole === 'admin' || currentRole === 'finance';
@@ -136,9 +137,20 @@ export default function ActualsImport() {
     amount: '',
   });
   const [source, setSource] = useState<ActualsSource>('unknown');
-  const [amountSign, setAmountSign] = useState<AmountSignMode>('positive');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
+
+  // Reset wizard state when FY changes
+  useEffect(() => {
+    setFile(null);
+    setCsvHeaders([]);
+    setCsvRows([]);
+    setMapping({ txnDate: '', merchantName: '', amount: '' });
+    setSource('unknown');
+    setReplaceExisting(false);
+    setSkipInvalidRows(true);
+    setStep('upload');
+  }, [selectedFYId]);
 
   // Get selected FY
   const selectedFY = fiscalYears.find(fy => fy.id === selectedFYId);
@@ -204,7 +216,10 @@ export default function ActualsImport() {
       if (catIdx !== -1) autoMapping.category = headers[catIdx];
       
       // Description detection (if not already used for merchant)
-      const descIdx = lowerHeaders.findIndex(h => h.includes('memo') || (h.includes('description') && headers[descIdx] !== autoMapping.merchantName));
+      const descIdx = lowerHeaders.findIndex((h, idx) => 
+        h.includes('memo') || 
+        (h.includes('description') && headers[idx] !== autoMapping.merchantName)
+      );
       if (descIdx !== -1 && headers[descIdx] !== autoMapping.merchantName) {
         autoMapping.description = headers[descIdx];
       }
@@ -242,12 +257,8 @@ export default function ActualsImport() {
       if (parsedAmount === null) {
         errors.push(`Invalid amount: "${amountValue}"`);
       } else {
-        // Normalize sign
-        if (amountSign === 'negative') {
-          parsedAmount = Math.abs(parsedAmount);
-        } else {
-          parsedAmount = Math.abs(parsedAmount);
-        }
+        // Always normalize to positive spend
+        parsedAmount = Math.abs(parsedAmount);
       }
       
       // Optional fields
@@ -270,7 +281,7 @@ export default function ActualsImport() {
         errors,
       };
     });
-  }, [csvRows, mapping, amountSign]);
+  }, [csvRows, mapping]);
 
   // Stats
   const validRows = parsedRows.filter(r => r.errors.length === 0);
@@ -291,12 +302,42 @@ export default function ActualsImport() {
   // Can proceed to preview?
   const canPreview = isMappingComplete && csvRows.length > 0;
   
+  // Can continue from preview to confirm?
+  // If there are invalid rows and skipInvalidRows is false, block
+  const canContinueToConfirm = validRows.length > 0 && (invalidRows.length === 0 || skipInvalidRows);
+  
   // Can confirm import?
-  const canConfirm = validRows.length > 0 || (skipInvalidRows && validRows.length > 0);
+  const canConfirm = validRows.length > 0 && selectedFYId && (invalidRows.length === 0 || skipInvalidRows);
 
   // Handle import confirmation
   const handleConfirmImport = useCallback(() => {
-    if (!selectedFYId || validRows.length === 0) return;
+    // Guard: FY must be selected
+    if (!selectedFYId) {
+      toast({
+        title: 'Select a fiscal year first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Guard: must have valid rows
+    if (validRows.length === 0) {
+      toast({
+        title: 'No valid rows to import',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Guard: invalid rows exist and skip is off
+    if (invalidRows.length > 0 && !skipInvalidRows) {
+      toast({
+        title: 'Fix mapping or enable "Skip invalid rows"',
+        description: `${invalidRows.length} rows have errors.`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     const transactions: ActualsTransaction[] = validRows.map((row, idx) => ({
@@ -321,13 +362,14 @@ export default function ActualsImport() {
       appendActuals(selectedFYId, transactions);
     }
 
-    toast.success(`Imported ${transactions.length} transactions`, {
+    toast({
+      title: `Imported ${transactions.length} transactions`,
       description: `Total: ${formatUSD(totalAmount)}`,
     });
 
     // Navigate back to admin
     navigate('/admin');
-  }, [selectedFYId, validRows, source, replaceExisting, totalAmount, navigate]);
+  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast]);
 
   // Render based on step
   const renderStep = () => {
@@ -604,31 +646,13 @@ export default function ActualsImport() {
               </CardContent>
             </Card>
 
-            {/* Amount Sign Handling */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Amount Sign</CardTitle>
-                <CardDescription>
-                  How does your CSV represent spend?
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={amountSign}
-                  onValueChange={(v) => setAmountSign(v as AmountSignMode)}
-                  className="flex gap-6"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="positive" id="sign-positive" />
-                    <Label htmlFor="sign-positive">Spend is positive (e.g., 100.00)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="negative" id="sign-negative" />
-                    <Label htmlFor="sign-negative">Spend is negative (e.g., -100.00)</Label>
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
+            {/* Amount Sign Info */}
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Amounts are automatically normalized to positive spend values regardless of the sign in your CSV.
+              </AlertDescription>
+            </Alert>
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep('upload')}>
@@ -738,11 +762,35 @@ export default function ActualsImport() {
               </CardContent>
             </Card>
 
+            {/* Blocking message when invalid rows and skip is off */}
+            {invalidRows.length > 0 && !skipInvalidRows && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Fix mapping or enable "Skip invalid rows" to continue. {invalidRows.length} row(s) have errors.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Skip invalid rows toggle (shown in preview for convenience) */}
+            {invalidRows.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="skip-invalid-preview"
+                  checked={skipInvalidRows}
+                  onCheckedChange={(checked) => setSkipInvalidRows(checked === true)}
+                />
+                <Label htmlFor="skip-invalid-preview" className="text-sm">
+                  Skip invalid rows ({invalidRows.length} will be skipped)
+                </Label>
+              </div>
+            )}
+
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep('mapping')}>
                 Back to Mapping
               </Button>
-              <Button onClick={() => setStep('confirm')} disabled={validRows.length === 0}>
+              <Button onClick={() => setStep('confirm')} disabled={!canContinueToConfirm}>
                 Continue to Confirm
               </Button>
             </div>
