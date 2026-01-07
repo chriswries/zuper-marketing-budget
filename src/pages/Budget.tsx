@@ -1537,6 +1537,7 @@ export default function Budget() {
       />
     </div>
   );
+}
 
 function BudgetNotifyApprover({
   budgetName,
