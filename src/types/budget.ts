@@ -63,6 +63,12 @@ export interface LineItem {
   adjustmentRequestId?: string;
   adjustmentBeforeValues?: MonthlyValues;
   adjustmentSheet?: 'budget' | 'forecast';
+  // Deletion tracking
+  deletionStatus?: 'pending';
+  deletionRequestId?: string;
+  // Cancellation tracking (for the line item's pending request)
+  cancellationStatus?: 'pending';
+  cancellationRequestId?: string;
 }
 
 export interface CostCenter {

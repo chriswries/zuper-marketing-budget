@@ -30,7 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink } from 'lucide-react';
 import {
   CostCenter,
   LineItem,
@@ -56,6 +56,15 @@ interface DeleteLineItemArgs {
   lineItemId: string;
 }
 
+export interface RowActionArgs {
+  costCenterId: string;
+  lineItem: LineItem;
+  actionType: 'cancel_request' | 'delete_line_item';
+  targetRequestId?: string; // For cancellations, the request being cancelled
+}
+
+export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
+
 interface SheetTableProps {
   costCenters: CostCenter[];
   valueType: ValueType;
@@ -63,6 +72,8 @@ interface SheetTableProps {
   showEmptyCostCenters?: boolean;
   onCellChange?: (args: CellChangeArgs) => void;
   onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
+  onRowAction?: (args: RowActionArgs) => void;
+  currentUserRole?: UserRole;
   lockedMonths?: Set<Month>;
   renderCostCenterFYMeta?: (costCenter: CostCenter, spent: number) => React.ReactNode;
   renderGrandTotalFYMeta?: (grandTotal: number) => React.ReactNode;
@@ -98,7 +109,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound }: SheetTableProps) {
   const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,8 +159,12 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
   // Determine if editing is enabled (supports forecastValues and budgetValues)
   const isEditable = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onCellChange;
-  // Determine if delete is enabled (supports forecastValues and budgetValues)
+  // Determine if row actions are enabled
+  const hasRowActions = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onRowAction;
+  // Legacy canDelete for backwards compatibility
   const canDelete = editable && (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onDeleteLineItem;
+  // Show action column if either new or legacy handler exists
+  const showActionColumn = hasRowActions || canDelete;
 
   // Check if any filter is active
   const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly;
@@ -278,7 +293,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
               <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted">
                 FY Total
               </TableHead>
-              {canDelete && (
+              {showActionColumn && (
                 <TableHead className="w-[50px] min-w-[50px]"></TableHead>
               )}
             </TableRow>
@@ -286,7 +301,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
           <TableBody>
             {filteredCostCenters.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canDelete ? 16 : 15} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={showActionColumn ? 16 : 15} className="text-center text-muted-foreground py-8">
                   No matching line items found.
                 </TableCell>
               </TableRow>
@@ -328,7 +343,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                           <div>{formatCurrency(fyTotal)}</div>
                           {renderCostCenterFYMeta?.(costCenter, fyTotal)}
                         </TableCell>
-                        {canDelete && <TableCell></TableCell>}
+                        {showActionColumn && <TableCell></TableCell>}
                       </TableRow>
 
                       {/* Line Item Child Rows */}
@@ -352,7 +367,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="sticky left-0 bg-background z-10">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
-                                  {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && (
+                                  {/* Approval pending badge */}
+                                  {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && !item.cancellationStatus && (
                                     <div className="flex items-center gap-1">
                                       <Badge variant="secondary" className="text-xs">
                                         Approval pending
@@ -365,6 +381,48 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             navigate(`/requests/${pendingRequestId}`);
+                                          }}
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Cancellation pending badge */}
+                                  {item.cancellationStatus === 'pending' && (
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                                        Cancellation pending
+                                      </Badge>
+                                      {item.cancellationRequestId && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/requests/${item.cancellationRequestId}`);
+                                          }}
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Deletion pending badge */}
+                                  {item.deletionStatus === 'pending' && (
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="outline" className="text-xs border-destructive text-destructive">
+                                        Deletion pending
+                                      </Badge>
+                                      {item.deletionRequestId && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/requests/${item.deletionRequestId}`);
                                           }}
                                         >
                                           <ExternalLink className="h-3 w-3" />
@@ -423,30 +481,96 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="text-right tabular-nums font-medium bg-muted/20">
                                 {formatCurrency(itemFYTotal)}
                               </TableCell>
-                              {canDelete && (
+                              {showActionColumn && (
                                 <TableCell className="text-center">
-                                  {/* Allow delete for pending items (cancel request), block for contracted non-pending */}
-                                  {item.isContracted && item.approvalStatus !== 'pending' ? (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
-                                            disabled
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>Contracted items cannot be deleted.</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  ) : (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
+                                  {(() => {
+                                    // Determine action type and permissions
+                                    const isPending = item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending';
+                                    const hasCancellationPending = item.cancellationStatus === 'pending';
+                                    const hasDeletionPending = item.deletionStatus === 'pending';
+                                    
+                                    // If cancellation or deletion is already pending, disable
+                                    if (hasCancellationPending || hasDeletionPending) {
+                                      return (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                                  disabled
+                                                >
+                                                  {isPending ? <XCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                                </Button>
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>{hasCancellationPending ? 'Cancellation pending' : 'Deletion pending'}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    }
+                                    
+                                    // Admin/Finance: disabled
+                                    if (currentUserRole === 'admin' || currentUserRole === 'finance') {
+                                      return (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                                  disabled
+                                                >
+                                                  {isPending ? <XCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                                                </Button>
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>{currentUserRole === 'finance' ? 'Finance is read-only' : 'Admin cannot modify line items'}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    }
+                                    
+                                    // Contracted non-pending items cannot be deleted (except cancel pending requests)
+                                    if (item.isContracted && !isPending) {
+                                      return (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-7 w-7 text-muted-foreground cursor-not-allowed opacity-50"
+                                                  disabled
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>Contracted items cannot be deleted</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    }
+                                    
+                                    // Manager or CMO: can perform actions
+                                    const actionType = isPending ? 'cancel_request' : 'delete_line_item';
+                                    const targetRequestId = item.approvalRequestId || item.adjustmentRequestId;
+                                    
+                                    // If we have onRowAction, use the new flow
+                                    if (onRowAction) {
+                                      return (
                                         <TooltipProvider>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
@@ -454,46 +578,81 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onRowAction({
+                                                    costCenterId: costCenter.id,
+                                                    lineItem: item,
+                                                    actionType,
+                                                    targetRequestId,
+                                                  });
+                                                }}
                                               >
-                                                <Trash2 className="h-4 w-4" />
+                                                {isPending ? <XCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                                               </Button>
                                             </TooltipTrigger>
-                                            {item.approvalStatus === 'pending' && (
-                                              <TooltipContent>
-                                                <p>Cancel request</p>
-                                              </TooltipContent>
-                                            )}
+                                            <TooltipContent>
+                                              <p>{isPending ? 'Cancel request' : 'Delete line item'}</p>
+                                            </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>
-                                            {item.approvalStatus === 'pending' ? 'Cancel request?' : 'Delete line item?'}
-                                          </AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            {item.approvalStatus === 'pending'
-                                              ? `This will cancel the pending approval request for "${item.name}" and remove it from the forecast.`
-                                              : `This will permanently delete "${item.name}" from the forecast. This action cannot be undone.`}
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                            onClick={() => {
-                                              onDeleteLineItem?.({
-                                                costCenterId: costCenter.id,
-                                                lineItemId: item.id,
-                                              });
-                                            }}
-                                          >
-                                            {item.approvalStatus === 'pending' ? 'Cancel Request' : 'Delete'}
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
+                                      );
+                                    }
+                                    
+                                    // Legacy: use AlertDialog with onDeleteLineItem
+                                    if (onDeleteLineItem) {
+                                      return (
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                  >
+                                                    <Trash2 className="h-4 w-4" />
+                                                  </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p>{isPending ? 'Cancel request' : 'Delete line item'}</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>
+                                                {isPending ? 'Cancel request?' : 'Delete line item?'}
+                                              </AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                {isPending
+                                                  ? `This will cancel the pending approval request for "${item.name}".`
+                                                  : `This will permanently delete "${item.name}". This action cannot be undone.`}
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Go back</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                onClick={() => {
+                                                  onDeleteLineItem({
+                                                    costCenterId: costCenter.id,
+                                                    lineItemId: item.id,
+                                                  });
+                                                }}
+                                              >
+                                                {isPending ? 'Cancel Request' : 'Delete'}
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      );
+                                    }
+                                    
+                                    return null;
+                                  })()}
                                 </TableCell>
                               )}
                             </TableRow>
@@ -518,7 +677,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                     <div>{formatCurrency(grandFYTotal)}</div>
                     {renderGrandTotalFYMeta?.(grandFYTotal)}
                   </TableCell>
-                  {canDelete && <TableCell></TableCell>}
+                  {showActionColumn && <TableCell></TableCell>}
                 </TableRow>
               </>
             )}

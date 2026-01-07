@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, RowActionArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
+import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { mockCostCenters } from '@/data/mock-budget-data';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
@@ -33,7 +34,7 @@ import { Lock, History, Plus, Info } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { createDefaultApprovalSteps } from '@/types/requests';
+import { createDefaultApprovalSteps, createCMOApprovalSteps } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
@@ -150,6 +151,10 @@ export default function Forecast() {
   const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentJustificationData | null>(null);
   const [pendingUpdatedValues, setPendingUpdatedValues] = useState<MonthlyValues | null>(null);
   const [pendingOldValues, setPendingOldValues] = useState<MonthlyValues | null>(null);
+
+  // Row action dialog state
+  const [rowActionDialogOpen, setRowActionDialogOpen] = useState(false);
+  const [pendingRowAction, setPendingRowAction] = useState<RowActionData | null>(null);
 
   const handleFocusLineItemNotFound = useCallback(() => {
     toast({
@@ -378,6 +383,122 @@ export default function Forecast() {
       })
     );
   }, [costCenters, updateRequest]);
+
+  // Row action handler - opens dialog for justification
+  const handleRowAction = useCallback(({ costCenterId, lineItem, actionType, targetRequestId }: RowActionArgs) => {
+    setPendingRowAction({
+      type: actionType,
+      costCenterId,
+      lineItem,
+      targetRequestId,
+    });
+    setRowActionDialogOpen(true);
+  }, []);
+
+  // Handle row action cancel
+  const handleRowActionCancel = useCallback(() => {
+    setRowActionDialogOpen(false);
+    setPendingRowAction(null);
+  }, []);
+
+  // Handle row action submit
+  const handleRowActionSubmit = useCallback((justification: string) => {
+    if (!pendingRowAction) return;
+
+    const { type, costCenterId, lineItem, targetRequestId } = pendingRowAction;
+    const costCenter = costCenters.find((cc) => cc.id === costCenterId);
+    const costCenterName = costCenter?.name ?? '';
+
+    if (currentRole === 'cmo') {
+      // CMO: immediate action
+      if (type === 'cancel_request' && targetRequestId) {
+        // Cancel the original request
+        updateRequest(targetRequestId, (request) => ({
+          ...request,
+          status: 'cancelled' as const,
+        }));
+        // Remove or revert the line item
+        setCostCenters((prev) =>
+          prev.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            if (lineItem.approvalStatus === 'pending') {
+              return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+            }
+            if (lineItem.adjustmentStatus === 'pending' && lineItem.adjustmentBeforeValues) {
+              return {
+                ...cc,
+                lineItems: cc.lineItems.map((item) =>
+                  item.id === lineItem.id
+                    ? { ...item, forecastValues: lineItem.adjustmentBeforeValues!, adjustmentStatus: undefined, adjustmentRequestId: undefined, adjustmentBeforeValues: undefined }
+                    : item
+                ),
+              };
+            }
+            return cc;
+          })
+        );
+        toast({ title: 'Cancelled', description: 'Request cancelled; manager notified.' });
+      } else if (type === 'delete_line_item') {
+        // Immediately delete
+        setCostCenters((prev) =>
+          prev.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+          })
+        );
+        toast({ title: 'Deleted', description: 'Line item deleted; manager notified.' });
+      }
+    } else if (currentRole === 'manager') {
+      // Manager: create request with CMO+Finance steps
+      const requestId = crypto.randomUUID();
+      const vendorName = lineItem.vendor?.name ?? '—';
+      const fyTotal = calculateFYTotal(lineItem.forecastValues);
+
+      addRequest({
+        id: requestId,
+        costCenterId,
+        costCenterName,
+        vendorName,
+        amount: fyTotal,
+        startMonth: 'feb',
+        endMonth: 'jan',
+        isContracted: lineItem.isContracted,
+        justification: type === 'cancel_request' ? `Cancellation: ${justification}` : `Deletion: ${justification}`,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        approvalSteps: createCMOApprovalSteps(),
+        originSheet: 'forecast',
+        originFiscalYearId: isActiveFY ? selectedFiscalYearId : null,
+        originCostCenterId: costCenterId,
+        originLineItemId: lineItem.id,
+        originKind: type,
+        lineItemName: lineItem.name,
+        targetRequestId: type === 'cancel_request' ? targetRequestId : undefined,
+      });
+
+      // Mark line item with pending status
+      setCostCenters((prev) =>
+        prev.map((cc) => {
+          if (cc.id !== costCenterId) return cc;
+          return {
+            ...cc,
+            lineItems: cc.lineItems.map((item) => {
+              if (item.id !== lineItem.id) return item;
+              if (type === 'cancel_request') {
+                return { ...item, cancellationStatus: 'pending' as const, cancellationRequestId: requestId };
+              }
+              return { ...item, deletionStatus: 'pending' as const, deletionRequestId: requestId };
+            }),
+          };
+        })
+      );
+
+      toast({ title: 'Request created', description: `${type === 'cancel_request' ? 'Cancellation' : 'Deletion'} request submitted for approval.` });
+    }
+
+    setRowActionDialogOpen(false);
+    setPendingRowAction(null);
+  }, [pendingRowAction, costCenters, currentRole, updateRequest, addRequest, isActiveFY, selectedFiscalYearId]);
 
   const handleCellChange = useCallback(({ costCenterId, lineItemId, month, newValue }: ForecastCellChangeArgs) => {
     // Find the line item
@@ -722,7 +843,8 @@ export default function Forecast() {
         valueType="forecastValues"
         editable={isEditable}
         onCellChange={isEditable ? handleCellChange : undefined}
-        onDeleteLineItem={isEditable ? handleDeleteLineItem : undefined}
+        onRowAction={handleRowAction}
+        currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
         lockedMonths={lockedMonths}
         focusCostCenterId={focusCostCenterId}
         focusLineItemId={focusLineItemId}
@@ -742,6 +864,13 @@ export default function Forecast() {
         data={pendingAdjustment}
         onCancel={handleJustificationCancel}
         onSubmit={handleJustificationSubmit}
+      />
+
+      <RowActionDialog
+        open={rowActionDialogOpen}
+        data={pendingRowAction}
+        onCancel={handleRowActionCancel}
+        onSubmit={handleRowActionSubmit}
       />
     </div>
   );
