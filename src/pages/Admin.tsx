@@ -16,7 +16,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole, UserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload } from "lucide-react";
+import { CalendarPlus, ShieldCheck, UserCog, History, Globe, Upload, Link } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
   admin: 'Marketing Admin',
@@ -213,6 +213,24 @@ export default function Admin() {
           <CardContent>
             <Button onClick={() => navigate('/admin/actuals')}>
               Import Actuals
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Actuals Matching */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Link className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Actuals Matching</CardTitle>
+            </div>
+            <CardDescription>
+              Match imported transactions to cost centers and line items.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => navigate('/admin/actuals/match')}>
+              Match Actuals
             </Button>
           </CardContent>
         </Card>
