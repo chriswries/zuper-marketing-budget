@@ -108,8 +108,9 @@ export default function RequestDetail() {
         originSheet: request.originSheet,
         amount: request.amount,
         vendorName: request.vendorName,
+      }).then(() => {
+        loadApprovalAudit('request', id).then(setAuditEvents);
       });
-      setAuditEvents(loadApprovalAudit('request', id));
     }
   }, [id, request]);
 
@@ -149,7 +150,7 @@ export default function RequestDetail() {
 
   const refreshAuditEvents = useCallback(() => {
     if (id) {
-      setAuditEvents(loadApprovalAudit('request', id));
+      loadApprovalAudit('request', id).then(setAuditEvents);
     }
   }, [id]);
 

@@ -1,3 +1,4 @@
+import { supabase } from '@/integrations/supabase/client';
 import {
   ApprovalEntityType,
   ApprovalAuditEvent,
@@ -5,104 +6,162 @@ import {
   ApprovalActorRole,
   ApprovalStepLevel,
 } from '@/types/approvalAudit';
+import type { Json } from '@/integrations/supabase/types';
 
-const STORAGE_KEY = 'approval_audit_v1';
+// Custom event for same-tab updates
+export const APPROVAL_AUDIT_UPDATED_EVENT = 'approval-audit-updated';
 
-interface AuditStore {
-  request: Record<string, ApprovalAuditEvent[]>;
-  budget: Record<string, ApprovalAuditEvent[]>;
+function dispatchAuditUpdated(): void {
+  window.dispatchEvent(new CustomEvent(APPROVAL_AUDIT_UPDATED_EVENT));
 }
 
-function loadStore(): AuditStore {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return {
-        request: parsed.request ?? {},
-        budget: parsed.budget ?? {},
-      };
-    }
-  } catch {
-    // Ignore parse errors
+// Map DB row to ApprovalAuditEvent
+function rowToEvent(row: {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  actor_role: string | null;
+  note: string | null;
+  meta: Json | null;
+  created_at: string;
+}): ApprovalAuditEvent {
+  return {
+    id: row.id,
+    entityType: row.entity_type as ApprovalEntityType,
+    entityId: row.entity_id,
+    action: row.action as ApprovalAuditAction,
+    timestamp: row.created_at,
+    actorRole: row.actor_role as ApprovalActorRole,
+    stepLevel: (row.meta as Record<string, unknown> | null)?.stepLevel as ApprovalStepLevel | undefined,
+    note: row.note ?? undefined,
+    meta: row.meta as Record<string, unknown> | undefined,
+  };
+}
+
+// Load audit events for a specific entity
+export async function loadApprovalAudit(
+  entityType: ApprovalEntityType,
+  entityId: string
+): Promise<ApprovalAuditEvent[]> {
+  const { data, error } = await supabase
+    .from('approval_audit_events')
+    .select('*')
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Failed to load approval audit:', error);
+    return [];
   }
-  return { request: {}, budget: {} };
+
+  return (data || []).map(rowToEvent);
 }
 
-function saveStore(store: AuditStore): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    // Ignore storage errors
-  }
-}
+// Synchronous version that returns cached data or empty array
+// (for backward compatibility - callers should migrate to async version)
+let cachedEvents: Record<string, ApprovalAuditEvent[]> = {};
 
-export function loadApprovalAudit(
+export function loadApprovalAuditSync(
   entityType: ApprovalEntityType,
   entityId: string
 ): ApprovalAuditEvent[] {
-  const store = loadStore();
-  return store[entityType][entityId] ?? [];
+  const key = `${entityType}:${entityId}`;
+  return cachedEvents[key] ?? [];
 }
 
-export function appendApprovalAudit(
+// Append a new audit event
+export async function appendApprovalAudit(
   entityType: ApprovalEntityType,
   entityId: string,
   event: Omit<ApprovalAuditEvent, 'id' | 'entityType' | 'entityId' | 'timestamp'>
-): ApprovalAuditEvent {
-  const store = loadStore();
-  
+): Promise<ApprovalAuditEvent> {
+  const id = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  const { stepLevel, ...eventRest } = event;
+  const meta = { ...event.meta, stepLevel } as Record<string, unknown>;
+
+  const { data, error } = await supabase
+    .from('approval_audit_events')
+    .insert({
+      id,
+      entity_type: entityType,
+      entity_id: entityId,
+      action: event.action,
+      actor_role: event.actorRole,
+      note: event.note ?? null,
+      meta: meta as Json,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Failed to append approval audit:', error);
+  }
+
   const fullEvent: ApprovalAuditEvent = {
-    id: crypto.randomUUID(),
+    id,
     entityType,
     entityId,
-    timestamp: new Date().toISOString(),
+    timestamp,
     ...event,
   };
 
-  if (!store[entityType][entityId]) {
-    store[entityType][entityId] = [];
+  // Update cache
+  const key = `${entityType}:${entityId}`;
+  if (!cachedEvents[key]) {
+    cachedEvents[key] = [];
   }
-  store[entityType][entityId].unshift(fullEvent);
-  
-  // Keep max 50 events per entity
-  store[entityType][entityId] = store[entityType][entityId].slice(0, 50);
-  
-  saveStore(store);
+  cachedEvents[key].unshift(fullEvent);
+
   dispatchAuditUpdated();
   return fullEvent;
 }
 
-export function ensureCreatedEventIfMissing(
+// Ensure a "created" event exists for an entity
+export async function ensureCreatedEventIfMissing(
   entityType: ApprovalEntityType,
   entityId: string,
   createdAtIso: string,
   actorRole: ApprovalActorRole,
   meta?: Record<string, unknown>
-): void {
-  const existing = loadApprovalAudit(entityType, entityId);
+): Promise<void> {
+  const existing = await loadApprovalAudit(entityType, entityId);
   const hasCreated = existing.some((e) => e.action === 'created');
-  
+
   if (!hasCreated) {
-    const store = loadStore();
-    
-    const createdEvent: ApprovalAuditEvent = {
-      id: crypto.randomUUID(),
+    const id = crypto.randomUUID();
+    await supabase
+      .from('approval_audit_events')
+      .insert({
+        id,
+        entity_type: entityType,
+        entity_id: entityId,
+        action: 'created',
+        actor_role: actorRole,
+        note: null,
+        meta: (meta ?? {}) as Json,
+        created_at: createdAtIso,
+      });
+
+    // Update cache
+    const key = `${entityType}:${entityId}`;
+    cachedEvents[key] = existing;
+    cachedEvents[key].push({
+      id,
       entityType,
       entityId,
       action: 'created',
       timestamp: createdAtIso,
       actorRole,
       meta,
-    };
-
-    if (!store[entityType][entityId]) {
-      store[entityType][entityId] = [];
-    }
-    // Add created event at the end (oldest)
-    store[entityType][entityId].push(createdEvent);
-    
-    saveStore(store);
+    });
+  } else {
+    // Update cache
+    const key = `${entityType}:${entityId}`;
+    cachedEvents[key] = existing;
   }
 }
 
@@ -143,20 +202,20 @@ const stepLabels: Record<ApprovalStepLevel, string> = {
 
 export function formatAuditEvent(event: ApprovalAuditEvent): string {
   const roleLabel = roleLabels[event.actorRole];
-  const actionLabel = actionLabels[event.action];
-  
+  const actionLabel = actionLabels[event.action] ?? event.action;
+
   if (event.action === 'approved_step' || event.action === 'rejected_step') {
     const stepLabel = event.stepLevel ? stepLabels[event.stepLevel] : '';
     return `${roleLabel} ${actionLabel.toLowerCase()} ${stepLabel} step`;
   }
-  
+
   if (event.action === 'notified_next_approver' && event.meta) {
     const channel = event.meta.channel === 'slack' ? 'Slack' : 'Email';
     const part = event.meta.part === 'message' ? 'message' : event.meta.part === 'subject' ? 'subject' : 'body';
     const stepLabel = event.stepLevel ? stepLabels[event.stepLevel] : '';
     return `${roleLabel} copied ${channel} ${part} for ${stepLabel} step`;
   }
-  
+
   return `${roleLabel} ${actionLabel.toLowerCase()}`;
 }
 
@@ -164,56 +223,81 @@ export function formatAuditEvent(event: ApprovalAuditEvent): string {
 export { formatAuditTimestamp } from '@/lib/dateTime';
 
 // Global loader for all audit events across all entities
-export function loadAllApprovalAuditEvents(): ApprovalAuditEvent[] {
-  const store = loadStore();
-  const allEvents: ApprovalAuditEvent[] = [];
+export async function loadAllApprovalAuditEvents(): Promise<ApprovalAuditEvent[]> {
+  const { data, error } = await supabase
+    .from('approval_audit_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
 
-  // Flatten request events
-  for (const entityId of Object.keys(store.request)) {
-    allEvents.push(...store.request[entityId]);
+  if (error) {
+    console.error('Failed to load all approval audit events:', error);
+    return [];
   }
 
-  // Flatten budget events
-  for (const entityId of Object.keys(store.budget)) {
-    allEvents.push(...store.budget[entityId]);
-  }
-
-  // Sort by timestamp descending (newest first)
-  allEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  return allEvents;
+  return (data || []).map(rowToEvent);
 }
 
-// Custom event for same-tab updates
-export const APPROVAL_AUDIT_UPDATED_EVENT = 'approval-audit-updated';
-
-function dispatchAuditUpdated(): void {
-  window.dispatchEvent(new CustomEvent(APPROVAL_AUDIT_UPDATED_EVENT));
-}
-
-/**
- * Remove all audit events for a specific entity.
- */
-export function removeApprovalAuditForEntity(
+// Remove all audit events for a specific entity (admin only)
+export async function removeApprovalAuditForEntity(
   entityType: ApprovalEntityType,
   entityId: string
-): void {
-  const store = loadStore();
-  delete store[entityType][entityId];
-  saveStore(store);
+): Promise<void> {
+  const { error } = await supabase
+    .from('approval_audit_events')
+    .delete()
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId);
+
+  if (error) {
+    console.error('Failed to remove approval audit for entity:', error);
+  }
+
+  // Clear cache
+  const key = `${entityType}:${entityId}`;
+  delete cachedEvents[key];
+
   dispatchAuditUpdated();
 }
 
-/**
- * Replace all audit events for a specific entity (used by bundle import).
- */
-export function replaceApprovalAuditForEntity(
+// Replace all audit events for a specific entity (used by bundle import, admin only)
+export async function replaceApprovalAuditForEntity(
   entityType: ApprovalEntityType,
   entityId: string,
   events: ApprovalAuditEvent[]
-): void {
-  const store = loadStore();
-  store[entityType][entityId] = events;
-  saveStore(store);
+): Promise<void> {
+  // Delete existing
+  await supabase
+    .from('approval_audit_events')
+    .delete()
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId);
+
+  // Insert new events
+  if (events.length > 0) {
+    const rows = events.map((e) => ({
+      id: e.id,
+      entity_type: entityType,
+      entity_id: entityId,
+      action: e.action,
+      actor_role: e.actorRole,
+      note: e.note ?? null,
+      meta: ({ ...e.meta, stepLevel: e.stepLevel }) as Json,
+      created_at: e.timestamp,
+    }));
+
+    const { error } = await supabase
+      .from('approval_audit_events')
+      .insert(rows);
+
+    if (error) {
+      console.error('Failed to replace approval audit for entity:', error);
+    }
+  }
+
+  // Update cache
+  const key = `${entityType}:${entityId}`;
+  cachedEvents[key] = events;
+
   dispatchAuditUpdated();
 }
