@@ -14,6 +14,216 @@ export type Database = {
   }
   public: {
     Tables: {
+      actuals_matching: {
+        Row: {
+          created_at: string
+          fiscal_year_id: string
+          matches_by_txn_id: Json
+          rules_by_merchant_key: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fiscal_year_id: string
+          matches_by_txn_id?: Json
+          rules_by_merchant_key?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fiscal_year_id?: string
+          matches_by_txn_id?: Json
+          rules_by_merchant_key?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actuals_matching_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: true
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      actuals_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          fiscal_year_id: string
+          merchant: string | null
+          raw: Json
+          source: string | null
+          txn_date: string | null
+          txn_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          fiscal_year_id: string
+          merchant?: string | null
+          raw: Json
+          source?: string | null
+          txn_date?: string | null
+          txn_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          fiscal_year_id?: string
+          merchant?: string | null
+          raw?: Json
+          source?: string | null
+          txn_date?: string | null
+          txn_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actuals_transactions_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_settings: {
+        Row: {
+          admin_override_enabled: boolean
+          created_at: string
+          id: string
+          increase_approval_absolute_usd: number
+          increase_approval_percent: number
+          show_archived_fiscal_years: boolean
+          time_zone: string
+          updated_at: string
+        }
+        Insert: {
+          admin_override_enabled?: boolean
+          created_at?: string
+          id?: string
+          increase_approval_absolute_usd?: number
+          increase_approval_percent?: number
+          show_archived_fiscal_years?: boolean
+          time_zone?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_override_enabled?: boolean
+          created_at?: string
+          id?: string
+          increase_approval_absolute_usd?: number
+          increase_approval_percent?: number
+          show_archived_fiscal_years?: boolean
+          time_zone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      approval_audit_events: {
+        Row: {
+          action: string
+          actor_role: string | null
+          created_at: string
+          created_by: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          meta: Json | null
+          note: string | null
+        }
+        Insert: {
+          action: string
+          actor_role?: string | null
+          created_at?: string
+          created_by?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          meta?: Json | null
+          note?: string | null
+        }
+        Update: {
+          action?: string
+          actor_role?: string | null
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          meta?: Json | null
+          note?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_years: {
+        Row: {
+          archived_at: string | null
+          archived_by: string | null
+          archived_justification: string | null
+          created_at: string
+          data: Json
+          id: string
+          name: string
+          previous_status_before_archive: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
+          archived_justification?: string | null
+          created_at?: string
+          data: Json
+          id: string
+          name: string
+          previous_status_before_archive?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          archived_by?: string | null
+          archived_justification?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          name?: string
+          previous_status_before_archive?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fy_forecasts: {
+        Row: {
+          created_at: string
+          data: Json
+          fiscal_year_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          fiscal_year_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          fiscal_year_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fy_forecasts_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: true
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -59,12 +269,50 @@ export type Database = {
         }
         Relationships: []
       }
+      spend_requests: {
+        Row: {
+          created_at: string
+          data: Json
+          deleted_at: string | null
+          id: string
+          origin_fiscal_year_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          deleted_at?: string | null
+          id: string
+          origin_fiscal_year_id?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          deleted_at?: string | null
+          id?: string
+          origin_fiscal_year_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       allow_self_signup: { Args: never; Returns: boolean }
+      current_user_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      has_any_role: {
+        Args: { required_roles: Database["public"]["Enums"]["user_role"][] }
+        Returns: boolean
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
