@@ -17,7 +17,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye, Users } from "lucide-react";
+import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye, Users, DatabaseBackup } from "lucide-react";
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -294,6 +294,26 @@ export default function Admin() {
             <CardContent>
               <Button onClick={() => navigate('/admin/users')}>
                 Manage Users
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Data Migration - Admin only */}
+        {currentRole === 'admin' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <DatabaseBackup className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Data Migration</CardTitle>
+              </div>
+              <CardDescription>
+                Migrate legacy localStorage data (pre-cloud) into the shared cloud database.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/admin/data-migration')}>
+                Open Data Migration
               </Button>
             </CardContent>
           </Card>

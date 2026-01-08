@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
+import { CloudDataRealtimeManager } from "@/components/realtime/CloudDataRealtimeManager";
 
 interface AppLayoutProps {
   children?: ReactNode;
@@ -11,6 +12,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <SidebarProvider>
+      <CloudDataRealtimeManager />
       <AppSidebar />
       <SidebarInset>
         <AppHeader />

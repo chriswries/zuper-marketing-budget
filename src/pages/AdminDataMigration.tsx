@@ -19,6 +19,9 @@ import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { useFiscalYearBudget, type FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
 import { supabase } from '@/integrations/supabase/client';
+import { clearForecastCache } from '@/lib/forecastStore';
+import { clearActualsCache } from '@/lib/actualsStore';
+import { clearMatchingCache } from '@/lib/actualsMatchingStore';
 import type { CostCenter } from '@/types/budget';
 import type { SpendRequest } from '@/types/requests';
 import type { ActualsTransaction } from '@/types/actuals';
@@ -336,11 +339,16 @@ export default function AdminDataMigration() {
         }
       }
 
+      // Clear caches so next reads pull fresh DB data
+      clearForecastCache();
+      clearActualsCache();
+      clearMatchingCache();
+
       await refetchFiscalYears();
 
       toast({
         title: 'Migration Complete',
-        description: `Merged ${insertedFYs} FYs, ${insertedRequests} requests, ${insertedForecasts} forecasts, ${insertedActuals} actuals, ${insertedMatching} matching configs.`,
+        description: `Merged ${insertedFYs} FYs, ${insertedRequests} requests, ${insertedForecasts} forecasts, ${insertedActuals} actuals, ${insertedMatching} matching configs. You can now close this page.`,
       });
     } catch (err) {
       console.error('Migration error:', err);
@@ -456,11 +464,16 @@ export default function AdminDataMigration() {
         }
       }
 
+      // Clear caches so next reads pull fresh DB data
+      clearForecastCache();
+      clearActualsCache();
+      clearMatchingCache();
+
       await refetchFiscalYears();
 
       toast({
         title: 'Overwrite Complete',
-        description: `Imported ${insertedFYs} FYs and ${insertedRequests} requests from localStorage.`,
+        description: `Imported ${insertedFYs} FYs and ${insertedRequests} requests from localStorage. You can now close this page.`,
       });
 
       setOverwriteConfirmation('');

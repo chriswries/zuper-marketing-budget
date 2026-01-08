@@ -242,3 +242,41 @@ export async function preloadActualsMatching(fiscalYearId: string): Promise<void
 export function clearMatchingCache(): void {
   matchingCache = {};
 }
+
+// Clear specific FY from cache
+export function invalidateMatchingCache(fyId: string): void {
+  delete matchingCache[fyId];
+}
+
+/**
+ * Subscribe to realtime changes on actuals_matching table.
+ * Invalidates cache for affected fiscal year.
+ * Returns cleanup function.
+ */
+export function subscribeActualsMatchingRealtimeInvalidation(): () => void {
+  const channel = supabase
+    .channel('matching-cache-invalidation')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'actuals_matching',
+      },
+      (payload) => {
+        const fyId = (payload.new as { fiscal_year_id?: string })?.fiscal_year_id 
+          || (payload.old as { fiscal_year_id?: string })?.fiscal_year_id;
+        
+        if (fyId) {
+          invalidateMatchingCache(fyId);
+        } else {
+          clearMatchingCache();
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
