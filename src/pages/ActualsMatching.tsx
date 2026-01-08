@@ -49,9 +49,9 @@ import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
-import { loadActuals } from '@/lib/actualsStore';
+import { loadActualsAsync } from '@/lib/actualsStore';
 import {
-  loadActualsMatching,
+  loadActualsMatchingAsync,
   saveActualsMatching,
   normalizeMerchantKey,
   applyMerchantRules,
@@ -104,9 +104,12 @@ export default function ActualsMatching() {
       return;
     }
 
+    let cancelled = false;
+
     async function loadData() {
-      // Load transactions
-      const txns = loadActuals(selectedFiscalYearId);
+      // Load transactions asynchronously from DB
+      const txns = await loadActualsAsync(selectedFiscalYearId);
+      if (cancelled) return;
       setTransactions(txns);
 
       // Apply merchant rules and reload matching data
@@ -120,13 +123,18 @@ export default function ActualsMatching() {
         }
       }
 
-      // Load matching data
-      const matchingData = loadActualsMatching(selectedFiscalYearId);
+      // Load matching data asynchronously from DB
+      const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
+      if (cancelled) return;
       setMatchesByTxnId(matchingData.matchesByTxnId);
       setRulesByMerchantKey(matchingData.rulesByMerchantKey);
     }
 
     loadData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedFiscalYearId, canEdit, currentRole]);
 
   // Filtered transactions
@@ -287,8 +295,8 @@ export default function ActualsMatching() {
     // Recompute rollup
     recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
 
-    // Reload state
-    const matchingData = loadActualsMatching(selectedFiscalYearId);
+    // Reload state from DB
+    const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
     setMatchesByTxnId(matchingData.matchesByTxnId);
     setRulesByMerchantKey(matchingData.rulesByMerchantKey);
 
@@ -309,24 +317,24 @@ export default function ActualsMatching() {
   };
 
   // Handle unmatch confirm
-  const handleConfirmUnmatch = () => {
+  const handleConfirmUnmatch = async () => {
     if (!txnToUnmatch || !selectedFiscalYearId || !selectedFiscalYear) return;
 
     const match = matchesByTxnId[txnToUnmatch.id];
     if (!match) return;
 
-    removeTransactionMatch(selectedFiscalYearId, txnToUnmatch.id);
+    await removeTransactionMatch(selectedFiscalYearId, txnToUnmatch.id);
 
     // Remove merchant rule if requested
     if (match.merchantKey && !keepMerchantRule) {
-      removeMerchantRule(selectedFiscalYearId, match.merchantKey);
+      await removeMerchantRule(selectedFiscalYearId, match.merchantKey);
     }
 
     // Recompute rollup
     recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
 
-    // Reload state
-    const matchingData = loadActualsMatching(selectedFiscalYearId);
+    // Reload state from DB
+    const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
     setMatchesByTxnId(matchingData.matchesByTxnId);
     setRulesByMerchantKey(matchingData.rulesByMerchantKey);
 

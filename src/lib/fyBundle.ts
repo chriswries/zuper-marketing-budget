@@ -6,9 +6,9 @@ import type { FiscalYearBundleV1, BundleValidationResult, ActualsMatchingBundle 
 import type { SpendRequest } from '@/types/requests';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
 import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { loadActuals } from '@/lib/actualsStore';
-import { loadActualsMatching } from '@/lib/actualsMatchingStore';
-import { loadForecastForFY } from '@/lib/forecastStore';
+import { loadActualsAsync } from '@/lib/actualsStore';
+import { loadActualsMatchingAsync } from '@/lib/actualsMatchingStore';
+import { loadForecastForFYAsync } from '@/lib/forecastStore';
 import { loadApprovalAudit } from '@/lib/approvalAuditStore';
 
 interface BuildBundleArgs {
@@ -19,19 +19,20 @@ interface BuildBundleArgs {
 
 /**
  * Build a complete FY bundle for export.
+ * Uses async DB loaders to ensure data is fully loaded regardless of cache state.
  */
 export async function buildFiscalYearBundleV1(args: BuildBundleArgs): Promise<FiscalYearBundleV1> {
   const { fiscalYear, currentRole, requests } = args;
   const fiscalYearId = fiscalYear.id;
 
-  // Load forecast for this FY (may be null)
-  const forecast = loadForecastForFY(fiscalYearId);
+  // Load forecast for this FY (may be null) - ASYNC to ensure data is loaded from DB
+  const forecast = await loadForecastForFYAsync(fiscalYearId);
 
-  // Load actuals transactions
-  const actualsTransactions = loadActuals(fiscalYearId);
+  // Load actuals transactions - ASYNC to ensure data is loaded from DB
+  const actualsTransactions = await loadActualsAsync(fiscalYearId);
 
-  // Load actuals matching data
-  const actualsMatchingRaw = loadActualsMatching(fiscalYearId);
+  // Load actuals matching data - ASYNC to ensure data is loaded from DB
+  const actualsMatchingRaw = await loadActualsMatchingAsync(fiscalYearId);
   const actualsMatching: ActualsMatchingBundle = {
     matchesByTxnId: actualsMatchingRaw.matchesByTxnId,
     rulesByMerchantKey: actualsMatchingRaw.rulesByMerchantKey,

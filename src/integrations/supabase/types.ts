@@ -159,7 +159,8 @@ export type Database = {
       fiscal_years: {
         Row: {
           archived_at: string | null
-          archived_by: string | null
+          archived_by_role: string | null
+          archived_by_user_id: string | null
           archived_justification: string | null
           created_at: string
           data: Json
@@ -171,7 +172,8 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
-          archived_by?: string | null
+          archived_by_role?: string | null
+          archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
           data: Json
@@ -183,7 +185,8 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
-          archived_by?: string | null
+          archived_by_role?: string | null
+          archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
           data?: Json
