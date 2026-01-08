@@ -129,37 +129,6 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [lineItemSort, setLineItemSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  // Ensure trackpad/mouse wheel scroll works inside the table (both axes)
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      // Don't interfere with browser zoom / OS gestures
-      if (e.ctrlKey || e.metaKey) return;
-
-      const canX = el.scrollWidth > el.clientWidth;
-      const canY = el.scrollHeight > el.clientHeight;
-
-      let dx = e.deltaX;
-      if (e.shiftKey && dx === 0) dx = e.deltaY;
-      const dy = e.deltaY;
-
-      const shouldConsume = (canX && dx !== 0) || (canY && dy !== 0);
-      if (!shouldConsume) return;
-
-      if (canX && dx !== 0) el.scrollLeft += dx;
-      if (canY && dy !== 0) el.scrollTop += dy;
-
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
 
   // Focus/scroll/highlight logic
   useEffect(() => {
@@ -412,23 +381,50 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
-        ref={scrollRef}
-        className="relative w-full max-w-full overflow-auto overscroll-contain border rounded-lg max-h-[calc(100dvh-280px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="relative w-full max-w-full overflow-auto overscroll-contain border rounded-lg max-h-[calc(100vh-220px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         tabIndex={0}
+        onWheelCapture={(e) => {
+          const el = e.currentTarget;
+
+          // Preserve browser zoom gestures
+          if (e.ctrlKey || e.metaKey) return;
+
+          const dxRaw = e.deltaX;
+          const dyRaw = e.deltaY;
+          const dx = e.shiftKey && dxRaw === 0 ? dyRaw : dxRaw;
+          const dy = dyRaw;
+
+          const maxX = el.scrollWidth - el.clientWidth;
+          const maxY = el.scrollHeight - el.clientHeight;
+
+          const canScrollX =
+            el.scrollWidth > el.clientWidth &&
+            ((dx < 0 && el.scrollLeft > 0) || (dx > 0 && el.scrollLeft < maxX));
+
+          const canScrollY =
+            el.scrollHeight > el.clientHeight &&
+            ((dy < 0 && el.scrollTop > 0) || (dy > 0 && el.scrollTop < maxY));
+
+          // If the table can consume this scroll, keep it from bubbling to the page.
+          // Do NOT preventDefault so native horizontal trackpad scrolling still works.
+          if (canScrollX || canScrollY) {
+            e.stopPropagation();
+          }
+        }}
       >
         <Table className="border-separate border-spacing-0 min-w-max w-max">
-          <TableHeader className="sticky top-0 z-20">
+          <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-50 bg-background border-b relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
+              <TableHead className="min-w-[320px] w-[320px] sticky left-0 z-50 bg-background border-b relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="w-[120px] min-w-[120px] bg-muted border-b">Vendor</TableHead>
+              <TableHead className="min-w-[200px] w-[200px] bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className={`w-[90px] min-w-[90px] text-right border-b bg-muted`}
+                    className="min-w-[110px] w-[110px] text-right border-b bg-muted"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -437,11 +433,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted border-b">
+              <TableHead className="min-w-[140px] w-[140px] text-right font-semibold bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[50px] min-w-[50px] bg-muted border-b"></TableHead>
+                <TableHead className="min-w-[80px] w-[80px] bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -467,7 +463,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="sticky left-0 z-40 bg-muted/80 relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
+                        <TableCell className="sticky left-0 z-20 bg-background relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -511,7 +507,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="sticky left-0 z-40 bg-background relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
+                              <TableCell className="sticky left-0 z-20 bg-background relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -927,7 +923,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="font-semibold border-t-2 bg-accent">
-                  <TableCell className="sticky left-0 z-40 bg-accent relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
+                  <TableCell className="sticky left-0 z-20 bg-background relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                     Grand Total
                   </TableCell>
                   <TableCell>—</TableCell>
