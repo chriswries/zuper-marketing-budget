@@ -388,34 +388,24 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         tabIndex={0}
         aria-label="Budget table"
         onWheelCapture={(e) => {
-          // When the cursor is inside the table, keep scroll confined to this container
-          // so the surrounding panel (Forecast/Budget/etc.) doesn't scroll.
+          // Keep vertical scroll confined to the table so the surrounding page/panel
+          // doesn't scroll when the cursor is inside the grid.
+          //
+          // IMPORTANT: Do NOT hijack horizontal wheel/trackpad scrolling — let the
+          // browser handle native horizontal scrolling for best compatibility.
           const el = scrollRef.current;
           if (!el) return;
 
-          const canScrollX = el.scrollWidth > el.clientWidth;
+          // If the user is scrolling horizontally (trackpad sideways) or using
+          // Shift+wheel for horizontal scroll, don't intercept.
+          if (e.shiftKey || e.deltaX !== 0) return;
+
           const canScrollY = el.scrollHeight > el.clientHeight;
+          if (!canScrollY) return;
 
-          // Some devices/browsers emit horizontal scrolling as deltaY while Shift is held.
-          const intendedDeltaX = e.shiftKey ? e.deltaY : e.deltaX;
-          const intendedDeltaY = e.shiftKey ? 0 : e.deltaY;
-
-          let handled = false;
-
-          if (intendedDeltaX !== 0 && canScrollX) {
-            el.scrollLeft += intendedDeltaX;
-            handled = true;
-          }
-
-          if (intendedDeltaY !== 0 && canScrollY) {
-            el.scrollTop += intendedDeltaY;
-            handled = true;
-          }
-
-          if (handled) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
+          el.scrollTop += e.deltaY;
+          e.preventDefault();
+          e.stopPropagation();
         }}
         className="relative min-w-0 w-full overflow-x-auto overflow-y-auto overscroll-contain rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable both-edges' }}
