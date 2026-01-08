@@ -385,22 +385,22 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
         ref={scrollRef}
-        className="relative w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto overscroll-contain rounded-md border bg-background max-h-[calc(100vh-220px)]"
-        tabIndex={0}
+        className="relative w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
+        style={{ scrollbarGutter: 'stable both-edges' }}
       >
-        <Table className="w-max min-w-max table-fixed min-w-[1600px]">
+        <Table className="w-max min-w-full table-fixed">
           <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="min-w-[320px] w-[320px] bg-muted border-b">
+              <TableHead className="w-[340px] min-w-[340px] sticky left-0 z-40 bg-muted border-b border-r">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="min-w-[200px] w-[200px] sticky top-0 z-30 bg-muted border-b">Vendor</TableHead>
+              <TableHead className="w-[220px] min-w-[220px] bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className="min-w-[110px] w-[110px] sticky top-0 z-30 text-right border-b bg-muted"
+                    className="w-[120px] min-w-[120px] text-right border-b bg-muted"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -409,11 +409,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="min-w-[140px] w-[140px] sticky top-0 z-30 text-right font-semibold bg-muted border-b">
+              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="min-w-[80px] w-[80px] sticky top-0 z-30 bg-muted border-b"></TableHead>
+                <TableHead className="w-[72px] min-w-[72px] bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -439,7 +439,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="min-w-[320px] w-[320px] bg-background">
+                        <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-background border-r">
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -452,17 +452,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">—</TableCell>
+                        <TableCell className="w-[220px] min-w-[220px] text-muted-foreground">—</TableCell>
                         {MONTHS.map((month) => (
-                          <TableCell key={month} className="text-right tabular-nums">
+                          <TableCell key={month} className="w-[120px] min-w-[120px] text-right tabular-nums">
                             {formatCurrency(rollup[month])}
                           </TableCell>
                         ))}
-                        <TableCell className="text-right tabular-nums font-semibold bg-muted/50">
+                        <TableCell className="w-[140px] min-w-[140px] text-right tabular-nums font-semibold bg-muted/50">
                           <div>{formatCurrency(fyTotal)}</div>
                           {renderCostCenterFYMeta?.(costCenter, fyTotal)}
                         </TableCell>
-                        {showActionColumn && <TableCell></TableCell>}
+                        {showActionColumn && <TableCell className="w-[72px] min-w-[72px]"></TableCell>}
                       </TableRow>
 
                       {/* Line Item Child Rows */}
@@ -483,7 +483,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="min-w-[320px] w-[320px] bg-background">
+                              <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-background border-r">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -566,7 +566,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="text-muted-foreground text-sm">
+                              <TableCell className="w-[220px] min-w-[220px] text-muted-foreground text-sm">
                                 {item.vendor?.name ?? '—'}
                               </TableCell>
                               {MONTHS.map((month) => {
@@ -587,6 +587,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                       key={month}
                                       value={cellValue}
                                       formatted={formatCurrency(cellValue)}
+                                      className="w-[120px] min-w-[120px]"
                                       onSave={(newValue) => {
                                         onCellChange({
                                           costCenterId: costCenter.id,
@@ -603,17 +604,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 return (
                                   <TableCell 
                                     key={month} 
-                                    className={`text-right tabular-nums ${isMonthLocked || isItemLocked ? 'bg-muted/40 cursor-not-allowed text-muted-foreground' : ''}`}
+                                    className={`w-[120px] min-w-[120px] text-right tabular-nums ${isMonthLocked || isItemLocked ? 'bg-muted/40 cursor-not-allowed text-muted-foreground' : ''}`}
                                   >
                                     {formatCurrency(cellValue)}
                                   </TableCell>
                                 );
                               })}
-                              <TableCell className="text-right tabular-nums font-medium bg-muted/20">
+                              <TableCell className="w-[140px] min-w-[140px] text-right tabular-nums font-medium bg-muted/20">
                                 {formatCurrency(itemFYTotal)}
                               </TableCell>
                               {showActionColumn && (
-                                <TableCell className="text-center">
+                                <TableCell className="w-[72px] min-w-[72px] text-center">
 {(() => {
                                     // Determine action type and permissions
                                     const isPending = item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending';
@@ -899,20 +900,20 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2 bg-accent">
-                  <TableCell className="min-w-[320px] w-[320px] bg-accent">
+                  <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-accent border-r">
                     Grand Total
                   </TableCell>
-                  <TableCell>—</TableCell>
+                  <TableCell className="w-[220px] min-w-[220px]">—</TableCell>
                   {MONTHS.map((month) => (
-                    <TableCell key={month} className="text-right tabular-nums">
+                    <TableCell key={month} className="w-[120px] min-w-[120px] text-right tabular-nums">
                       {formatCurrency(grandTotal[month])}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right tabular-nums bg-accent">
+                  <TableCell className="w-[140px] min-w-[140px] text-right tabular-nums bg-accent">
                     <div>{formatCurrency(grandFYTotal)}</div>
                     {renderGrandTotalFYMeta?.(grandFYTotal)}
                   </TableCell>
-                  {showActionColumn && <TableCell></TableCell>}
+                  {showActionColumn && <TableCell className="w-[72px] min-w-[72px]"></TableCell>}
                 </TableRow>
               </>
             )}
