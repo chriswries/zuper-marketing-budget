@@ -388,16 +388,29 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         tabIndex={0}
         aria-label="Budget table"
         onWheelCapture={(e) => {
-          // When the cursor is inside the table, keep horizontal scrolling confined to this container
-          // so the surrounding panel doesn't pan horizontally.
-          if (e.deltaX !== 0 && scrollRef.current) {
-            const el = scrollRef.current;
-            const canScrollX = el.scrollWidth > el.clientWidth;
-            if (canScrollX) {
-              el.scrollLeft += e.deltaX;
-              e.preventDefault();
-              e.stopPropagation();
-            }
+          // When the cursor is inside the table, keep scroll confined to this container
+          // so the surrounding panel (Forecast/Budget/etc.) doesn't scroll.
+          const el = scrollRef.current;
+          if (!el) return;
+
+          const canScrollX = el.scrollWidth > el.clientWidth;
+          const canScrollY = el.scrollHeight > el.clientHeight;
+
+          let handled = false;
+
+          if (e.deltaX !== 0 && canScrollX) {
+            el.scrollLeft += e.deltaX;
+            handled = true;
+          }
+
+          if (e.deltaY !== 0 && canScrollY) {
+            el.scrollTop += e.deltaY;
+            handled = true;
+          }
+
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
           }
         }}
         className="relative min-w-0 w-full overflow-x-auto overflow-y-auto overscroll-contain rounded-md border bg-background max-h-[calc(100vh-220px)]"
