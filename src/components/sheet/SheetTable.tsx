@@ -385,22 +385,22 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
         ref={scrollRef}
-        className="relative w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
+        className="relative min-w-0 isolate w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable both-edges' }}
       >
         <Table className="w-max min-w-full table-fixed">
           <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="w-[340px] min-w-[340px] sticky left-0 z-40 bg-muted border-b border-r">
+              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[60] bg-muted border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="w-[220px] min-w-[220px] bg-muted border-b">Vendor</TableHead>
+              <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-30 bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className="w-[120px] min-w-[120px] text-right border-b bg-muted"
+                    className="w-[120px] min-w-[120px] text-right border-b bg-muted sticky top-0 z-30"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -409,11 +409,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold bg-muted border-b">
+              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold bg-muted border-b sticky top-0 z-30">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[72px] min-w-[72px] bg-muted border-b"></TableHead>
+                <TableHead className="w-[72px] min-w-[72px] bg-muted border-b sticky top-0 z-30"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -439,7 +439,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-background border-r">
+                        <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[20] bg-background border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -483,7 +483,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-background border-r">
+                              <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[20] bg-background border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -900,7 +900,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2 bg-accent">
-                  <TableCell className="w-[340px] min-w-[340px] sticky left-0 z-20 bg-accent border-r">
+                  <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[20] bg-accent border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                     Grand Total
                   </TableCell>
                   <TableCell className="w-[220px] min-w-[220px]">—</TableCell>
