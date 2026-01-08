@@ -380,8 +380,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-auto max-h-[calc(100vh-300px)]">
-        <Table className="border-separate border-spacing-0">
+      <div 
+        className="border rounded-lg overflow-auto max-h-[calc(100vh-300px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        tabIndex={0}
+      >
+        <Table className="border-separate border-spacing-0 min-w-max">
           <TableHeader className="sticky top-0 z-20">
             <TableRow>
               <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-30 bg-muted border-b border-r">
@@ -393,7 +396,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                 return (
                   <TableHead
                     key={month}
-                    className={`w-[90px] min-w-[90px] text-right border-b ${isLocked ? 'bg-muted' : 'bg-muted'}`}
+                    className={`w-[90px] min-w-[90px] text-right border-b bg-muted`}
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -891,8 +894,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                 })}
 
                 {/* Grand Total Row */}
-                <TableRow className="font-semibold border-t-2">
-                  <TableCell className="sticky left-0 z-10 bg-primary/10 border-r">
+                <TableRow className="font-semibold border-t-2 bg-accent">
+                  <TableCell className="sticky left-0 z-10 bg-accent border-r">
                     Grand Total
                   </TableCell>
                   <TableCell>—</TableCell>
@@ -901,7 +904,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                       {formatCurrency(grandTotal[month])}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right tabular-nums bg-primary/10">
+                  <TableCell className="text-right tabular-nums bg-accent">
                     <div>{formatCurrency(grandFYTotal)}</div>
                     {renderGrandTotalFYMeta?.(grandFYTotal)}
                   </TableCell>
