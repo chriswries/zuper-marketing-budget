@@ -20,6 +20,10 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          invited_at: string | null
+          invited_by: string | null
+          is_active: boolean
+          last_login_at: string | null
           last_name: string | null
           must_change_password: boolean
           role: Database["public"]["Enums"]["user_role"]
@@ -30,6 +34,10 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id: string
+          invited_at?: string | null
+          invited_by?: string | null
+          is_active?: boolean
+          last_login_at?: string | null
           last_name?: string | null
           must_change_password?: boolean
           role?: Database["public"]["Enums"]["user_role"]
@@ -40,6 +48,10 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          is_active?: boolean
+          last_login_at?: string | null
           last_name?: string | null
           must_change_password?: boolean
           role?: Database["public"]["Enums"]["user_role"]

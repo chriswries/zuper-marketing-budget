@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
@@ -11,6 +12,10 @@ export interface Profile {
   last_name: string | null;
   role: UserRole;
   must_change_password: boolean;
+  is_active: boolean;
+  invited_at: string | null;
+  invited_by: string | null;
+  last_login_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const { toast } = useToast();
 
   // Combined loading state
   const loading = sessionLoading || profileLoading;
@@ -70,11 +76,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileLoading(true);
     try {
       const profileData = await fetchProfileWithRetry(userId);
+      
+      // Check if user is inactive
+      if (profileData && !profileData.is_active) {
+        toast({
+          title: 'Account Disabled',
+          description: 'Your account has been disabled. Please contact an administrator.',
+          variant: 'destructive',
+        });
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        return;
+      }
+      
       setProfile(profileData);
+      
+      // Update last_login_at (fire and forget)
+      if (profileData) {
+        supabase
+          .from('profiles')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', userId)
+          .then(() => {});
+      }
     } finally {
       setProfileLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -94,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Defer profile loading outside the callback; still “immediate” for UX
+      // Defer profile loading outside the callback; still "immediate" for UX
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         queueMicrotask(() => {
           void loadProfile(newSession.user.id);

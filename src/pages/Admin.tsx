@@ -17,7 +17,7 @@ import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye } from "lucide-react";
+import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye, Users } from "lucide-react";
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -274,6 +274,26 @@ export default function Admin() {
             <CardContent>
               <Button onClick={() => navigate('/admin/fy-tools')}>
                 Open FY Tools
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* User Management - Admin only */}
+        {currentRole === 'admin' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">User Management</CardTitle>
+              </div>
+              <CardDescription>
+                Create and manage user accounts, assign roles, and reset passwords.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/admin/users')}>
+                Manage Users
               </Button>
             </CardContent>
           </Card>
