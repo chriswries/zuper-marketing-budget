@@ -381,10 +381,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
       {/* Table */}
       <div 
-        className="border rounded-lg overflow-auto max-h-[calc(100vh-300px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="relative border rounded-lg max-h-[calc(100vh-280px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        style={{ overflow: 'auto', overscrollBehavior: 'contain' }}
         tabIndex={0}
       >
-        <Table className="border-separate border-spacing-0 min-w-max">
+        <Table className="border-separate border-spacing-0 w-max min-w-full">
           <TableHeader className="sticky top-0 z-20">
             <TableRow>
               <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-30 bg-muted border-b border-r">
