@@ -104,25 +104,29 @@ export default function ActualsMatching() {
       return;
     }
 
-    // Load transactions
-    const txns = loadActuals(selectedFiscalYearId);
-    setTransactions(txns);
+    async function loadData() {
+      // Load transactions
+      const txns = loadActuals(selectedFiscalYearId);
+      setTransactions(txns);
 
-    // Apply merchant rules and reload matching data
-    if (txns.length > 0 && canEdit) {
-      const appliedCount = applyMerchantRules(selectedFiscalYearId, txns, currentRole);
-      if (appliedCount > 0) {
-        toast({
-          title: 'Merchant rules applied',
-          description: `${appliedCount} transaction(s) auto-matched from existing rules.`,
-        });
+      // Apply merchant rules and reload matching data
+      if (txns.length > 0 && canEdit) {
+        const appliedCount = await applyMerchantRules(selectedFiscalYearId, txns, currentRole);
+        if (appliedCount > 0) {
+          toast({
+            title: 'Merchant rules applied',
+            description: `${appliedCount} transaction(s) auto-matched from existing rules.`,
+          });
+        }
       }
+
+      // Load matching data
+      const matchingData = loadActualsMatching(selectedFiscalYearId);
+      setMatchesByTxnId(matchingData.matchesByTxnId);
+      setRulesByMerchantKey(matchingData.rulesByMerchantKey);
     }
 
-    // Load matching data
-    const matchingData = loadActualsMatching(selectedFiscalYearId);
-    setMatchesByTxnId(matchingData.matchesByTxnId);
-    setRulesByMerchantKey(matchingData.rulesByMerchantKey);
+    loadData();
   }, [selectedFiscalYearId, canEdit, currentRole]);
 
   // Filtered transactions
@@ -228,7 +232,7 @@ export default function ActualsMatching() {
   }, [matchDialogOpen, suggestedMatch]);
 
   // Handle match confirm
-  const handleConfirmMatch = () => {
+  const handleConfirmMatch = async () => {
     if (!selectedTxn || !selectedFiscalYearId || !selectedFiscalYear) return;
     if (!selectedCostCenterId || !selectedLineItemId) return;
 
@@ -252,7 +256,7 @@ export default function ActualsMatching() {
       merchantKey,
     };
 
-    addTransactionMatch(selectedFiscalYearId, match);
+    await addTransactionMatch(selectedFiscalYearId, match);
 
     // Create merchant rule if requested
     if (createMerchantRule) {
@@ -263,10 +267,10 @@ export default function ActualsMatching() {
         createdAt: new Date().toISOString(),
         createdByRole: currentRole,
       };
-      addMerchantRule(selectedFiscalYearId, rule);
+      await addMerchantRule(selectedFiscalYearId, rule);
 
       // Apply rule to other unmatched transactions from same merchant
-      const appliedCount = applyMerchantRules(
+      const appliedCount = await applyMerchantRules(
         selectedFiscalYearId,
         transactions.filter((t) => t.id !== selectedTxn.id),
         currentRole

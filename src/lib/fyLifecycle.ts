@@ -1,7 +1,9 @@
 /**
  * Fiscal Year lifecycle operations: archive, restore, hard delete.
+ * All operations now work with DB-backed stores.
  */
 
+import { supabase } from '@/integrations/supabase/client';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
 import type { FiscalYearBudget, FiscalYearStatus } from '@/contexts/FiscalYearBudgetContext';
 import type { SpendRequest } from '@/types/requests';
@@ -39,15 +41,15 @@ export function getFYScopedRequests(
 /**
  * Archive a fiscal year (reversible).
  */
-export function archiveFiscalYear(
+export async function archiveFiscalYear(
   fiscalYear: FiscalYearBudget,
   role: UserRole,
   justification: string,
-  updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => void
-): void {
+  updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => Promise<void>
+): Promise<void> {
   const previousStatus = fiscalYear.status;
 
-  updateFiscalYearBudget(fiscalYear.id, (fy) => ({
+  await updateFiscalYearBudget(fiscalYear.id, (fy) => ({
     ...fy,
     status: 'archived' as FiscalYearStatus,
     archivedAt: new Date().toISOString(),
@@ -58,7 +60,7 @@ export function archiveFiscalYear(
   }));
 
   // Log audit event (using 'request' entity type with FY id for consistency with FY-1)
-  appendApprovalAudit('request', fiscalYear.id, {
+  await appendApprovalAudit('request', fiscalYear.id, {
     action: 'fy_archived',
     actorRole: role === 'admin' ? 'admin' : 'manager',
     note: justification,
@@ -73,15 +75,15 @@ export function archiveFiscalYear(
 /**
  * Restore an archived fiscal year.
  */
-export function restoreFiscalYear(
+export async function restoreFiscalYear(
   fiscalYear: FiscalYearBudget,
   role: UserRole,
   justification: string,
-  updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => void
-): void {
+  updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => Promise<void>
+): Promise<void> {
   const restoredStatus = fiscalYear.previousStatusBeforeArchive || 'planning';
 
-  updateFiscalYearBudget(fiscalYear.id, (fy) => ({
+  await updateFiscalYearBudget(fiscalYear.id, (fy) => ({
     ...fy,
     status: restoredStatus,
     archivedAt: undefined,
@@ -92,7 +94,7 @@ export function restoreFiscalYear(
   }));
 
   // Log audit event
-  appendApprovalAudit('request', fiscalYear.id, {
+  await appendApprovalAudit('request', fiscalYear.id, {
     action: 'fy_restored',
     actorRole: role === 'admin' ? 'admin' : 'manager',
     note: justification,
@@ -113,15 +115,14 @@ export interface HardDeleteResult {
  * Hard delete a fiscal year and all associated data (destructive).
  * Returns null if adminOverrideEnabled is false (guard).
  */
-export function hardDeleteFiscalYear(
+export async function hardDeleteFiscalYear(
   fiscalYear: FiscalYearBudget,
   role: UserRole,
   justification: string,
   allRequests: SpendRequest[],
-  deleteFiscalYearBudget: (id: string) => void,
-  setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void,
+  deleteFiscalYearBudget: (id: string) => Promise<void>,
   adminOverrideEnabled: boolean
-): HardDeleteResult | null {
+): Promise<HardDeleteResult | null> {
   // Defensive guard: hard delete requires Admin Override Mode AND admin role
   if (!adminOverrideEnabled || role !== 'admin') {
     return null;
@@ -134,7 +135,7 @@ export function hardDeleteFiscalYear(
   const deletedRequestIds = fyRequests.map(r => r.id);
 
   // 2. Log audit event BEFORE deleting (so it's recorded)
-  appendApprovalAudit('request', fyId, {
+  await appendApprovalAudit('request', fyId, {
     action: 'fy_hard_deleted',
     actorRole: role === 'admin' ? 'admin' : 'manager',
     note: justification,
@@ -149,32 +150,36 @@ export function hardDeleteFiscalYear(
   // 3. Remove audit events for each request
   const deletedAuditEntityIds: string[] = [];
   for (const requestId of deletedRequestIds) {
-    removeApprovalAuditForEntity('request', requestId);
+    await removeApprovalAuditForEntity('request', requestId);
     deletedAuditEntityIds.push(requestId);
   }
 
-  // 4. Remove FY-level audit events (but keep the hard_deleted event for history)
-  // Actually, we should NOT remove FY-level audit to preserve the deletion record
-  // So we skip: removeApprovalAuditForEntity('request', fyId);
+  // 4. Delete FY-scoped requests from DB
+  if (deletedRequestIds.length > 0) {
+    const { error } = await supabase
+      .from('spend_requests')
+      .delete()
+      .in('id', deletedRequestIds);
 
-  // 5. Remove requests from store
-  const deletedRequestIdSet = new Set(deletedRequestIds);
-  setRequests((prev) => prev.filter(r => !deletedRequestIdSet.has(r.id)));
+    if (error) {
+      console.error('Failed to delete FY-scoped requests:', error);
+    }
+  }
 
-  // 6. Delete forecast for FY
-  clearForecastForFY(fyId);
+  // 5. Delete forecast for FY
+  await clearForecastForFY(fyId);
 
-  // 7. Delete actuals for FY
-  deleteActualsForFY(fyId);
+  // 6. Delete actuals for FY
+  await deleteActualsForFY(fyId);
 
-  // 8. Delete actuals matching for FY
-  deleteActualsMatchingForFY(fyId);
+  // 7. Delete actuals matching for FY
+  await deleteActualsMatchingForFY(fyId);
 
-  // 9. Delete actuals rollup cache for FY
+  // 8. Delete actuals rollup cache for FY
   deleteActualsRollupForFY(fyId);
 
-  // 10. Delete the FY itself from the FY store (this also clears selection if needed)
-  deleteFiscalYearBudget(fyId);
+  // 9. Delete the FY itself from DB (this will cascade delete fy_forecasts, actuals_transactions, actuals_matching)
+  await deleteFiscalYearBudget(fyId);
 
   return {
     deletedRequestIds,

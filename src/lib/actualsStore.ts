@@ -1,57 +1,166 @@
 /**
  * Storage module for actuals transactions.
- * Persists to localStorage keyed by fiscal year.
+ * Persists to Supabase actuals_transactions table.
  */
 
+import { supabase } from '@/integrations/supabase/client';
 import type { ActualsTransaction, ActualsSummary } from '@/types/actuals';
+import type { Json } from '@/integrations/supabase/types';
 
-const STORAGE_KEY = 'mkt-actuals-v1';
+// In-memory cache for synchronous access patterns
+let actualsCache: Record<string, ActualsTransaction[]> = {};
 
-interface ActualsStorage {
-  [fiscalYearId: string]: ActualsTransaction[];
+// Map DB row to ActualsTransaction
+function rowToTransaction(row: {
+  fiscal_year_id: string;
+  txn_id: string;
+  txn_date: string | null;
+  merchant: string | null;
+  amount: number;
+  source: string | null;
+  raw: Json;
+}): ActualsTransaction {
+  const raw = row.raw as Record<string, unknown>;
+  return {
+    id: row.txn_id,
+    source: (row.source ?? 'unknown') as ActualsTransaction['source'],
+    fiscalYearId: row.fiscal_year_id,
+    txnDate: row.txn_date ?? (raw.txnDate as string) ?? '',
+    postedDate: raw.postedDate as string | undefined,
+    merchantName: row.merchant ?? (raw.merchantName as string) ?? '',
+    description: raw.description as string | undefined,
+    amount: row.amount,
+    currency: (raw.currency as string) ?? 'USD',
+    category: raw.category as string | undefined,
+    externalId: raw.externalId as string | undefined,
+    raw: raw.raw as Record<string, unknown> ?? raw,
+    createdAt: raw.createdAt as string ?? new Date().toISOString(),
+  };
 }
 
-function loadAllActuals(): ActualsStorage {
+// Map ActualsTransaction to DB row
+function transactionToRow(txn: ActualsTransaction): {
+  fiscal_year_id: string;
+  txn_id: string;
+  txn_date: string | null;
+  merchant: string | null;
+  amount: number;
+  source: string | null;
+  raw: Json;
+} {
+  return {
+    fiscal_year_id: txn.fiscalYearId,
+    txn_id: txn.id,
+    txn_date: txn.txnDate || null,
+    merchant: txn.merchantName || null,
+    amount: txn.amount,
+    source: txn.source || null,
+    raw: txn as unknown as Json,
+  };
+}
+
+export async function loadActualsAsync(fiscalYearId: string): Promise<ActualsTransaction[]> {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return {};
-    return JSON.parse(stored) as ActualsStorage;
-  } catch {
-    console.error('Failed to load actuals from localStorage');
-    return {};
+    const { data, error } = await supabase
+      .from('actuals_transactions')
+      .select('*')
+      .eq('fiscal_year_id', fiscalYearId);
+
+    if (error) {
+      console.error('Failed to load actuals:', error);
+      return [];
+    }
+
+    const txns = (data || []).map(rowToTransaction);
+    actualsCache[fiscalYearId] = txns;
+    return txns;
+  } catch (err) {
+    console.error('Error loading actuals:', err);
+    return [];
   }
 }
 
-function saveAllActuals(data: ActualsStorage): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error('Failed to save actuals to localStorage:', error);
-  }
-}
-
+// Synchronous version that returns cached data (for backward compatibility)
 export function loadActuals(fiscalYearId: string): ActualsTransaction[] {
-  const all = loadAllActuals();
-  return all[fiscalYearId] ?? [];
+  if (fiscalYearId in actualsCache) {
+    return actualsCache[fiscalYearId];
+  }
+  
+  // Trigger async load for next time
+  loadActualsAsync(fiscalYearId).catch(console.error);
+  
+  return [];
 }
 
-export function appendActuals(fiscalYearId: string, txns: ActualsTransaction[]): void {
-  const all = loadAllActuals();
-  const existing = all[fiscalYearId] ?? [];
-  all[fiscalYearId] = [...existing, ...txns];
-  saveAllActuals(all);
+export async function appendActuals(fiscalYearId: string, txns: ActualsTransaction[]): Promise<void> {
+  if (txns.length === 0) return;
+
+  // Update cache
+  const existing = actualsCache[fiscalYearId] ?? [];
+  actualsCache[fiscalYearId] = [...existing, ...txns];
+
+  try {
+    const rows = txns.map(transactionToRow);
+    const { error } = await supabase
+      .from('actuals_transactions')
+      .insert(rows);
+
+    if (error) {
+      console.error('Failed to append actuals:', error);
+    }
+  } catch (err) {
+    console.error('Error appending actuals:', err);
+  }
 }
 
-export function replaceActuals(fiscalYearId: string, txns: ActualsTransaction[]): void {
-  const all = loadAllActuals();
-  all[fiscalYearId] = txns;
-  saveAllActuals(all);
+export async function replaceActuals(fiscalYearId: string, txns: ActualsTransaction[]): Promise<void> {
+  // Update cache
+  actualsCache[fiscalYearId] = txns;
+
+  try {
+    // Delete existing
+    const { error: deleteError } = await supabase
+      .from('actuals_transactions')
+      .delete()
+      .eq('fiscal_year_id', fiscalYearId);
+
+    if (deleteError) {
+      console.error('Failed to delete existing actuals:', deleteError);
+      return;
+    }
+
+    // Insert new
+    if (txns.length > 0) {
+      const rows = txns.map(transactionToRow);
+      const { error: insertError } = await supabase
+        .from('actuals_transactions')
+        .insert(rows);
+
+      if (insertError) {
+        console.error('Failed to insert actuals:', insertError);
+      }
+    }
+  } catch (err) {
+    console.error('Error replacing actuals:', err);
+  }
 }
 
-export function deleteActualsForFY(fiscalYearId: string): void {
-  const all = loadAllActuals();
-  delete all[fiscalYearId];
-  saveAllActuals(all);
+export async function deleteActualsForFY(fiscalYearId: string): Promise<void> {
+  // Clear cache
+  delete actualsCache[fiscalYearId];
+
+  try {
+    const { error } = await supabase
+      .from('actuals_transactions')
+      .delete()
+      .eq('fiscal_year_id', fiscalYearId);
+
+    if (error) {
+      console.error('Failed to delete actuals:', error);
+    }
+  } catch (err) {
+    console.error('Error deleting actuals:', err);
+  }
 }
 
 export function getActualsSummary(fiscalYearId: string): ActualsSummary {
@@ -72,4 +181,14 @@ export function getActualsSummary(fiscalYearId: string): ActualsSummary {
   }
 
   return { count: txns.length, total, minDate, maxDate };
+}
+
+// Preload actuals into cache
+export async function preloadActuals(fiscalYearId: string): Promise<void> {
+  await loadActualsAsync(fiscalYearId);
+}
+
+// Clear entire cache
+export function clearActualsCache(): void {
+  actualsCache = {};
 }

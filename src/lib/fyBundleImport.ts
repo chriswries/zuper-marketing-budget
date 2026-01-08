@@ -344,7 +344,7 @@ export function cloneFiscalYearBundleV1(bundle: FiscalYearBundleV1): FiscalYearB
  * - Overwrite mode: requires admin + override, FY must exist, no request ID conflicts
  * - Clone mode: always allowed, remaps IDs to avoid conflicts
  */
-export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
+export async function importFiscalYearBundleV1(args: ImportBundleArgs): Promise<ImportResult> {
   const {
     bundle: originalBundle,
     mode,
@@ -409,13 +409,12 @@ export function importFiscalYearBundleV1(args: ImportBundleArgs): ImportResult {
       return { ok: false, errors: ['Could not find existing fiscal year to overwrite.'] };
     }
 
-    const deleteResult = hardDeleteFiscalYear(
+    const deleteResult = await hardDeleteFiscalYear(
       existingFY,
       currentRole,
       `Overwriting with imported bundle. Original justification: ${justification}`,
       existingRequests,
       deleteFiscalYearBudget,
-      setRequests,
       adminOverrideEnabled
     );
 

@@ -1,9 +1,11 @@
 /**
  * Storage module for actuals transaction matching and merchant rules.
- * Persists matches and merchant rules to localStorage keyed by fiscal year.
+ * Persists to Supabase actuals_matching table.
  */
 
+import { supabase } from '@/integrations/supabase/client';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface TransactionMatch {
   txnId: string;
@@ -28,28 +30,74 @@ export interface ActualsMatchingData {
   rulesByMerchantKey: Record<string, MerchantRule>;
 }
 
-function getStorageKey(fiscalYearId: string): string {
-  return `actuals_matches_${fiscalYearId}`;
-}
+const DEFAULT_MATCHING_DATA: ActualsMatchingData = {
+  matchesByTxnId: {},
+  rulesByMerchantKey: {},
+};
 
-export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
+// In-memory cache
+let matchingCache: Record<string, ActualsMatchingData> = {};
+
+export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<ActualsMatchingData> {
   try {
-    const stored = localStorage.getItem(getStorageKey(fiscalYearId));
-    if (!stored) {
-      return { matchesByTxnId: {}, rulesByMerchantKey: {} };
+    const { data, error } = await supabase
+      .from('actuals_matching')
+      .select('*')
+      .eq('fiscal_year_id', fiscalYearId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load actuals matching:', error);
+      return DEFAULT_MATCHING_DATA;
     }
-    return JSON.parse(stored) as ActualsMatchingData;
-  } catch {
-    console.error('Failed to load actuals matching from localStorage');
-    return { matchesByTxnId: {}, rulesByMerchantKey: {} };
+
+    if (!data) {
+      matchingCache[fiscalYearId] = DEFAULT_MATCHING_DATA;
+      return DEFAULT_MATCHING_DATA;
+    }
+
+    const result: ActualsMatchingData = {
+      matchesByTxnId: (data.matches_by_txn_id as unknown as Record<string, TransactionMatch>) ?? {},
+      rulesByMerchantKey: (data.rules_by_merchant_key as unknown as Record<string, MerchantRule>) ?? {},
+    };
+    matchingCache[fiscalYearId] = result;
+    return result;
+  } catch (err) {
+    console.error('Error loading actuals matching:', err);
+    return DEFAULT_MATCHING_DATA;
   }
 }
 
-export function saveActualsMatching(fiscalYearId: string, data: ActualsMatchingData): void {
+// Synchronous version for backward compatibility
+export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
+  if (fiscalYearId in matchingCache) {
+    return matchingCache[fiscalYearId];
+  }
+  
+  // Trigger async load
+  loadActualsMatchingAsync(fiscalYearId).catch(console.error);
+  
+  return DEFAULT_MATCHING_DATA;
+}
+
+export async function saveActualsMatching(fiscalYearId: string, data: ActualsMatchingData): Promise<void> {
+  // Update cache
+  matchingCache[fiscalYearId] = data;
+
   try {
-    localStorage.setItem(getStorageKey(fiscalYearId), JSON.stringify(data));
-  } catch (error) {
-    console.error('Failed to save actuals matching to localStorage:', error);
+    const { error } = await supabase
+      .from('actuals_matching')
+      .upsert({
+        fiscal_year_id: fiscalYearId,
+        matches_by_txn_id: data.matchesByTxnId as unknown as Json,
+        rules_by_merchant_key: data.rulesByMerchantKey as unknown as Json,
+      });
+
+    if (error) {
+      console.error('Failed to save actuals matching:', error);
+    }
+  } catch (err) {
+    console.error('Error saving actuals matching:', err);
   }
 }
 
@@ -69,12 +117,12 @@ export function normalizeMerchantKey(name: string): string {
  * Apply existing merchant rules to unmatched transactions.
  * Returns count of newly matched transactions.
  */
-export function applyMerchantRules(
+export async function applyMerchantRules(
   fiscalYearId: string,
   txns: Array<{ id: string; merchantName: string }>,
   role: UserRole
-): number {
-  const data = loadActualsMatching(fiscalYearId);
+): Promise<number> {
+  const data = await loadActualsMatchingAsync(fiscalYearId);
   let appliedCount = 0;
 
   for (const txn of txns) {
@@ -99,7 +147,7 @@ export function applyMerchantRules(
   }
 
   if (appliedCount > 0) {
-    saveActualsMatching(fiscalYearId, data);
+    await saveActualsMatching(fiscalYearId, data);
   }
 
   return appliedCount;
@@ -108,69 +156,89 @@ export function applyMerchantRules(
 /**
  * Add or update a single transaction match.
  */
-export function addTransactionMatch(
+export async function addTransactionMatch(
   fiscalYearId: string,
   match: TransactionMatch
-): void {
-  const data = loadActualsMatching(fiscalYearId);
+): Promise<void> {
+  const data = await loadActualsMatchingAsync(fiscalYearId);
   data.matchesByTxnId[match.txnId] = match;
-  saveActualsMatching(fiscalYearId, data);
+  await saveActualsMatching(fiscalYearId, data);
 }
 
 /**
  * Remove a transaction match.
  */
-export function removeTransactionMatch(
+export async function removeTransactionMatch(
   fiscalYearId: string,
   txnId: string
-): TransactionMatch | undefined {
-  const data = loadActualsMatching(fiscalYearId);
+): Promise<TransactionMatch | undefined> {
+  const data = await loadActualsMatchingAsync(fiscalYearId);
   const removed = data.matchesByTxnId[txnId];
   delete data.matchesByTxnId[txnId];
-  saveActualsMatching(fiscalYearId, data);
+  await saveActualsMatching(fiscalYearId, data);
   return removed;
 }
 
 /**
  * Add or update a merchant rule.
  */
-export function addMerchantRule(
+export async function addMerchantRule(
   fiscalYearId: string,
   rule: MerchantRule
-): void {
-  const data = loadActualsMatching(fiscalYearId);
+): Promise<void> {
+  const data = await loadActualsMatchingAsync(fiscalYearId);
   data.rulesByMerchantKey[rule.merchantKey] = rule;
-  saveActualsMatching(fiscalYearId, data);
+  await saveActualsMatching(fiscalYearId, data);
 }
 
 /**
  * Remove a merchant rule.
  */
-export function removeMerchantRule(
+export async function removeMerchantRule(
   fiscalYearId: string,
   merchantKey: string
-): MerchantRule | undefined {
-  const data = loadActualsMatching(fiscalYearId);
+): Promise<MerchantRule | undefined> {
+  const data = await loadActualsMatchingAsync(fiscalYearId);
   const removed = data.rulesByMerchantKey[merchantKey];
   delete data.rulesByMerchantKey[merchantKey];
-  saveActualsMatching(fiscalYearId, data);
+  await saveActualsMatching(fiscalYearId, data);
   return removed;
 }
 
 /**
  * Delete all matching data for a fiscal year.
  */
-export function deleteActualsMatchingForFY(fiscalYearId: string): void {
+export async function deleteActualsMatchingForFY(fiscalYearId: string): Promise<void> {
+  // Clear cache
+  delete matchingCache[fiscalYearId];
+
   try {
-    localStorage.removeItem(getStorageKey(fiscalYearId));
-  } catch (error) {
-    console.error('Failed to delete actuals matching from localStorage:', error);
+    const { error } = await supabase
+      .from('actuals_matching')
+      .delete()
+      .eq('fiscal_year_id', fiscalYearId);
+
+    if (error) {
+      console.error('Failed to delete actuals matching:', error);
+    }
+  } catch (err) {
+    console.error('Error deleting actuals matching:', err);
   }
 }
 
 /**
  * Replace all matching data for a fiscal year (used by bundle import).
  */
-export function replaceActualsMatchingForFY(fiscalYearId: string, data: ActualsMatchingData): void {
-  saveActualsMatching(fiscalYearId, data);
+export async function replaceActualsMatchingForFY(fiscalYearId: string, data: ActualsMatchingData): Promise<void> {
+  await saveActualsMatching(fiscalYearId, data);
+}
+
+// Preload matching data into cache
+export async function preloadActualsMatching(fiscalYearId: string): Promise<void> {
+  await loadActualsMatchingAsync(fiscalYearId);
+}
+
+// Clear entire cache
+export function clearMatchingCache(): void {
+  matchingCache = {};
 }
