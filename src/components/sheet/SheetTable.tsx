@@ -388,19 +388,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         className="relative min-w-0 isolate w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable both-edges' }}
       >
-        <Table className="w-max min-w-full table-fixed">
+        <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[60] bg-muted border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[60] bg-background border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-30 bg-muted border-b">Vendor</TableHead>
+              <TableHead className="w-[220px] min-w-[220px] bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className="w-[120px] min-w-[120px] text-right border-b bg-muted sticky top-0 z-30"
+                    className="w-[120px] min-w-[120px] text-right border-b bg-muted"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -409,11 +409,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold bg-muted border-b sticky top-0 z-30">
+              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[72px] min-w-[72px] bg-muted border-b sticky top-0 z-30"></TableHead>
+                <TableHead className="w-[72px] min-w-[72px] bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
