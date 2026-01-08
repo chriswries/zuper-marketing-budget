@@ -11,6 +11,7 @@ import { CurrentUserRoleProvider } from "@/contexts/CurrentUserRoleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { RoleGuard } from "@/components/auth/RoleGuard";
+import { MustChangePasswordGuard } from "@/components/auth/MustChangePasswordGuard";
 import Budget from "./pages/Budget";
 import Forecast from "./pages/Forecast";
 import Actuals from "./pages/Actuals";
@@ -20,12 +21,15 @@ import Reports from "./pages/Reports";
 import Tasks from "./pages/Tasks";
 import Import from "./pages/Import";
 import Admin from "./pages/Admin";
+import AdminUsers from "./pages/AdminUsers";
 import ApprovalAudit from "./pages/ApprovalAudit";
 import VarianceReport from "./pages/VarianceReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
 import FYTools from "./pages/FYTools";
 import Login from "./pages/Login";
+import ChangePassword from "./pages/ChangePassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,14 +46,27 @@ const App = () => (
                   <Toaster />
                   <Sonner />
                   <Routes>
-                    {/* Public route */}
+                    {/* Public routes */}
                     <Route path="/login" element={<Login />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
 
-                    {/* Protected routes */}
+                    {/* Change password (protected but no layout) */}
+                    <Route
+                      path="/change-password"
+                      element={
+                        <ProtectedRoute>
+                          <ChangePassword />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Protected routes with layout */}
                     <Route
                       element={
                         <ProtectedRoute>
-                          <AppLayout />
+                          <MustChangePasswordGuard>
+                            <AppLayout />
+                          </MustChangePasswordGuard>
                         </ProtectedRoute>
                       }
                     >
@@ -67,6 +84,14 @@ const App = () => (
                         element={
                           <RoleGuard allowedRoles={['admin']}>
                             <Admin />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route
+                        path="/admin/users"
+                        element={
+                          <RoleGuard allowedRoles={['admin']}>
+                            <AdminUsers />
                           </RoleGuard>
                         }
                       />

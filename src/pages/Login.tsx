@@ -8,9 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Loader2, AlertCircle, DollarSign, UserPlus } from 'lucide-react';
 import { z } from 'zod';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 const authSchema = z.object({
   email: z.string().trim().email('Please enter a valid email address'),
@@ -26,10 +34,16 @@ export default function Login() {
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
   const [signupAllowed, setSignupAllowed] = useState<boolean | null>(null);
   const [checkingSignup, setCheckingSignup] = useState(true);
+  
+  // Forgot password state
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const { signIn, signUp, session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
 
   // Check if signup is allowed (only for bootstrapping)
   useEffect(() => {
@@ -104,7 +118,11 @@ export default function Login() {
       } else {
         // Guard signup - only allow if signupAllowed is true
         if (!signupAllowed) {
-          toast.error('Account creation is managed by an admin.');
+          toast({
+            title: 'Signup Disabled',
+            description: 'Account creation is managed by an admin.',
+            variant: 'destructive',
+          });
           setError('Account creation is disabled. Please contact your administrator.');
           setIsLoading(false);
           return;
@@ -126,6 +144,42 @@ export default function Login() {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Check Your Email',
+        description: 'If an account exists with that email, you will receive a password reset link.',
+      });
+      setForgotOpen(false);
+      setForgotEmail('');
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to send reset email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -198,6 +252,17 @@ export default function Login() {
                       autoComplete="current-password"
                     />
                   </div>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="px-0 text-sm"
+                    onClick={() => {
+                      setForgotEmail(email);
+                      setForgotOpen(true);
+                    }}
+                  >
+                    Forgot password?
+                  </Button>
                 </TabsContent>
 
                 <TabsContent value="signup" className="m-0 space-y-4">
@@ -282,6 +347,18 @@ export default function Login() {
                 />
               </div>
 
+              <Button
+                type="button"
+                variant="link"
+                className="px-0 text-sm"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotOpen(true);
+                }}
+              >
+                Forgot password?
+              </Button>
+
               <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground">
                 <UserPlus className="h-4 w-4 shrink-0" />
                 <span>Account creation is managed by an admin. Contact your administrator for access.</span>
@@ -297,6 +374,39 @@ export default function Login() {
           </form>
         )}
       </Card>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Enter your email address and we'll send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@company.com"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForgotOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleForgotPassword} disabled={forgotLoading}>
+              {forgotLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Send Reset Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
