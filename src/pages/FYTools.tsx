@@ -219,7 +219,7 @@ export default function FYTools() {
 
   const isDeleteConfirmationValid = deleteConfirmation === selectedFY?.name || deleteConfirmation === 'DELETE';
 
-  const handleHardDelete = () => {
+  const handleHardDelete = async () => {
     if (!selectedFY || !deleteJustification.trim() || !isDeleteConfirmationValid) return;
 
     // Defensive guard: must have override enabled
@@ -232,13 +232,12 @@ export default function FYTools() {
       return;
     }
 
-    const result = hardDeleteFiscalYear(
+    const result = await hardDeleteFiscalYear(
       selectedFY,
       currentRole,
       deleteJustification.trim(),
       requests,
       deleteFiscalYearBudget,
-      setRequests,
       isAdminOverrideEnabled
     );
 
@@ -316,13 +315,13 @@ export default function FYTools() {
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!importBundle || !importJustification.trim()) return;
     if (importMode === 'overwrite' && overwriteConfirmation !== 'OVERWRITE') return;
 
     setIsImporting(true);
     try {
-      const result = importFiscalYearBundleV1({
+      const result = await importFiscalYearBundleV1({
         bundle: importBundle,
         mode: importMode,
         justification: importJustification.trim(),

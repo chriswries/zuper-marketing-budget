@@ -1,40 +1,98 @@
+/**
+ * Forecast store - persists to Supabase fy_forecasts table.
+ */
+
+import { supabase } from '@/integrations/supabase/client';
 import { CostCenter } from '@/types/budget';
+import type { Json } from '@/integrations/supabase/types';
 
-const FORECAST_BY_FY_KEY = 'forecast_cost_centers_by_fy_v1';
+// In-memory cache for synchronous access patterns
+let forecastCache: Record<string, CostCenter[] | null> = {};
 
-function loadForecasts(): Record<string, CostCenter[]> {
+export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[] | null> {
   try {
-    const stored = localStorage.getItem(FORECAST_BY_FY_KEY);
-    if (stored) {
-      return JSON.parse(stored);
+    const { data, error } = await supabase
+      .from('fy_forecasts')
+      .select('data')
+      .eq('fiscal_year_id', fyId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load forecast:', error);
+      return null;
     }
-  } catch (e) {
-    console.error('Failed to load forecasts from localStorage', e);
+
+    if (!data) {
+      forecastCache[fyId] = null;
+      return null;
+    }
+
+    const costCenters = data.data as unknown as CostCenter[];
+    forecastCache[fyId] = costCenters;
+    return costCenters;
+  } catch (err) {
+    console.error('Error loading forecast:', err);
+    return null;
   }
-  return {};
 }
 
-function saveForecasts(forecasts: Record<string, CostCenter[]>): void {
-  try {
-    localStorage.setItem(FORECAST_BY_FY_KEY, JSON.stringify(forecasts));
-  } catch (e) {
-    console.error('Failed to save forecasts to localStorage', e);
-  }
-}
-
+// Synchronous version that returns cached data (for backward compatibility)
 export function loadForecastForFY(fyId: string): CostCenter[] | null {
-  const all = loadForecasts();
-  return all[fyId] ?? null;
+  // Return cached value if available
+  if (fyId in forecastCache) {
+    return forecastCache[fyId];
+  }
+  
+  // Trigger async load for next time
+  loadForecastForFYAsync(fyId).catch(console.error);
+  
+  return null;
 }
 
-export function saveForecastForFY(fyId: string, costCenters: CostCenter[]): void {
-  const all = loadForecasts();
-  all[fyId] = costCenters;
-  saveForecasts(all);
+export async function saveForecastForFY(fyId: string, costCenters: CostCenter[]): Promise<void> {
+  // Update cache immediately
+  forecastCache[fyId] = costCenters;
+
+  try {
+    const { error } = await supabase
+      .from('fy_forecasts')
+      .upsert({
+        fiscal_year_id: fyId,
+        data: costCenters as unknown as Json,
+      });
+
+    if (error) {
+      console.error('Failed to save forecast:', error);
+    }
+  } catch (err) {
+    console.error('Error saving forecast:', err);
+  }
 }
 
-export function clearForecastForFY(fyId: string): void {
-  const all = loadForecasts();
-  delete all[fyId];
-  saveForecasts(all);
+export async function clearForecastForFY(fyId: string): Promise<void> {
+  // Clear cache
+  delete forecastCache[fyId];
+
+  try {
+    const { error } = await supabase
+      .from('fy_forecasts')
+      .delete()
+      .eq('fiscal_year_id', fyId);
+
+    if (error) {
+      console.error('Failed to clear forecast:', error);
+    }
+  } catch (err) {
+    console.error('Error clearing forecast:', err);
+  }
+}
+
+// Preload forecast into cache (call this when FY is selected)
+export async function preloadForecast(fyId: string): Promise<void> {
+  await loadForecastForFYAsync(fyId);
+}
+
+// Clear entire cache (useful for testing or logout)
+export function clearForecastCache(): void {
+  forecastCache = {};
 }
