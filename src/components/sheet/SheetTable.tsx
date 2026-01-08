@@ -381,19 +381,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
       {/* Table */}
       <div className="border rounded-lg overflow-auto max-h-[calc(100vh-300px)]">
-        <Table>
-          <TableHeader className="sticky top-0 z-30">
-            <TableRow className="bg-muted/50">
-              <TableHead className="w-[280px] min-w-[280px] sticky left-0 bg-muted/50 z-40">
+        <Table className="border-separate border-spacing-0">
+          <TableHeader className="sticky top-0 z-20">
+            <TableRow>
+              <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-30 bg-muted border-b border-r">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="w-[120px] min-w-[120px] bg-muted/50">Vendor</TableHead>
+              <TableHead className="w-[120px] min-w-[120px] bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className={`w-[90px] min-w-[90px] text-right ${isLocked ? 'bg-muted/70' : 'bg-muted/50'}`}
+                    className={`w-[90px] min-w-[90px] text-right border-b ${isLocked ? 'bg-muted' : 'bg-muted'}`}
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -402,11 +402,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted">
+              <TableHead className="w-[100px] min-w-[100px] text-right font-semibold bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[50px] min-w-[50px] bg-muted/50"></TableHead>
+                <TableHead className="w-[50px] min-w-[50px] bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -429,10 +429,10 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                       {/* Cost Center Parent Row */}
                       <TableRow
                         key={costCenter.id}
-                        className="bg-muted/30 font-medium cursor-pointer hover:bg-muted/50"
+                        className="font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="sticky left-0 bg-muted/30 z-20">
+                        <TableCell className="sticky left-0 z-10 bg-muted/80 border-r"  style={{ backgroundColor: 'hsl(var(--muted) / 0.9)' }}>
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -476,7 +476,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="sticky left-0 bg-background z-20">
+                              <TableCell className="sticky left-0 z-10 bg-background border-r">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -891,8 +891,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                 })}
 
                 {/* Grand Total Row */}
-                <TableRow className="bg-primary/5 font-semibold border-t-2">
-                  <TableCell className="sticky left-0 bg-primary/5 z-20">
+                <TableRow className="font-semibold border-t-2">
+                  <TableCell className="sticky left-0 z-10 bg-primary/10 border-r">
                     Grand Total
                   </TableCell>
                   <TableCell>—</TableCell>
