@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { clearForecastCache } from '@/lib/forecastStore';
+import { clearActualsCache } from '@/lib/actualsStore';
+import { clearMatchingCache } from '@/lib/actualsMatchingStore';
 
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
@@ -179,6 +182,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear all data caches to prevent cross-user data bleed
+    clearForecastCache();
+    clearActualsCache();
+    clearMatchingCache();
+    
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);

@@ -27,6 +27,7 @@ import VarianceReport from "./pages/VarianceReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
 import FYTools from "./pages/FYTools";
+import AdminDataMigration from "./pages/AdminDataMigration";
 import Login from "./pages/Login";
 import ChangePassword from "./pages/ChangePassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -116,6 +117,14 @@ const App = () => (
                         element={
                           <RoleGuard allowedRoles={['admin']}>
                             <FYTools />
+                          </RoleGuard>
+                        }
+                      />
+                      <Route
+                        path="/admin/data-migration"
+                        element={
+                          <RoleGuard allowedRoles={['admin']}>
+                            <AdminDataMigration />
                           </RoleGuard>
                         }
                       />

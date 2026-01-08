@@ -96,3 +96,41 @@ export async function preloadForecast(fyId: string): Promise<void> {
 export function clearForecastCache(): void {
   forecastCache = {};
 }
+
+// Clear specific FY from cache
+export function invalidateForecastCache(fyId: string): void {
+  delete forecastCache[fyId];
+}
+
+/**
+ * Subscribe to realtime changes on fy_forecasts table.
+ * Invalidates cache for affected fiscal year.
+ * Returns cleanup function.
+ */
+export function subscribeForecastRealtimeInvalidation(): () => void {
+  const channel = supabase
+    .channel('forecast-cache-invalidation')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'fy_forecasts',
+      },
+      (payload) => {
+        const fyId = (payload.new as { fiscal_year_id?: string })?.fiscal_year_id 
+          || (payload.old as { fiscal_year_id?: string })?.fiscal_year_id;
+        
+        if (fyId) {
+          invalidateForecastCache(fyId);
+        } else {
+          clearForecastCache();
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

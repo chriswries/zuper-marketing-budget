@@ -192,3 +192,41 @@ export async function preloadActuals(fiscalYearId: string): Promise<void> {
 export function clearActualsCache(): void {
   actualsCache = {};
 }
+
+// Clear specific FY from cache
+export function invalidateActualsCache(fyId: string): void {
+  delete actualsCache[fyId];
+}
+
+/**
+ * Subscribe to realtime changes on actuals_transactions table.
+ * Invalidates cache for affected fiscal year.
+ * Returns cleanup function.
+ */
+export function subscribeActualsRealtimeInvalidation(): () => void {
+  const channel = supabase
+    .channel('actuals-cache-invalidation')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'actuals_transactions',
+      },
+      (payload) => {
+        const fyId = (payload.new as { fiscal_year_id?: string })?.fiscal_year_id 
+          || (payload.old as { fiscal_year_id?: string })?.fiscal_year_id;
+        
+        if (fyId) {
+          invalidateActualsCache(fyId);
+        } else {
+          clearActualsCache();
+        }
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
