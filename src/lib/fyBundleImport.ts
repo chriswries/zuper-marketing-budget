@@ -130,7 +130,7 @@ export interface ImportBundleArgs {
   existingFiscalYears: FiscalYearBudget[];
   existingRequests: SpendRequest[];
   createFiscalYearBudget: (fy: FiscalYearBudget) => void;
-  deleteFiscalYearBudget: (id: string) => void;
+  deleteFiscalYearBudget: (id: string) => Promise<void>;
   setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void;
 }
 
