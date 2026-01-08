@@ -81,7 +81,7 @@ export default function ApprovalAudit() {
   const { fiscalYears, setSelectedFiscalYearId } = useFiscalYearBudget();
   const { settings: adminSettings } = useAdminSettings();
 
-  const [events, setEvents] = useState<ApprovalAuditEvent[]>(() => loadAllApprovalAuditEvents());
+  const [events, setEvents] = useState<ApprovalAuditEvent[]>([]);
   
   // Filters
   const [entityFilter, setEntityFilter] = useState<EntityFilter>('all');
@@ -92,9 +92,14 @@ export default function ApprovalAudit() {
   const [customEnd, setCustomEnd] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Load initial events
+  useEffect(() => {
+    loadAllApprovalAuditEvents().then(setEvents);
+  }, []);
+
   // Listen for audit updates
   useEffect(() => {
-    const handler = () => setEvents(loadAllApprovalAuditEvents());
+    const handler = () => loadAllApprovalAuditEvents().then(setEvents);
     window.addEventListener(APPROVAL_AUDIT_UPDATED_EVENT, handler);
     return () => window.removeEventListener(APPROVAL_AUDIT_UPDATED_EVENT, handler);
   }, []);

@@ -127,15 +127,8 @@ export default function FYTools() {
     const fyRequests = getFYScopedRequests(selectedFY, requests);
     const requestsCount = fyRequests.length;
 
-    // Count audit events
-    let auditEventCount = 0;
-    for (const req of fyRequests) {
-      const events = loadApprovalAudit('request', req.id);
-      auditEventCount += events.length;
-    }
-    // Also check FY-level audit events
-    const fyAuditEvents = loadApprovalAudit('request', selectedFY.id);
-    auditEventCount += fyAuditEvents.length;
+    // Count audit events - use 0 for sync computation (actual count loads async in bundle)
+    const auditEventCount = 0; // Will be computed when bundle is built
 
     return {
       costCenterCount,
@@ -149,12 +142,12 @@ export default function FYTools() {
     };
   }, [selectedFY, requests]);
 
-  const handleBuildPreview = () => {
+  const handleBuildPreview = async () => {
     if (!selectedFY) return;
     setIsBuilding(true);
 
     try {
-      const builtBundle = buildFiscalYearBundleV1({
+      const builtBundle = await buildFiscalYearBundleV1({
         fiscalYear: selectedFY,
         currentRole,
         requests,

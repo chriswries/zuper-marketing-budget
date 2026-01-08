@@ -358,7 +358,7 @@ export default function Budget() {
       action: 'submitted_for_approval',
       actorRole: currentRole,
     });
-    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, canSubmit, updateFiscalYearBudget, currentRole]);
 
   const handleApproveNextStep = useCallback(() => {
@@ -421,7 +421,7 @@ export default function Budget() {
       });
     }
 
-    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, selectedFiscalYear, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
 
   const handleReject = useCallback(() => {
@@ -459,7 +459,7 @@ export default function Budget() {
       actorRole: currentRole,
       stepLevel: stepLevel as 'cmo' | 'finance',
     });
-    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
 
   const handleResetToDraft = useCallback(() => {
@@ -486,14 +486,14 @@ export default function Budget() {
       action: 'reset',
       actorRole: currentRole,
     });
-    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole]);
 
   // Load audit log when FY changes
   useEffect(() => {
     if (selectedFiscalYearId) {
       setAuditLog(loadBudgetAuditLog(selectedFiscalYearId));
-      setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+      loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
     } else {
       setAuditLog([]);
       setApprovalAuditEvents([]);
@@ -1034,7 +1034,7 @@ export default function Budget() {
 
     setOverrideDialogOpen(false);
     setPendingOverrideAction(null);
-    setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId));
+    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [pendingOverrideAction, selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, updateRequest]);
 
   const handleCreateLineItem = useCallback(
@@ -1484,7 +1484,7 @@ export default function Budget() {
                 budgetName={selectedFiscalYear.name}
                 nextLevel={nextPendingBudgetStep.level as 'cmo' | 'finance'}
                 fiscalYearId={selectedFiscalYearId}
-                onAuditUpdated={() => setApprovalAuditEvents(loadApprovalAudit('budget', selectedFiscalYearId))}
+                onAuditUpdated={() => loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents)}
               />
             </div>
           )}

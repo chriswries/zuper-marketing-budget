@@ -20,7 +20,7 @@ interface BuildBundleArgs {
 /**
  * Build a complete FY bundle for export.
  */
-export function buildFiscalYearBundleV1(args: BuildBundleArgs): FiscalYearBundleV1 {
+export async function buildFiscalYearBundleV1(args: BuildBundleArgs): Promise<FiscalYearBundleV1> {
   const { fiscalYear, currentRole, requests } = args;
   const fiscalYearId = fiscalYear.id;
 
@@ -57,16 +57,16 @@ export function buildFiscalYearBundleV1(args: BuildBundleArgs): FiscalYearBundle
   });
 
   // Load audit events for each included request
-  const approvalAuditEventsByRequestId: Record<string, typeof loadApprovalAudit extends (a: any, b: infer R) => infer T ? T : never> = {};
+  const approvalAuditEventsByRequestId: Record<string, Awaited<ReturnType<typeof loadApprovalAudit>>> = {};
   for (const req of fyRequests) {
-    const events = loadApprovalAudit('request', req.id);
+    const events = await loadApprovalAudit('request', req.id);
     if (events.length > 0) {
       approvalAuditEventsByRequestId[req.id] = events;
     }
   }
 
   // Check if there are FY-level audit events (keyed by FY id)
-  const fyAuditEventsRaw = loadApprovalAudit('request', fiscalYearId);
+  const fyAuditEventsRaw = await loadApprovalAudit('request', fiscalYearId);
   const fyAuditEvents = fyAuditEventsRaw.length > 0 ? fyAuditEventsRaw : undefined;
 
   const bundle: FiscalYearBundleV1 = {
