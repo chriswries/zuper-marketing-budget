@@ -406,7 +406,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[90] bg-muted border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[70] bg-muted border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
               <TableHead className="w-[220px] min-w-[220px] bg-muted border-b">Vendor</TableHead>
