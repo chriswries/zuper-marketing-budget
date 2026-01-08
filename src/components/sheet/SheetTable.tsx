@@ -385,7 +385,22 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
         ref={scrollRef}
-        className="relative min-w-0 w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
+        tabIndex={0}
+        aria-label="Budget table"
+        onWheelCapture={(e) => {
+          // When the cursor is inside the table, keep horizontal scrolling confined to this container
+          // so the surrounding panel doesn't pan horizontally.
+          if (e.deltaX !== 0 && scrollRef.current) {
+            const el = scrollRef.current;
+            const canScrollX = el.scrollWidth > el.clientWidth;
+            if (canScrollX) {
+              el.scrollLeft += e.deltaX;
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }
+        }}
+        className="relative min-w-0 w-full overflow-x-auto overflow-y-auto overscroll-contain rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable both-edges' }}
       >
         <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
