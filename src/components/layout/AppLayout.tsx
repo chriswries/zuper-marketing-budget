@@ -16,7 +16,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       <AppSidebar />
       <SidebarInset>
         <AppHeader />
-        <main className="flex-1 overflow-hidden p-4 md:p-6">
+        {/* Allow normal vertical scrolling in the right panel, but prevent page-level horizontal panning */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           {children ?? <Outlet />}
         </main>
       </SidebarInset>
