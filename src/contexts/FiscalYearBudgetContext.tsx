@@ -86,7 +86,8 @@ function rowToFiscalYear(row: {
   status: string;
   data: Json;
   archived_at: string | null;
-  archived_by: string | null;
+  archived_by_user_id: string | null;
+  archived_by_role: string | null;
   archived_justification: string | null;
   previous_status_before_archive: string | null;
 }): FiscalYearBudget {
@@ -104,7 +105,7 @@ function rowToFiscalYear(row: {
     createdAt: data.createdAt as string,
     updatedAt: data.updatedAt as string,
     archivedAt: row.archived_at ?? undefined,
-    archivedByRole: row.archived_by ?? (data.archivedByRole as string | undefined),
+    archivedByRole: row.archived_by_role ?? (data.archivedByRole as string | undefined),
     archivedJustification: row.archived_justification ?? undefined,
     previousStatusBeforeArchive: (row.previous_status_before_archive ?? data.previousStatusBeforeArchive) as FiscalYearStatus | undefined,
   };
@@ -117,7 +118,7 @@ function fiscalYearToRow(fy: FiscalYearBudget): {
   status: string;
   data: Json;
   archived_at: string | null;
-  archived_by: string | null;
+  archived_by_role: string | null;
   archived_justification: string | null;
   previous_status_before_archive: string | null;
 } {
@@ -128,7 +129,7 @@ function fiscalYearToRow(fy: FiscalYearBudget): {
     status,
     data: rest as unknown as Json,
     archived_at: archivedAt ?? null,
-    archived_by: archivedByRole ?? null,
+    archived_by_role: archivedByRole ?? null,
     archived_justification: archivedJustification ?? null,
     previous_status_before_archive: previousStatusBeforeArchive ?? null,
   };
@@ -246,7 +247,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
           status: row.status,
           data: row.data,
           archived_at: row.archived_at,
-          archived_by: row.archived_by,
+          archived_by_role: row.archived_by_role,
           archived_justification: row.archived_justification,
           previous_status_before_archive: row.previous_status_before_archive,
         })

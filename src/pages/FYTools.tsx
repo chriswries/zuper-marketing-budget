@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,9 +30,9 @@ import { useRequests } from "@/contexts/RequestsContext";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
 import { buildFiscalYearBundleV1, validateFiscalYearBundle } from "@/lib/fyBundle";
 import { downloadJson, sanitizeFilename } from "@/lib/downloadJson";
-import { loadActuals } from "@/lib/actualsStore";
-import { loadActualsMatching } from "@/lib/actualsMatchingStore";
-import { loadForecastForFY } from "@/lib/forecastStore";
+import { loadActualsAsync } from "@/lib/actualsStore";
+import { loadActualsMatchingAsync } from "@/lib/actualsMatchingStore";
+import { loadForecastForFYAsync } from "@/lib/forecastStore";
 import { loadApprovalAudit } from "@/lib/approvalAuditStore";
 import { archiveFiscalYear, restoreFiscalYear, hardDeleteFiscalYear, getFYScopedRequests } from "@/lib/fyLifecycle";
 import { parseJsonFile, detectBundleConflicts, importFiscalYearBundleV1, type ImportMode, type BundleConflictResult } from "@/lib/fyBundleImport";
@@ -56,7 +56,8 @@ import {
   ShieldAlert,
   Upload,
   FileUp,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 import { Copy } from "lucide-react";
@@ -104,41 +105,91 @@ export default function FYTools() {
   const isArchived = selectedFY?.status === 'archived';
   const isAdminOverrideEnabled = settings.adminOverrideEnabled;
 
-  // Compute summary for selected FY
-  const summary = useMemo(() => {
-    if (!selectedFY) return null;
+  // Summary state (async loading)
+  interface FYSummary {
+    costCenterCount: number;
+    lineItemCount: number;
+    forecastExists: boolean;
+    actualsTxnCount: number;
+    matchingCount: number;
+    merchantRuleCount: number;
+    requestsCount: number;
+    auditEventCount: number;
+  }
+  const [summary, setSummary] = useState<FYSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
-    const costCenterCount = selectedFY.costCenters.length;
-    const lineItemCount = selectedFY.costCenters.reduce(
-      (sum, cc) => sum + cc.lineItems.length, 0
-    );
+  // Load summary asynchronously when FY changes
+  useEffect(() => {
+    if (!selectedFY) {
+      setSummary(null);
+      return;
+    }
+
+    let cancelled = false;
     
-    const forecast = loadForecastForFY(selectedFY.id);
-    const forecastExists = forecast !== null && forecast.length > 0;
-    
-    const actualsTxns = loadActuals(selectedFY.id);
-    const actualsTxnCount = actualsTxns.length;
-    
-    const matching = loadActualsMatching(selectedFY.id);
-    const matchingCount = Object.keys(matching.matchesByTxnId).length;
-    const merchantRuleCount = Object.keys(matching.rulesByMerchantKey).length;
+    async function loadSummary() {
+      setSummaryLoading(true);
+      
+      try {
+        const costCenterCount = selectedFY!.costCenters.length;
+        const lineItemCount = selectedFY!.costCenters.reduce(
+          (sum, cc) => sum + cc.lineItems.length, 0
+        );
+        
+        // Load data asynchronously from DB
+        const [forecast, actualsTxns, matching] = await Promise.all([
+          loadForecastForFYAsync(selectedFY!.id),
+          loadActualsAsync(selectedFY!.id),
+          loadActualsMatchingAsync(selectedFY!.id),
+        ]);
+        
+        if (cancelled) return;
 
-    // Count FY-scoped requests
-    const fyRequests = getFYScopedRequests(selectedFY, requests);
-    const requestsCount = fyRequests.length;
+        const forecastExists = forecast !== null && forecast.length > 0;
+        const actualsTxnCount = actualsTxns.length;
+        const matchingCount = Object.keys(matching.matchesByTxnId).length;
+        const merchantRuleCount = Object.keys(matching.rulesByMerchantKey).length;
 
-    // Count audit events - use 0 for sync computation (actual count loads async in bundle)
-    const auditEventCount = 0; // Will be computed when bundle is built
+        // Count FY-scoped requests
+        const fyRequests = getFYScopedRequests(selectedFY!, requests);
+        const requestsCount = fyRequests.length;
 
-    return {
-      costCenterCount,
-      lineItemCount,
-      forecastExists,
-      actualsTxnCount,
-      matchingCount,
-      merchantRuleCount,
-      requestsCount,
-      auditEventCount,
+        // Load audit event count
+        let auditEventCount = 0;
+        for (const req of fyRequests) {
+          const events = await loadApprovalAudit('request', req.id);
+          auditEventCount += events.length;
+        }
+        // Also count FY-level audit events
+        const fyAuditEvents = await loadApprovalAudit('request', selectedFY!.id);
+        auditEventCount += fyAuditEvents.length;
+        
+        if (cancelled) return;
+
+        setSummary({
+          costCenterCount,
+          lineItemCount,
+          forecastExists,
+          actualsTxnCount,
+          matchingCount,
+          merchantRuleCount,
+          requestsCount,
+          auditEventCount,
+        });
+      } catch (err) {
+        console.error('Error loading summary:', err);
+      } finally {
+        if (!cancelled) {
+          setSummaryLoading(false);
+        }
+      }
+    }
+
+    loadSummary();
+
+    return () => {
+      cancelled = true;
     };
   }, [selectedFY, requests]);
 
@@ -432,7 +483,13 @@ export default function FYTools() {
             </div>
 
             {/* Summary Panel */}
-            {selectedFY && summary && (
+            {selectedFY && summaryLoading && (
+              <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading summary...</span>
+              </div>
+            )}
+            {selectedFY && summary && !summaryLoading && (
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <h4 className="font-medium">{selectedFY.name}</h4>
