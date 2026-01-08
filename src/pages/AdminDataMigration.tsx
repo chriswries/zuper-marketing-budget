@@ -29,6 +29,17 @@ import type { ApprovalAuditEvent } from '@/types/approvalAudit';
 import type { Json } from '@/integrations/supabase/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   Database,
   AlertTriangle,
   CheckCircle2,
@@ -41,6 +52,7 @@ import {
   ShieldAlert,
   ArrowRight,
   Trash2,
+  HardDriveDownload,
 } from 'lucide-react';
 
 interface LegacyData {
@@ -227,11 +239,11 @@ export default function AdminDataMigration() {
   const [clearLocalStorageAfter, setClearLocalStorageAfter] = useState(true);
 
   const clearLegacyKeys = () => {
-    if (!legacyData) return;
-    
     // Clear all found keys
-    for (const key of legacyData.foundKeys) {
-      localStorage.removeItem(key);
+    if (legacyData) {
+      for (const key of legacyData.foundKeys) {
+        localStorage.removeItem(key);
+      }
     }
     
     // Also clear any remaining known legacy keys that might exist
@@ -252,6 +264,34 @@ export default function AdminDataMigration() {
     const newData = detectLegacyData();
     setLegacyData(newData);
     setSummary(computeSummary(newData));
+  };
+
+  // Check if any legacy keys exist (for standalone clear button)
+  const hasAnyLegacyKeys = (): boolean => {
+    if (legacyData && legacyData.foundKeys.length > 0) return true;
+    
+    const allKnownKeys = [
+      ...LEGACY_KEYS.fiscalYears,
+      ...LEGACY_KEYS.forecasts,
+      ...LEGACY_KEYS.actuals,
+      ...LEGACY_KEYS.matching,
+      ...LEGACY_KEYS.requests,
+      ...LEGACY_KEYS.auditEvents,
+    ];
+    
+    for (const key of allKnownKeys) {
+      if (localStorage.getItem(key) !== null) return true;
+    }
+    
+    return false;
+  };
+
+  const handleStandaloneClear = () => {
+    clearLegacyKeys();
+    toast({
+      title: 'Legacy localStorage Cleared',
+      description: 'Pre-cloud data has been removed from this browser. Cloud data is unaffected.',
+    });
   };
 
   useEffect(() => {
@@ -632,6 +672,59 @@ export default function AdminDataMigration() {
                   </div>
                 </div>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Standalone localStorage Cleanup */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <HardDriveDownload className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">LocalStorage Cleanup (This Browser Only)</CardTitle>
+            </div>
+            <CardDescription>
+              Clear legacy pre-cloud data stored in this browser without running a migration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {hasAnyLegacyKeys() ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Legacy keys detected: {legacyData?.foundKeys.length || 0} found key(s).
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear Legacy localStorage Now
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear legacy localStorage?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This removes pre-cloud data stored in this browser only. It does NOT delete cloud database data.
+                        User preferences (e.g., selected fiscal year) will remain intact.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleStandaloneClear}>
+                        Clear localStorage
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            ) : (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle>No Legacy Keys Found</AlertTitle>
+                <AlertDescription>
+                  This browser has no pre-cloud localStorage data to clear.
+                </AlertDescription>
+              </Alert>
             )}
           </CardContent>
         </Card>

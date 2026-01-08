@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { LogOut, User } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const roleLabels: Record<string, string> = {
@@ -29,6 +30,7 @@ const roleBadgeVariants: Record<string, 'default' | 'secondary' | 'outline' | 'd
 
 export function UserMenu() {
   const { user, profile, role, signOut } = useAuth();
+  const { currentRole, isOverrideActive, actualRole } = useCurrentUserRole();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -57,6 +59,10 @@ export function UserMenu() {
               {initials}
             </AvatarFallback>
           </Avatar>
+          {/* Visual indicator when role override is active */}
+          {isOverrideActive && (
+            <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-500 border-2 border-background" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -66,11 +72,18 @@ export function UserMenu() {
             <p className="text-xs leading-none text-muted-foreground">
               {profile?.email || user.email}
             </p>
-            {role && (
-              <Badge variant={roleBadgeVariants[role]} className="mt-2 w-fit">
-                {roleLabels[role]}
-              </Badge>
-            )}
+            <div className="flex flex-col gap-1 mt-2">
+              {role && (
+                <Badge variant={roleBadgeVariants[role]} className="w-fit">
+                  {roleLabels[role]}
+                </Badge>
+              )}
+              {isOverrideActive && (
+                <Badge variant="outline" className="w-fit border-amber-500 text-amber-600 text-xs">
+                  Simulating: {roleLabels[currentRole]}
+                </Badge>
+              )}
+            </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

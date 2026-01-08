@@ -15,15 +15,20 @@ import {
 } from "@/components/ui/select";
 import { BudgetSetupWizard } from "@/components/budget/BudgetSetupWizard";
 import { useAdminSettings } from "@/contexts/AdminSettingsContext";
-import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
+import { useCurrentUserRole, type UserRole } from "@/contexts/CurrentUserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { TIMEZONE_OPTIONS } from "@/lib/dateTime";
-import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye, Users, DatabaseBackup } from "lucide-react";
+import { CalendarPlus, ShieldCheck, History, Globe, Upload, Link, ShieldAlert, Package, Eye, Users, DatabaseBackup, FlaskConical } from "lucide-react";
 
 export default function Admin() {
   const navigate = useNavigate();
   const [wizardOpen, setWizardOpen] = useState(false);
   const { settings, updateSettings } = useAdminSettings();
-  const { currentRole } = useCurrentUserRole();
+  const { currentRole, setCurrentRole, actualRole, roleOverride, clearRoleOverride, isOverrideActive } = useCurrentUserRole();
+  const { role: dbRole } = useAuth();
+
+  // Use actual DB role for admin-only sections (so admin can't lock themselves out)
+  const isActualAdmin = dbRole === 'admin';
 
   const handleAbsoluteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
@@ -39,6 +44,12 @@ export default function Admin() {
     }
   };
 
+  const roleOptions: { value: UserRole; label: string }[] = [
+    { value: 'admin', label: 'Admin' },
+    { value: 'manager', label: 'Manager' },
+    { value: 'cmo', label: 'CMO' },
+    { value: 'finance', label: 'Finance' },
+  ];
   return (
     <div>
       <PageHeader
@@ -47,8 +58,58 @@ export default function Admin() {
       />
 
       <div className="space-y-6">
+        {/* Testing: Role Override - only visible to actual DB admin */}
+        {isActualAdmin && (
+          <Card className="border-amber-500/50 bg-amber-500/5">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-amber-500" />
+                <CardTitle className="text-lg">Testing: Role Override</CardTitle>
+              </div>
+              <CardDescription>
+                Simulate another role in the UI for testing. Does not change database permissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="space-y-1 flex-1">
+                  <Label htmlFor="role-override-select">Simulate role</Label>
+                  <Select
+                    value={currentRole}
+                    onValueChange={(value) => setCurrentRole(value as UserRole)}
+                  >
+                    <SelectTrigger id="role-override-select" className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {isOverrideActive && (
+                  <Button variant="outline" size="sm" onClick={clearRoleOverride}>
+                    Reset to Actual Role
+                  </Button>
+                )}
+              </div>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>Actual role: <span className="font-medium text-foreground">Admin</span></p>
+                {isOverrideActive && (
+                  <p className="text-amber-600">
+                    Simulating: <span className="font-medium">{roleOptions.find(r => r.value === currentRole)?.label}</span>
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Admin Override Mode - only visible to Admin */}
-        {currentRole === 'admin' && (
+        {isActualAdmin && (
           <Card className="border-amber-500/50 bg-amber-500/5">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -83,7 +144,7 @@ export default function Admin() {
         )}
 
         {/* Show Archived Fiscal Years Toggle - Admin only */}
-        {currentRole === 'admin' && (
+        {isActualAdmin && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -260,7 +321,7 @@ export default function Admin() {
         </Card>
 
         {/* FY Tools - Admin only */}
-        {currentRole === 'admin' && (
+        {isActualAdmin && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -280,7 +341,7 @@ export default function Admin() {
         )}
 
         {/* User Management - Admin only */}
-        {currentRole === 'admin' && (
+        {isActualAdmin && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -300,7 +361,7 @@ export default function Admin() {
         )}
 
         {/* Data Migration - Admin only */}
-        {currentRole === 'admin' && (
+        {isActualAdmin && (
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
