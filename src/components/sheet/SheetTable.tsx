@@ -388,17 +388,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         tabIndex={0}
         aria-label="Budget table"
         onWheelCapture={(e) => {
-          // Keep vertical scroll confined to the table so the surrounding page/panel
+          // Keep scrolling confined to this container so the surrounding page/panel
           // doesn't scroll when the cursor is inside the grid.
-          //
-          // IMPORTANT: Do NOT hijack horizontal wheel/trackpad scrolling — let the
-          // browser handle native horizontal scrolling for best compatibility.
           const el = scrollRef.current;
           if (!el) return;
 
-          // If the user is scrolling horizontally (trackpad sideways) or using
-          // Shift+wheel for horizontal scroll, don't intercept.
-          if (e.shiftKey || e.deltaX !== 0) return;
+          const isHorizontalIntent = e.shiftKey || e.deltaX !== 0;
+
+          // For horizontal scrolling, let the browser do native scrolling, but
+          // prevent the event from bubbling to outer scroll areas.
+          if (isHorizontalIntent) {
+            e.stopPropagation();
+            return;
+          }
 
           const canScrollY = el.scrollHeight > el.clientHeight;
           if (!canScrollY) return;
