@@ -129,6 +129,37 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [lineItemSort, setLineItemSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Ensure trackpad/mouse wheel scroll works inside the table (both axes)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // Don't interfere with browser zoom / OS gestures
+      if (e.ctrlKey || e.metaKey) return;
+
+      const canX = el.scrollWidth > el.clientWidth;
+      const canY = el.scrollHeight > el.clientHeight;
+
+      let dx = e.deltaX;
+      if (e.shiftKey && dx === 0) dx = e.deltaY;
+      const dy = e.deltaY;
+
+      const shouldConsume = (canX && dx !== 0) || (canY && dy !== 0);
+      if (!shouldConsume) return;
+
+      if (canX && dx !== 0) el.scrollLeft += dx;
+      if (canY && dy !== 0) el.scrollTop += dy;
+
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   // Focus/scroll/highlight logic
   useEffect(() => {
@@ -381,17 +412,14 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
-        className="relative border rounded-lg max-h-[calc(100dvh-280px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        style={{ 
-          overflow: 'auto',
-          overscrollBehavior: 'contain',
-        }}
+        ref={scrollRef}
+        className="relative w-full max-w-full overflow-auto overscroll-contain border rounded-lg max-h-[calc(100dvh-280px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         tabIndex={0}
       >
-        <Table className="border-separate border-spacing-0 !w-max">
+        <Table className="border-separate border-spacing-0 min-w-max w-max">
           <TableHeader className="sticky top-0 z-20">
             <TableRow>
-              <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-30 bg-muted border-b border-r">
+              <TableHead className="w-[280px] min-w-[280px] sticky left-0 z-50 bg-background border-b relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                 Cost Center / Line Item
               </TableHead>
               <TableHead className="w-[120px] min-w-[120px] bg-muted border-b">Vendor</TableHead>
@@ -439,7 +467,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="sticky left-0 z-10 bg-muted/80 border-r"  style={{ backgroundColor: 'hsl(var(--muted) / 0.9)' }}>
+                        <TableCell className="sticky left-0 z-40 bg-muted/80 relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -483,7 +511,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="sticky left-0 z-10 bg-background border-r">
+                              <TableCell className="sticky left-0 z-40 bg-background relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -899,7 +927,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="font-semibold border-t-2 bg-accent">
-                  <TableCell className="sticky left-0 z-10 bg-accent border-r">
+                  <TableCell className="sticky left-0 z-40 bg-accent relative after:content-[''] after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-border after:pointer-events-none">
                     Grand Total
                   </TableCell>
                   <TableCell>—</TableCell>
