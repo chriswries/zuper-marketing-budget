@@ -384,19 +384,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         className="relative w-full overflow-auto overscroll-contain isolate touch-pan-x touch-pan-y border rounded-lg max-h-[calc(100vh-220px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         tabIndex={0}
       >
-        <Table className="border-separate border-spacing-0 !w-max min-w-[1600px]">
-          <TableHeader className="sticky top-0 z-30 bg-background">
+        <Table className="border-separate border-spacing-0 w-max min-w-max min-w-[1600px]">
+          <TableHeader>
             <TableRow>
               <TableHead className="min-w-[320px] w-[320px] sticky left-0 top-0 z-50 bg-muted border-b shadow-[2px_0_0_0_hsl(var(--border))]">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="min-w-[200px] w-[200px] bg-muted border-b">Vendor</TableHead>
+              <TableHead className="min-w-[200px] w-[200px] sticky top-0 z-30 bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className="min-w-[110px] w-[110px] text-right border-b bg-muted"
+                    className="min-w-[110px] w-[110px] sticky top-0 z-30 text-right border-b bg-muted"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -405,11 +405,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="min-w-[140px] w-[140px] text-right font-semibold bg-muted border-b">
+              <TableHead className="min-w-[140px] w-[140px] sticky top-0 z-30 text-right font-semibold bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="min-w-[80px] w-[80px] bg-muted border-b"></TableHead>
+                <TableHead className="min-w-[80px] w-[80px] sticky top-0 z-30 bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
