@@ -396,15 +396,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
           const canScrollX = el.scrollWidth > el.clientWidth;
           const canScrollY = el.scrollHeight > el.clientHeight;
 
+          // Some devices/browsers emit horizontal scrolling as deltaY while Shift is held.
+          const intendedDeltaX = e.shiftKey ? e.deltaY : e.deltaX;
+          const intendedDeltaY = e.shiftKey ? 0 : e.deltaY;
+
           let handled = false;
 
-          if (e.deltaX !== 0 && canScrollX) {
-            el.scrollLeft += e.deltaX;
+          if (intendedDeltaX !== 0 && canScrollX) {
+            el.scrollLeft += intendedDeltaX;
             handled = true;
           }
 
-          if (e.deltaY !== 0 && canScrollY) {
-            el.scrollTop += e.deltaY;
+          if (intendedDeltaY !== 0 && canScrollY) {
+            el.scrollTop += intendedDeltaY;
             handled = true;
           }
 
@@ -419,7 +423,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <TableHeader className="sticky top-0 z-30">
             <TableRow>
-              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[70] bg-muted border-b border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-[80] bg-muted border-b border-r border-border shadow-[6px_0_10px_-6px_hsl(var(--foreground)/0.18)]">
                 Cost Center / Line Item
               </TableHead>
               <TableHead className="w-[220px] min-w-[220px] bg-muted border-b">Vendor</TableHead>
@@ -467,7 +471,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[40] bg-muted border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]"> 
+                        <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[60] bg-muted border-r border-border shadow-[6px_0_10px_-6px_hsl(var(--foreground)/0.18)]">
                           <div className="flex items-center gap-2">
                             {isExpanded ? (
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -511,7 +515,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[40] bg-muted border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                              <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[60] bg-muted border-r border-border shadow-[6px_0_10px_-6px_hsl(var(--foreground)/0.18)]">
                                 <div className="flex items-center gap-2 pl-6">
                                   <span className="text-foreground">{item.name}</span>
                                   {/* Approval pending badge */}
@@ -928,7 +932,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2 bg-accent">
-                  <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[40] bg-muted border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                  <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-[60] bg-muted border-r border-border shadow-[6px_0_10px_-6px_hsl(var(--foreground)/0.18)]">
                     Grand Total
                   </TableCell>
                   <TableCell className="w-[220px] min-w-[220px]">—</TableCell>
