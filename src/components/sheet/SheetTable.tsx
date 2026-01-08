@@ -129,6 +129,44 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [lineItemSort, setLineItemSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Native wheel handler for reliable horizontal scrolling
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Don't interfere with zoom gestures
+      if (e.ctrlKey || e.metaKey) return;
+
+      // Compute horizontal delta (shift+wheel → horizontal)
+      let dx = e.deltaX;
+      if (e.shiftKey && dx === 0) {
+        dx = e.deltaY;
+      }
+      const dy = e.deltaY;
+
+      // Determine scrollability
+      const canScrollX = el.scrollWidth > el.clientWidth;
+      const canScrollY = el.scrollHeight > el.clientHeight;
+
+      // Only consume if we can scroll in that direction
+      if (canScrollX && dx !== 0) {
+        el.scrollLeft += dx;
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (canScrollY && dy !== 0 && !e.shiftKey) {
+        el.scrollTop += dy;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      // Otherwise let the event bubble to page
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Focus/scroll/highlight logic
   useEffect(() => {
@@ -381,6 +419,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
       {/* Table scroll container - owns both horizontal and vertical scroll */}
       <div
+        ref={scrollRef}
         className="relative w-full overflow-auto overscroll-contain isolate touch-pan-x touch-pan-y border rounded-lg max-h-[calc(100vh-220px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         tabIndex={0}
       >
