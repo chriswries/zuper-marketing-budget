@@ -27,6 +27,7 @@ import type { SpendRequest } from '@/types/requests';
 import type { ActualsTransaction } from '@/types/actuals';
 import type { ApprovalAuditEvent } from '@/types/approvalAudit';
 import type { Json } from '@/integrations/supabase/types';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Database,
   AlertTriangle,
@@ -49,6 +50,8 @@ interface LegacyData {
   matching: Record<string, { matchesByTxnId: Record<string, unknown>; rulesByMerchantKey: Record<string, unknown> }>;
   requests: SpendRequest[];
   auditEvents: Record<string, ApprovalAuditEvent[]>;
+  // Track which keys were actually found (for cleanup)
+  foundKeys: string[];
 }
 
 interface MigrationSummary {
@@ -87,6 +90,7 @@ function detectLegacyData(): LegacyData {
     matching: {},
     requests: [],
     auditEvents: {},
+    foundKeys: [],
   };
 
   // Try known keys first
@@ -94,6 +98,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<FiscalYearBudget[]>(localStorage.getItem(key));
     if (data && Array.isArray(data) && data.length > 0 && data[0].id && data[0].costCenters) {
       result.fiscalYears = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -102,6 +107,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<Record<string, CostCenter[]>>(localStorage.getItem(key));
     if (data && typeof data === 'object' && Object.keys(data).length > 0) {
       result.forecasts = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -110,6 +116,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<Record<string, ActualsTransaction[]>>(localStorage.getItem(key));
     if (data && typeof data === 'object' && Object.keys(data).length > 0) {
       result.actuals = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -118,6 +125,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<Record<string, { matchesByTxnId: Record<string, unknown>; rulesByMerchantKey: Record<string, unknown> }>>(localStorage.getItem(key));
     if (data && typeof data === 'object' && Object.keys(data).length > 0) {
       result.matching = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -126,6 +134,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<SpendRequest[]>(localStorage.getItem(key));
     if (data && Array.isArray(data) && data.length > 0 && data[0].id) {
       result.requests = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -134,6 +143,7 @@ function detectLegacyData(): LegacyData {
     const data = tryParseJson<Record<string, ApprovalAuditEvent[]>>(localStorage.getItem(key));
     if (data && typeof data === 'object' && Object.keys(data).length > 0) {
       result.auditEvents = data;
+      result.foundKeys.push(key);
       break;
     }
   }
@@ -154,6 +164,7 @@ function detectLegacyData(): LegacyData {
         if (Array.isArray(data) && data.length > 0 && data[0].id && data[0].costCenters && data[0].name) {
           if (result.fiscalYears.length === 0) {
             result.fiscalYears = data;
+            result.foundKeys.push(key);
           }
         }
         
@@ -161,6 +172,7 @@ function detectLegacyData(): LegacyData {
         if (Array.isArray(data) && data.length > 0 && data[0].id && data[0].vendorName !== undefined && data[0].approvalSteps) {
           if (result.requests.length === 0) {
             result.requests = data;
+            result.foundKeys.push(key);
           }
         }
       } catch {
@@ -212,6 +224,35 @@ export default function AdminDataMigration() {
   const [loading, setLoading] = useState(true);
   const [migrating, setMigrating] = useState(false);
   const [overwriteConfirmation, setOverwriteConfirmation] = useState('');
+  const [clearLocalStorageAfter, setClearLocalStorageAfter] = useState(true);
+
+  const clearLegacyKeys = () => {
+    if (!legacyData) return;
+    
+    // Clear all found keys
+    for (const key of legacyData.foundKeys) {
+      localStorage.removeItem(key);
+    }
+    
+    // Also clear any remaining known legacy keys that might exist
+    const allKnownKeys = [
+      ...LEGACY_KEYS.fiscalYears,
+      ...LEGACY_KEYS.forecasts,
+      ...LEGACY_KEYS.actuals,
+      ...LEGACY_KEYS.matching,
+      ...LEGACY_KEYS.requests,
+      ...LEGACY_KEYS.auditEvents,
+    ];
+    
+    for (const key of allKnownKeys) {
+      localStorage.removeItem(key);
+    }
+    
+    // Re-detect to update UI
+    const newData = detectLegacyData();
+    setLegacyData(newData);
+    setSummary(computeSummary(newData));
+  };
 
   useEffect(() => {
     const data = detectLegacyData();
@@ -346,10 +387,19 @@ export default function AdminDataMigration() {
 
       await refetchFiscalYears();
 
-      toast({
-        title: 'Migration Complete',
-        description: `Merged ${insertedFYs} FYs, ${insertedRequests} requests, ${insertedForecasts} forecasts, ${insertedActuals} actuals, ${insertedMatching} matching configs. You can now close this page.`,
-      });
+      // Clear legacy localStorage if checkbox is checked
+      if (clearLocalStorageAfter) {
+        clearLegacyKeys();
+        toast({
+          title: 'Migration Complete',
+          description: `Merged ${insertedFYs} FYs, ${insertedRequests} requests, ${insertedForecasts} forecasts, ${insertedActuals} actuals, ${insertedMatching} matching configs. Legacy localStorage keys cleared.`,
+        });
+      } else {
+        toast({
+          title: 'Migration Complete',
+          description: `Merged ${insertedFYs} FYs, ${insertedRequests} requests, ${insertedForecasts} forecasts, ${insertedActuals} actuals, ${insertedMatching} matching configs. You can now close this page.`,
+        });
+      }
     } catch (err) {
       console.error('Migration error:', err);
       toast({
@@ -471,10 +521,19 @@ export default function AdminDataMigration() {
 
       await refetchFiscalYears();
 
-      toast({
-        title: 'Overwrite Complete',
-        description: `Imported ${insertedFYs} FYs and ${insertedRequests} requests from localStorage. You can now close this page.`,
-      });
+      // Clear legacy localStorage if checkbox is checked
+      if (clearLocalStorageAfter) {
+        clearLegacyKeys();
+        toast({
+          title: 'Overwrite Complete',
+          description: `Imported ${insertedFYs} FYs and ${insertedRequests} requests from localStorage. Legacy localStorage keys cleared.`,
+        });
+      } else {
+        toast({
+          title: 'Overwrite Complete',
+          description: `Imported ${insertedFYs} FYs and ${insertedRequests} requests from localStorage. You can now close this page.`,
+        });
+      }
 
       setOverwriteConfirmation('');
     } catch (err) {
@@ -580,6 +639,26 @@ export default function AdminDataMigration() {
         {/* Migration Actions */}
         {hasLegacyData && (
           <>
+            {/* Cleanup checkbox - shared between actions */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="clear-localstorage"
+                    checked={clearLocalStorageAfter}
+                    onCheckedChange={(checked) => setClearLocalStorageAfter(checked === true)}
+                  />
+                  <Label htmlFor="clear-localstorage" className="text-sm font-normal cursor-pointer">
+                    Clear legacy localStorage after successful migration
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 ml-6">
+                  Removes old localStorage keys so data won't be detected again on reload.
+                  Does not affect user preferences (e.g., selected fiscal year).
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Merge Action */}
             <Card>
               <CardHeader>
