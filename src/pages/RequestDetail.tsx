@@ -208,26 +208,14 @@ export default function RequestDetail() {
     
     // ADJUSTMENT: Current = original before increase, Revised = new after increase
     if (request.originKind === 'adjustment') {
-      // Try explicit fields first
-      if ((request as any).currentAmount !== undefined && (request as any).revisedAmount !== undefined) {
+      // Use explicit fields if available (new requests will have these)
+      if (request.currentAmount !== undefined && request.revisedAmount !== undefined) {
         return {
-          currentAmount: `$${(request as any).currentAmount.toLocaleString()}`,
-          revisedAmount: `$${(request as any).revisedAmount.toLocaleString()}`,
+          currentAmount: `$${request.currentAmount.toLocaleString()}`,
+          revisedAmount: `$${request.revisedAmount.toLocaleString()}`,
         };
       }
-      // Try adjustmentMeta
-      const meta = (request as any).adjustmentMeta;
-      if (meta) {
-        const oldVal = meta.oldFYTotal ?? meta.oldTotal ?? meta.oldAmount ?? meta.adjustmentBeforeTotal;
-        const newVal = meta.newFYTotal ?? meta.newTotal ?? meta.newAmount ?? meta.adjustmentAfterTotal;
-        if (oldVal !== undefined && newVal !== undefined) {
-          return {
-            currentAmount: `$${oldVal.toLocaleString()}`,
-            revisedAmount: `$${newVal.toLocaleString()}`,
-          };
-        }
-      }
-      // Fallback: no old/new amounts found
+      // Fallback for legacy requests without explicit fields
       return { 
         currentAmount: 'n/a', 
         revisedAmount: `$${request.amount.toLocaleString()}` 
@@ -241,10 +229,15 @@ export default function RequestDetail() {
     };
   }, [request]);
 
-  // Justification display with n/a fallback
+  // Justification display: strip "Forecast adjustment: " or "Budget adjustment: " prefix, fallback to n/a
   const justificationDisplay = useMemo(() => {
     if (!request?.justification || !request.justification.trim()) return 'n/a';
-    return request.justification;
+    // Strip common prefixes (case-insensitive)
+    const cleaned = request.justification
+      .replace(/^forecast adjustment:\s*/i, '')
+      .replace(/^budget adjustment:\s*/i, '')
+      .trim();
+    return cleaned || 'n/a';
   }, [request]);
 
   const refreshAuditEvents = useCallback(() => {

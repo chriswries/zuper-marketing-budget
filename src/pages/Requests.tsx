@@ -280,11 +280,13 @@ export default function Requests() {
                     </TableCell>
                     <TableCell>{request.vendorName}</TableCell>
                     <TableCell className="text-right">
-                      ${request.amount.toLocaleString()}
+                      {request.originKind === 'adjustment' && request.currentAmount !== undefined
+                        ? `$${request.currentAmount.toLocaleString()}`
+                        : `$${request.amount.toLocaleString()}`}
                     </TableCell>
                     <TableCell className="text-right">
-                      {request.status === 'pending' && request.originKind === 'adjustment' ? (
-                        <span className="text-muted-foreground">—</span>
+                      {request.originKind === 'adjustment' && request.revisedAmount !== undefined ? (
+                        `$${request.revisedAmount.toLocaleString()}`
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

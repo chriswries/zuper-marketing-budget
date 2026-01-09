@@ -803,6 +803,10 @@ export default function Forecast() {
     const startMonth: Month = changedMonths[0] ?? 'feb';
     const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
 
+    // Calculate old and new FY totals for adjustment display
+    const oldTotal = calculateFYTotal(pendingOldValues);
+    const newTotal = calculateFYTotal(pendingUpdatedValues);
+
     // Create the spend request with origin metadata
     const requestId = crypto.randomUUID();
     const newRequest = {
@@ -814,7 +818,7 @@ export default function Forecast() {
       startMonth,
       endMonth,
       isContracted: lineItem.isContracted,
-      justification: `Forecast adjustment: ${userJustification}`,
+      justification: userJustification,
       status: 'pending' as const,
       createdAt: new Date().toISOString(),
       approvalSteps: createDefaultApprovalSteps(),
@@ -825,6 +829,9 @@ export default function Forecast() {
       originLineItemId: lineItemId,
       originKind: 'adjustment' as const,
       lineItemName,
+      // Adjustment amounts for display
+      currentAmount: Math.round(oldTotal),
+      revisedAmount: Math.round(newTotal),
     };
     addRequest(newRequest);
 
