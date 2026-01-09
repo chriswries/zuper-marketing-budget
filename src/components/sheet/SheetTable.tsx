@@ -405,7 +405,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[320px] min-w-[320px] max-w-[320px] sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+              <TableHead className="sheet-first-col sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
               <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-20 bg-muted border-b">Vendor</TableHead>
@@ -453,17 +453,21 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-10 bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span>{costCenter.name}</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {costCenter.lineItems.length} items
-                            </Badge>
+                        <TableCell className="sheet-first-col sticky left-0 z-10 bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <div className="flex-shrink-0 pt-0.5">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="whitespace-normal break-words">{costCenter.name}</span>
+                              <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
+                                {costCenter.lineItems.length} items
+                              </Badge>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="w-[220px] min-w-[220px] text-muted-foreground">—</TableCell>
@@ -497,87 +501,93 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-10 bg-background border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
-                                <div className="flex items-center gap-2 pl-6">
-                                  <span className="text-foreground">{item.name}</span>
-                                  {/* Approval pending badge */}
-                                  {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && !item.cancellationStatus && (
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="secondary" className="text-xs">
-                                        Approval pending
-                                      </Badge>
-                                      {pendingRequestId && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/requests/${pendingRequestId}`);
-                                          }}
-                                        >
-                                          <ExternalLink className="h-3 w-3" />
-                                        </Button>
+                              <TableCell className="sheet-first-col sticky left-0 z-10 bg-background border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                                <div className="flex items-start gap-2 pl-6 min-w-0">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium whitespace-normal break-words text-foreground">
+                                      {item.name}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-1 max-w-full">
+                                      {/* Approval pending badge */}
+                                      {(item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending') && !item.cancellationStatus && (
+                                        <div className="flex items-center gap-1">
+                                          <Badge variant="secondary" className="text-xs">
+                                            Approval pending
+                                          </Badge>
+                                          {pendingRequestId && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/requests/${pendingRequestId}`);
+                                              }}
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
+                                      {/* Cancellation pending badge */}
+                                      {item.cancellationStatus === 'pending' && (
+                                        <div className="flex items-center gap-1">
+                                          <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                                            Cancellation pending
+                                          </Badge>
+                                          {item.cancellationRequestId && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/requests/${item.cancellationRequestId}`);
+                                              }}
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
+                                      {/* Deletion pending badge */}
+                                      {item.deletionStatus === 'pending' && (
+                                        <div className="flex items-center gap-1">
+                                          <Badge variant="outline" className="text-xs border-destructive text-destructive">
+                                            Deletion pending
+                                          </Badge>
+                                          {item.deletionRequestId && (
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/requests/${item.deletionRequestId}`);
+                                              }}
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      )}
+                                      {item.isContracted && (
+                                        <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
+                                          Contracted
+                                        </Badge>
+                                      )}
+                                      {item.isAccrual && (
+                                        <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
+                                          Accrual
+                                        </Badge>
+                                      )}
+                                      {item.isSoftwareSubscription && (
+                                        <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                          Software
+                                        </Badge>
                                       )}
                                     </div>
-                                  )}
-                                  {/* Cancellation pending badge */}
-                                  {item.cancellationStatus === 'pending' && (
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
-                                        Cancellation pending
-                                      </Badge>
-                                      {item.cancellationRequestId && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/requests/${item.cancellationRequestId}`);
-                                          }}
-                                        >
-                                          <ExternalLink className="h-3 w-3" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  )}
-                                  {/* Deletion pending badge */}
-                                  {item.deletionStatus === 'pending' && (
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="outline" className="text-xs border-destructive text-destructive">
-                                        Deletion pending
-                                      </Badge>
-                                      {item.deletionRequestId && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/requests/${item.deletionRequestId}`);
-                                          }}
-                                        >
-                                          <ExternalLink className="h-3 w-3" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  )}
-                                  {item.isContracted && (
-                                    <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">
-                                      Contracted
-                                    </Badge>
-                                  )}
-                                  {item.isAccrual && (
-                                    <Badge variant="outline" className="text-xs border-amber-500 text-amber-600">
-                                      Accrual
-                                    </Badge>
-                                  )}
-                                  {item.isSoftwareSubscription && (
-                                    <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
-                                      Software
-                                    </Badge>
-                                  )}
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell className="w-[220px] min-w-[220px] text-muted-foreground text-sm">
@@ -914,7 +924,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2 bg-accent">
-                  <TableCell className="w-[320px] min-w-[320px] max-w-[320px] sticky left-0 z-10 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                  <TableCell className="sheet-first-col sticky left-0 z-10 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                     Grand Total
                   </TableCell>
                   <TableCell className="w-[220px] min-w-[220px]">—</TableCell>
