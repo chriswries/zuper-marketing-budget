@@ -387,6 +387,33 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         aria-label="Budget table"
         className="relative min-w-0 w-full overflow-auto overscroll-contain rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable' }}
+        onWheel={(e) => {
+          // Debug: verify the browser is delivering horizontal deltas to the scroll container.
+          // This should not change native scrolling behavior.
+          const el = scrollRef.current;
+          if (!el) return;
+          const beforeLeft = el.scrollLeft;
+          const beforeTop = el.scrollTop;
+          requestAnimationFrame(() => {
+            const afterLeft = el.scrollLeft;
+            const afterTop = el.scrollTop;
+            // Only log when user attempts horizontal scroll (trackpad) or shift-wheel.
+            if (Math.abs(e.deltaX) > 0 || e.shiftKey) {
+              // eslint-disable-next-line no-console
+              console.log('[SheetTable scroll]', {
+                deltaX: e.deltaX,
+                deltaY: e.deltaY,
+                shiftKey: e.shiftKey,
+                beforeLeft,
+                afterLeft,
+                beforeTop,
+                afterTop,
+                scrollWidth: el.scrollWidth,
+                clientWidth: el.clientWidth,
+              });
+            }
+          });
+        }}
       >
         <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
           <TableHeader>
