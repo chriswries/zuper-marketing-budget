@@ -31,6 +31,7 @@ import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import {
   loadApprovalAudit,
@@ -1581,6 +1582,7 @@ export default function Budget() {
         costCenters={selectedFiscalYear.costCenters}
         lockedMonths={new Set()} // No locked months for Budget
         onCreateLineItem={handleCreateLineItem}
+        checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters: selectedFiscalYear.costCenters })}
       />
 
       <EditAllocationsDialog

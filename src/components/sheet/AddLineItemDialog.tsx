@@ -22,12 +22,20 @@ import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, MonthlyValues } from
 
 type ScheduleType = 'one-time' | 'recurring' | 'spread';
 
+export interface DuplicateNameCheckResult {
+  duplicate: boolean;
+  existingCostCenterName?: string;
+  existingLineItemName?: string;
+}
+
 interface AddLineItemDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   costCenters: CostCenter[];
   lockedMonths: Set<Month>;
   onCreateLineItem: (costCenterId: string, lineItem: LineItem) => void;
+  /** Optional callback to check for duplicate line item names */
+  checkDuplicateName?: (name: string) => DuplicateNameCheckResult;
 }
 
 function createEmptyMonthlyValues(): MonthlyValues {
@@ -43,6 +51,7 @@ export function AddLineItemDialog({
   costCenters,
   lockedMonths,
   onCreateLineItem,
+  checkDuplicateName,
 }: AddLineItemDialogProps) {
   // Form state
   const [costCenterId, setCostCenterId] = useState<string>('');
@@ -131,9 +140,20 @@ export function AddLineItemDialog({
     return values;
   };
 
+  // Check for duplicate name
+  const duplicateCheck = useMemo<DuplicateNameCheckResult>(() => {
+    if (!checkDuplicateName || !name.trim()) {
+      return { duplicate: false };
+    }
+    return checkDuplicateName(name);
+  }, [checkDuplicateName, name]);
+
   // Validation
   const isValid = useMemo(() => {
     if (!costCenterId || !name.trim()) return false;
+    
+    // Block if duplicate name
+    if (duplicateCheck.duplicate) return false;
 
     if (scheduleType === 'one-time') {
       return oneTimeMonth !== '' && parseFloat(oneTimeAmount) > 0;
@@ -154,6 +174,7 @@ export function AddLineItemDialog({
   }, [
     costCenterId,
     name,
+    duplicateCheck.duplicate,
     scheduleType,
     oneTimeMonth,
     oneTimeAmount,
@@ -249,7 +270,17 @@ export function AddLineItemDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Google Ads Q3"
+              className={duplicateCheck.duplicate ? 'border-destructive focus-visible:ring-destructive' : ''}
             />
+            {duplicateCheck.duplicate && (
+              <p className="text-sm text-destructive">
+                Line item name already exists
+                {duplicateCheck.existingCostCenterName && (
+                  <> in "{duplicateCheck.existingCostCenterName}"</>
+                )}
+                . Please choose a unique name.
+              </p>
+            )}
           </div>
 
           {/* Vendor Name */}
