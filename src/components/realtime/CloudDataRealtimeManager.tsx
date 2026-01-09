@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { subscribeForecastRealtimeInvalidation } from '@/lib/forecastStore';
 import { subscribeActualsRealtimeInvalidation } from '@/lib/actualsStore';
 import { subscribeActualsMatchingRealtimeInvalidation } from '@/lib/actualsMatchingStore';
+import { subscribeVendorRegistryRealtimeInvalidation } from '@/lib/vendorRegistryStore';
 
 export function CloudDataRealtimeManager() {
   const { session } = useAuth();
@@ -26,8 +27,9 @@ export function CloudDataRealtimeManager() {
     const forecastCleanup = subscribeForecastRealtimeInvalidation();
     const actualsCleanup = subscribeActualsRealtimeInvalidation();
     const matchingCleanup = subscribeActualsMatchingRealtimeInvalidation();
+    const vendorRegistryCleanup = subscribeVendorRegistryRealtimeInvalidation();
 
-    cleanupRef.current = [forecastCleanup, actualsCleanup, matchingCleanup];
+    cleanupRef.current = [forecastCleanup, actualsCleanup, matchingCleanup, vendorRegistryCleanup];
 
     // Cleanup on unmount or session change
     return () => {

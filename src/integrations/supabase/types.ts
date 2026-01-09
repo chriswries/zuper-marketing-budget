@@ -49,6 +49,7 @@ export type Database = {
       actuals_transactions: {
         Row: {
           amount: number
+          canonical_vendor_id: string | null
           created_at: string
           fiscal_year_id: string
           merchant: string | null
@@ -59,6 +60,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          canonical_vendor_id?: string | null
           created_at?: string
           fiscal_year_id: string
           merchant?: string | null
@@ -69,6 +71,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          canonical_vendor_id?: string | null
           created_at?: string
           fiscal_year_id?: string
           merchant?: string | null
@@ -78,6 +81,13 @@ export type Database = {
           txn_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "actuals_transactions_canonical_vendor_id_fkey"
+            columns: ["canonical_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_vendors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "actuals_transactions_fiscal_year_id_fkey"
             columns: ["fiscal_year_id"]
@@ -153,6 +163,36 @@ export type Database = {
           id?: string
           meta?: Json | null
           note?: string | null
+        }
+        Relationships: []
+      }
+      canonical_vendors: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -301,6 +341,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      vendor_aliases: {
+        Row: {
+          alias_display: string | null
+          alias_key: string
+          canonical_vendor_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          source: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          alias_display?: string | null
+          alias_key: string
+          canonical_vendor_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          alias_display?: string | null
+          alias_key?: string
+          canonical_vendor_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          source?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_aliases_canonical_vendor_id_fkey"
+            columns: ["canonical_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
