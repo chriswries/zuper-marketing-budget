@@ -24,6 +24,7 @@ import Admin from "./pages/Admin";
 import AdminUsers from "./pages/AdminUsers";
 import ApprovalAudit from "./pages/ApprovalAudit";
 import VarianceReport from "./pages/VarianceReport";
+import ForecastActualsVarianceReport from "./pages/ForecastActualsVarianceReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
 import FYTools from "./pages/FYTools";
@@ -130,6 +131,7 @@ const App = () => (
                       />
                       <Route path="/audit" element={<ApprovalAudit />} />
                       <Route path="/reports/variance" element={<VarianceReport />} />
+                      <Route path="/reports/forecast-actuals-variance" element={<ForecastActualsVarianceReport />} />
                       <Route path="*" element={<NotFound />} />
                     </Route>
                   </Routes>
