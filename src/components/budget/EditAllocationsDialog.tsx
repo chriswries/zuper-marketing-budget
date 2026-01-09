@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -20,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -72,7 +72,11 @@ export function EditAllocationsDialog({
     }))
   );
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  
+  // Strong delete confirmation state
   const [pendingDeleteRow, setPendingDeleteRow] = useState<AllocationRow | null>(null);
+  const [deleteJustification, setDeleteJustification] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Reset state when dialog opens
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -88,10 +92,16 @@ export function EditAllocationsDialog({
         }))
       );
       setDeletedIds([]);
-      setPendingDeleteRow(null);
+      resetDeleteConfirmation();
     }
     onOpenChange(nextOpen);
   }, [fiscalYearBudget, onOpenChange]);
+
+  const resetDeleteConfirmation = () => {
+    setPendingDeleteRow(null);
+    setDeleteJustification('');
+    setDeleteConfirmText('');
+  };
 
   // Compute amounts
   const computedRows = useMemo(() => {
@@ -130,20 +140,31 @@ export function EditAllocationsDialog({
     ]);
   };
 
-  const removeRow = (row: AllocationRow) => {
-    if (row.hasLineItems && !row.isNew) {
-      setPendingDeleteRow(row);
-    } else {
-      confirmRemoveRow(row);
-    }
+  // Always open confirm dialog for any delete
+  const requestDelete = (row: AllocationRow) => {
+    setPendingDeleteRow(row);
+    setDeleteJustification('');
+    setDeleteConfirmText('');
   };
 
-  const confirmRemoveRow = (row: AllocationRow) => {
-    setRows((prev) => prev.filter((r) => r.id !== row.id));
-    if (!row.isNew) {
-      setDeletedIds((prev) => [...prev, row.id]);
+  // Check if delete confirmation is valid
+  const isDeleteConfirmValid = useMemo(() => {
+    if (!pendingDeleteRow) return false;
+    const hasJustification = deleteJustification.trim().length > 0;
+    const confirmTextTrimmed = deleteConfirmText.trim();
+    const matchesName = confirmTextTrimmed === pendingDeleteRow.name;
+    const matchesDelete = confirmTextTrimmed.toUpperCase() === 'DELETE';
+    return hasJustification && (matchesName || matchesDelete);
+  }, [pendingDeleteRow, deleteJustification, deleteConfirmText]);
+
+  const confirmRemoveRow = () => {
+    if (!pendingDeleteRow || !isDeleteConfirmValid) return;
+    
+    setRows((prev) => prev.filter((r) => r.id !== pendingDeleteRow.id));
+    if (!pendingDeleteRow.isNew) {
+      setDeletedIds((prev) => [...prev, pendingDeleteRow.id]);
     }
-    setPendingDeleteRow(null);
+    resetDeleteConfirmation();
   };
 
   const moveRow = (index: number, direction: 'up' | 'down') => {
@@ -195,9 +216,9 @@ export function EditAllocationsDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Edit Budget Allocations</DialogTitle>
+            <DialogTitle>Edit Budget Settings</DialogTitle>
             <DialogDescription>
-              Adjust the target budget and cost center allocations for {fiscalYearBudget.name}.
+              Adjust the target budget and cost center settings for {fiscalYearBudget.name}.
             </DialogDescription>
           </DialogHeader>
 
@@ -296,7 +317,7 @@ export function EditAllocationsDialog({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeRow(row)}
+                            onClick={() => requestDelete(row)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -358,24 +379,64 @@ export function EditAllocationsDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation for cost centers with line items */}
-      <AlertDialog open={!!pendingDeleteRow} onOpenChange={() => setPendingDeleteRow(null)}>
+      {/* Strong delete confirmation dialog */}
+      <AlertDialog open={!!pendingDeleteRow} onOpenChange={(open) => !open && resetDeleteConfirmation()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete cost center?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Deleting "{pendingDeleteRow?.name}" will remove its line items from the budget.
-              This action cannot be undone.
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This will remove <strong>"{pendingDeleteRow?.name || 'this cost center'}"</strong> from the Budget Settings.
+                </p>
+                {pendingDeleteRow?.hasLineItems && (
+                  <p className="text-destructive">
+                    This cost center has line items that will also be removed from the budget.
+                  </p>
+                )}
+                <p className="font-medium">This action cannot be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Justification */}
+            <div className="space-y-2">
+              <Label htmlFor="deleteJustification">
+                Justification <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="deleteJustification"
+                value={deleteJustification}
+                onChange={(e) => setDeleteJustification(e.target.value)}
+                placeholder="Please explain why you are deleting this cost center..."
+                className="min-h-[80px]"
+              />
+            </div>
+
+            {/* Typed confirmation */}
+            <div className="space-y-2">
+              <Label htmlFor="deleteConfirmText">
+                Type <strong>"{pendingDeleteRow?.name}"</strong> or <strong>DELETE</strong> to confirm <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="deleteConfirmText"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={pendingDeleteRow?.name || 'DELETE'}
+              />
+            </div>
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => pendingDeleteRow && confirmRemoveRow(pendingDeleteRow)}
+            <Button
+              variant="destructive"
+              onClick={confirmRemoveRow}
+              disabled={!isDeleteConfirmValid}
             >
-              Delete
-            </AlertDialogAction>
+              Delete Cost Center
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
