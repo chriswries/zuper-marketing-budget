@@ -169,13 +169,9 @@ export default function Requests() {
           <Checkbox
             id="needsMyApproval"
             checked={needsMyApproval}
-            onCheckedChange={(checked) => setNeedsMyApproval(!!checked)}
-            disabled={currentRole === 'admin'}
+            onCheckedChange={(checked) => setNeedsMyApproval(Boolean(checked))}
           />
-          <Label 
-            htmlFor="needsMyApproval" 
-            className={currentRole === 'admin' ? 'text-muted-foreground' : 'cursor-pointer'}
-          >
+          <Label htmlFor="needsMyApproval" className="cursor-pointer">
             Needs my approval
           </Label>
         </div>
@@ -220,7 +216,7 @@ export default function Requests() {
           ) : filteredRequests.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground">
               <p>No matching requests found.</p>
-              {needsMyApproval && currentRole !== 'admin' ? (
+              {needsMyApproval ? (
                 <div className="mt-2">
                   <p className="text-sm">No requests need your approval right now.</p>
                   <Button
@@ -229,7 +225,7 @@ export default function Requests() {
                     className="mt-1 h-auto p-0"
                     onClick={() => setNeedsMyApproval(false)}
                   >
-                    Clear "Needs my approval" to see all requests
+                    Uncheck "Needs my approval" to see all requests
                   </Button>
                 </div>
               ) : (
