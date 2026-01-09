@@ -298,10 +298,11 @@ export function ImportWizard() {
               onContinue={handleLineItemMappingComplete}
             />
           )}
-          {currentStep === "post" && lineItemMappedTransactions.length > 0 && (
+          {currentStep === "post" && lineItemMappedTransactions.length > 0 && selectedFiscalYearId && (
             <PostToActualsStep
               transactions={lineItemMappedTransactions}
               fileName={file?.name}
+              fiscalYearId={selectedFiscalYearId}
               onBack={handleBackToLineItems}
               onPosted={handlePosted}
             />
