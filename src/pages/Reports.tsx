@@ -55,23 +55,6 @@ export default function Reports() {
         <Card className="flex flex-col opacity-60">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-lg">Budget vs Forecast vs Actuals</CardTitle>
-            </div>
-            <CardDescription>
-              Full three-way comparison by month with drill-down capabilities.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto">
-            <Button disabled variant="outline" className="w-full">
-              Coming Soon
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col opacity-60">
-          <CardHeader>
-            <div className="flex items-center gap-2">
               <Flame className="h-5 w-5 text-muted-foreground" />
               <CardTitle className="text-lg">Burn Rate / Runway</CardTitle>
             </div>
