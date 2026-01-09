@@ -44,7 +44,7 @@ export function MappingStep({ data, onBack, onContinue }: MappingStepProps) {
   const [amountColumn, setAmountColumn] = useState<string>("");
   const [vendorColumn, setVendorColumn] = useState<string>("");
   const [memoColumn, setMemoColumn] = useState<string>(NONE_VALUE);
-  const [amountSignMode, setAmountSignMode] = useState<'expenses_negative' | 'expenses_positive'>('expenses_negative');
+  const [amountSignMode, setAmountSignMode] = useState<'expenses_negative' | 'expenses_positive'>('expenses_positive');
   
   // Auto-detect on mount
   useEffect(() => {
