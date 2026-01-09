@@ -36,7 +36,7 @@ const STEPS: { key: ImportWizardStep; label: string }[] = [
 ];
 
 export function ImportWizard() {
-  const { selectedFiscalYearId } = useFiscalYearBudget();
+  const { selectedFiscalYearId, fiscalYears } = useFiscalYearBudget();
   const [currentStep, setCurrentStep] = useState<ImportWizardStep>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedImportData | null>(null);
@@ -303,6 +303,7 @@ export function ImportWizard() {
               transactions={lineItemMappedTransactions}
               fileName={file?.name}
               fiscalYearId={selectedFiscalYearId}
+              fiscalYearName={fiscalYears.find(fy => fy.id === selectedFiscalYearId)?.name ?? `FY${selectedFiscalYearId}`}
               onBack={handleBackToLineItems}
               onPosted={handlePosted}
             />
