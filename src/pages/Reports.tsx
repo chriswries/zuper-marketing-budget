@@ -33,11 +33,29 @@ export default function Reports() {
           </CardContent>
         </Card>
 
+        {/* Forecast vs Actuals Variance - Available */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Forecast vs Actuals Variance</CardTitle>
+            </div>
+            <CardDescription>
+              Compare current forecast against matched actuals to identify variances by cost center and line item.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <Button onClick={() => navigate('/reports/forecast-actuals-variance')} className="w-full">
+              View Report
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Coming Soon Cards */}
         <Card className="flex flex-col opacity-60">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-muted-foreground" />
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
               <CardTitle className="text-lg">Budget vs Forecast vs Actuals</CardTitle>
             </div>
             <CardDescription>
