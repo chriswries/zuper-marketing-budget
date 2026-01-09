@@ -31,6 +31,7 @@ import { MONTH_LABELS } from '@/types/budget';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getNextPendingStep, getApproverLabel, canRoleApproveRequest } from '@/lib/requestApprovals';
 import { formatDate } from '@/lib/dateTime';
+import { getRequestKindLabel } from '@/types/requests';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -217,6 +218,7 @@ export default function Requests() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Status</TableHead>
+                  <TableHead>Request Type</TableHead>
                   <TableHead>Next Approver</TableHead>
                   <TableHead>Cost Center</TableHead>
                   <TableHead>Vendor</TableHead>
@@ -237,6 +239,9 @@ export default function Requests() {
                       <Badge variant={statusVariant(request.status)}>
                         {request.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{getRequestKindLabel(request.originKind)}</span>
                     </TableCell>
                     <TableCell>
                       {(() => {
