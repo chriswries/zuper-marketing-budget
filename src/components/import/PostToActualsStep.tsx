@@ -33,6 +33,8 @@ import {
   saveLatestActualsImport,
   loadLatestActualsImport,
   clearLatestActualsImport,
+  clearLegacyActualsImportLocalStorage,
+  hasLegacyActualsImportData,
 } from "@/lib/actualsImportStore";
 import { appendActuals } from "@/lib/actualsStore";
 import { toast } from "@/hooks/use-toast";
@@ -107,10 +109,17 @@ export function PostToActualsStep({
   const [isPosted, setIsPosted] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showLegacyCleanupDialog, setShowLegacyCleanupDialog] = useState(false);
   const [postedBatchId, setPostedBatchId] = useState<string | null>(null);
+  const [clearedBatch, setClearedBatch] = useState(false);
+  const [clearedLegacyData, setClearedLegacyData] = useState(false);
 
   // Check if there's an existing import
   const existingBatch = useMemo(() => loadLatestActualsImport(), []);
+  
+  // Check if legacy data exists (only compute once, then track via state)
+  const initialHasLegacy = useMemo(() => hasLegacyActualsImportData(), []);
+  const hasLegacyData = initialHasLegacy && !clearedLegacyData;
 
   // Compute totals
   const totalAmount = useMemo(
@@ -193,11 +202,27 @@ export function PostToActualsStep({
     }
   };
 
-  const [clearedBatch, setClearedBatch] = useState(false);
-
   const handleClearExisting = () => {
     clearLatestActualsImport();
     setClearedBatch(true);
+  };
+
+  const handleClearLegacyData = () => {
+    const result = clearLegacyActualsImportLocalStorage();
+    setClearedLegacyData(true);
+    setShowLegacyCleanupDialog(false);
+    
+    if (result.clearedKeys.length > 0) {
+      toast({
+        title: "Cleared legacy import data",
+        description: `Removed ${result.clearedKeys.length} legacy storage key(s): ${result.clearedKeys.join(", ")}`,
+      });
+    } else {
+      toast({
+        title: "No legacy import data found",
+        description: "No legacy localStorage keys were present.",
+      });
+    }
   };
 
   // Compute effective existing batch (null if cleared)
@@ -261,6 +286,26 @@ export function PostToActualsStep({
             >
               <Trash2 className="h-4 w-4 mr-1" />
               Clear
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Legacy data cleanup option */}
+      {hasLegacyData && (
+        <Alert variant="default" className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-amber-800 dark:text-amber-200">
+              Legacy import data found in browser storage from before database persistence was added.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLegacyCleanupDialog(true)}
+              className="border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Clear legacy data
             </Button>
           </AlertDescription>
         </Alert>
@@ -341,7 +386,7 @@ export function PostToActualsStep({
         </Button>
       </div>
 
-      {/* Confirmation Dialog */}
+      {/* Post Confirmation Dialog */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -353,6 +398,22 @@ export function PostToActualsStep({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmPost}>Post Actuals</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Legacy Cleanup Confirmation Dialog */}
+      <AlertDialog open={showLegacyCleanupDialog} onOpenChange={setShowLegacyCleanupDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear legacy import data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes old Import Actuals data saved in your browser before database posting existed. This will NOT delete any Actuals saved to the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearLegacyData}>Clear</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
