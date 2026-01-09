@@ -591,8 +591,8 @@ export default function RequestDetail() {
         </Alert>
       )}
 
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-        <Card className="md:col-span-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-5">
+        <Card className="md:col-span-3 min-w-0">
           <CardHeader>
             <CardTitle className="text-lg">Request Details</CardTitle>
           </CardHeader>
@@ -631,7 +631,7 @@ export default function RequestDetail() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="md:col-span-2 min-w-0">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Approval Timeline</CardTitle>
@@ -650,7 +650,7 @@ export default function RequestDetail() {
         </Card>
 
         {/* Approval Activity */}
-        <Card className="md:col-span-3">
+        <Card className="md:col-span-5">
           <CardHeader>
             <div className="flex items-center gap-2">
               <History className="h-4 w-4 text-muted-foreground" />
