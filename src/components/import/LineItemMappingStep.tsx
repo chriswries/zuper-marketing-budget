@@ -28,6 +28,7 @@ import { formatUSD } from "@/lib/import";
 interface LineItemMappingStepProps {
   transactions: ImportedTransactionWithVendor[];
   lineItemOptions: LineItemOption[];
+  allowedCostCenterIds?: string[]; // If set, filter options to only these cost centers
   initialMappings?: VendorToLineItemMap;
   onBack: () => void;
   onContinue: (result: {
@@ -46,6 +47,7 @@ interface VendorGroup {
 export function LineItemMappingStep({
   transactions,
   lineItemOptions,
+  allowedCostCenterIds = [],
   initialMappings = {},
   onBack,
   onContinue,
@@ -91,14 +93,21 @@ export function LineItemMappingStep({
   const totalCount = vendorGroups.length;
   const allMapped = mappedCount === totalCount;
 
-  // Sort line item options by cost center then line item name
+  // Filter and sort line item options
+  // If allowedCostCenterIds is non-empty, filter to only those cost centers
+  // Otherwise, show all options
   const sortedLineItemOptions = useMemo(() => {
-    return [...lineItemOptions].sort((a, b) => {
-      const ccCompare = a.costCenterName.localeCompare(b.costCenterName);
+    let filtered = lineItemOptions;
+    if (allowedCostCenterIds.length > 0) {
+      const allowedSet = new Set(allowedCostCenterIds);
+      filtered = lineItemOptions.filter(opt => allowedSet.has(opt.costCenterId));
+    }
+    return [...filtered].sort((a, b) => {
+      const ccCompare = a.costCenterName.localeCompare(b.costCenterName, undefined, { sensitivity: 'base' });
       if (ccCompare !== 0) return ccCompare;
-      return a.lineItemName.localeCompare(b.lineItemName);
+      return a.lineItemName.localeCompare(b.lineItemName, undefined, { sensitivity: 'base' });
     });
-  }, [lineItemOptions]);
+  }, [lineItemOptions, allowedCostCenterIds]);
 
   // Auto-map by vendor name matching
   const handleAutoMap = () => {
@@ -229,9 +238,7 @@ export function LineItemMappingStep({
                       <SelectContent>
                         {sortedLineItemOptions.map((option) => (
                           <SelectItem key={option.lineItemId} value={option.lineItemId}>
-                            <span className="text-muted-foreground">{option.costCenterName}</span>
-                            <span className="mx-1">→</span>
-                            <span>{option.lineItemName}</span>
+                            {option.costCenterName}: {option.lineItemName}
                           </SelectItem>
                         ))}
                       </SelectContent>

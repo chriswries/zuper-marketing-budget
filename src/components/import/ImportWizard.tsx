@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Papa from "papaparse";
 import { Card, CardContent } from "@/components/ui/card";
 import { UploadStep } from "./UploadStep";
@@ -21,7 +21,9 @@ import type {
   LineItemOption
 } from "@/types/import";
 import { cn } from "@/lib/utils";
-import { mockVendors, mockCostCenters } from "@/data/mock-budget-data";
+import { useFiscalYearBudget } from "@/contexts/FiscalYearBudgetContext";
+import { loadForecastForFYAsync } from "@/lib/forecastStore";
+import type { CostCenter } from "@/types/budget";
 
 const STEPS: { key: ImportWizardStep; label: string }[] = [
   { key: "upload", label: "Upload" },
@@ -34,6 +36,7 @@ const STEPS: { key: ImportWizardStep; label: string }[] = [
 ];
 
 export function ImportWizard() {
+  const { selectedFiscalYearId } = useFiscalYearBudget();
   const [currentStep, setCurrentStep] = useState<ImportWizardStep>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<ParsedImportData | null>(null);
@@ -45,22 +48,25 @@ export function ImportWizard() {
   const [lineItemMappings, setLineItemMappings] = useState<VendorToLineItemMap>({});
   const [lineItemMappedTransactions, setLineItemMappedTransactions] = useState<ImportedTransactionMapped[]>([]);
   const [postedBatchId, setPostedBatchId] = useState<string | null>(null);
+  const [forecastCostCenters, setForecastCostCenters] = useState<CostCenter[]>([]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
-  // Initialize canonical vendors from mock data
-  const initialCanonicalVendors = useMemo(() => {
-    const vendors: CanonicalVendor[] = mockVendors.map(v => ({
-      id: v.id,
-      name: v.name,
-    }));
-    return vendors.sort((a, b) => a.name.localeCompare(b.name));
-  }, []);
+  // Load forecast cost centers when FY is selected
+  useEffect(() => {
+    if (!selectedFiscalYearId) {
+      setForecastCostCenters([]);
+      return;
+    }
+    loadForecastForFYAsync(selectedFiscalYearId).then((costCenters) => {
+      setForecastCostCenters(costCenters || []);
+    });
+  }, [selectedFiscalYearId]);
 
-  // Build line item options from mock cost centers
+  // Build line item options from forecast cost centers
   const lineItemOptions: LineItemOption[] = useMemo(() => {
     const options: LineItemOption[] = [];
-    for (const cc of mockCostCenters) {
+    for (const cc of forecastCostCenters) {
       for (const li of cc.lineItems) {
         options.push({
           lineItemId: li.id,
@@ -76,7 +82,21 @@ export function ImportWizard() {
       if (ccCompare !== 0) return ccCompare;
       return a.lineItemName.localeCompare(b.lineItemName);
     });
-  }, []);
+  }, [forecastCostCenters]);
+
+  // Derive allowed cost center IDs from existing line item mappings
+  const allowedCostCenterIds: string[] = useMemo(() => {
+    const mappedLineItemIds = Object.values(lineItemMappings);
+    if (mappedLineItemIds.length === 0) return [];
+    const costCenterIdSet = new Set<string>();
+    for (const lineItemId of mappedLineItemIds) {
+      const option = lineItemOptions.find(opt => opt.lineItemId === lineItemId);
+      if (option) {
+        costCenterIdSet.add(option.costCenterId);
+      }
+    }
+    return Array.from(costCenterIdSet);
+  }, [lineItemMappings, lineItemOptions]);
 
   const parseFile = (file: File): Promise<ParsedImportData> => {
     return new Promise((resolve) => {
@@ -272,6 +292,7 @@ export function ImportWizard() {
             <LineItemMappingStep
               transactions={vendorNormalizedTransactions}
               lineItemOptions={lineItemOptions}
+              allowedCostCenterIds={allowedCostCenterIds}
               initialMappings={lineItemMappings}
               onBack={handleBackToVendors}
               onContinue={handleLineItemMappingComplete}
