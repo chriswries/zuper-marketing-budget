@@ -39,6 +39,7 @@ import { createDefaultApprovalSteps, createCMOApprovalSteps, OriginKind } from '
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { formatAuditTimestamp } from '@/lib/dateTime';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
@@ -1263,6 +1264,7 @@ export default function Forecast() {
         costCenters={costCenters}
         lockedMonths={lockedMonths}
         onCreateLineItem={handleCreateLineItem}
+        checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters })}
       />
 
       <AdjustmentJustificationDialog
