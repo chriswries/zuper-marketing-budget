@@ -20,6 +20,7 @@ import {
 import { useFiscalYearBudget, FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { ChevronUp, ChevronDown, Plus, Trash2, AlertCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { validateCostCenterNames } from '@/lib/validateCostCenters';
 
 interface CostCenterDraft {
   id: string;
@@ -85,6 +86,13 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
 
   const isBalanced = Math.abs(totalAllocated - targetBudgetNum) <= 1;
   const difference = totalAllocated - targetBudgetNum;
+
+  // Validate cost center names (Step 2)
+  const costCenterValidation = useMemo(() => {
+    return validateCostCenterNames(costCenters);
+  }, [costCenters]);
+
+  const isStep2Valid = costCenters.length > 0 && costCenterValidation.isValid;
 
   // Step 2: Initialize cost centers from prior FY or empty
   const initializeCostCenters = () => {
@@ -260,42 +268,47 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
 
             <div className="space-y-2">
               {costCenters.map((cc, index) => (
-                <div key={cc.id} className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-                  <div className="flex flex-col gap-0.5">
+                <div key={cc.id} className="space-y-1">
+                  <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                    <div className="flex flex-col gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleMoveCostCenter(index, 'up')}
+                        disabled={index === 0}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleMoveCostCenter(index, 'down')}
+                        disabled={index === costCenters.length - 1}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Input
+                      ref={(el) => { inputRefs.current[cc.id] = el; }}
+                      className={cn("flex-1", costCenterValidation.errorsById[cc.id] && "border-destructive")}
+                      placeholder="Cost center name"
+                      value={cc.name}
+                      onChange={(e) => handleUpdateCostCenter(cc.id, 'name', e.target.value)}
+                    />
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleMoveCostCenter(index, 'up')}
-                      disabled={index === 0}
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleRemoveCostCenter(cc.id)}
                     >
-                      <ChevronUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleMoveCostCenter(index, 'down')}
-                      disabled={index === costCenters.length - 1}
-                    >
-                      <ChevronDown className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Input
-                    ref={(el) => { inputRefs.current[cc.id] = el; }}
-                    className="flex-1"
-                    placeholder="Cost center name"
-                    value={cc.name}
-                    onChange={(e) => handleUpdateCostCenter(cc.id, 'name', e.target.value)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleRemoveCostCenter(cc.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {costCenterValidation.errorsById[cc.id] && (
+                    <p className="text-xs text-destructive ml-10">{costCenterValidation.errorsById[cc.id]}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -305,11 +318,18 @@ export function BudgetSetupWizard({ open, onOpenChange }: BudgetSetupWizardProps
               Add Cost Center
             </Button>
 
+            {!costCenterValidation.isValid && costCenters.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span>Fix cost center name errors to continue.</span>
+              </div>
+            )}
+
             <div className="flex justify-between pt-4">
               <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button onClick={() => setStep(3)} disabled={costCenters.length === 0}>
+              <Button onClick={() => setStep(3)} disabled={!isStep2Valid}>
                 Next: Allocations
               </Button>
             </div>

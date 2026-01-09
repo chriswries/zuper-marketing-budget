@@ -32,6 +32,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowUp, ArrowDown, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { CostCenter } from '@/types/budget';
+import { validateCostCenterNames } from '@/lib/validateCostCenters';
+import { toast } from '@/hooks/use-toast';
 
 interface AllocationRow {
   id: string;
@@ -107,6 +109,13 @@ export function EditAllocationsDialog({
   const difference = totalAllocated - targetBudget;
   const isBalanced = Math.abs(difference) <= 1;
 
+  // Validate cost center names
+  const costCenterValidation = useMemo(() => {
+    return validateCostCenterNames(rows);
+  }, [rows]);
+
+  const canSave = isBalanced && costCenterValidation.isValid;
+
   const updateRow = (id: string, updates: Partial<AllocationRow>) => {
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
@@ -150,6 +159,16 @@ export function EditAllocationsDialog({
   };
 
   const handleSave = () => {
+    // Defensive guard
+    if (!costCenterValidation.isValid) {
+      toast({
+        title: 'Fix cost center names',
+        description: 'Cost center names must be unique and non-empty.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     onSave({
       targetBudget,
       costCenters: computedRows.map((r) => ({
@@ -213,76 +232,78 @@ export function EditAllocationsDialog({
                     </p>
                   ) : (
                     computedRows.map((row, index) => (
-                      <div
-                        key={row.id}
-                        className="flex items-center gap-2 p-3 border rounded-lg bg-card"
-                      >
-                        {/* Reorder buttons */}
-                        <div className="flex flex-col gap-0.5">
+                      <div key={row.id} className="space-y-1">
+                        <div className="flex items-center gap-2 p-3 border rounded-lg bg-card">
+                          {/* Reorder buttons */}
+                          <div className="flex flex-col gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => moveRow(index, 'up')}
+                              disabled={index === 0}
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5"
+                              onClick={() => moveRow(index, 'down')}
+                              disabled={index === rows.length - 1}
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </Button>
+                          </div>
+
+                          {/* Name */}
+                          <Input
+                            value={row.name}
+                            onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                            placeholder="Cost center name"
+                            className={`flex-1 min-w-[120px] ${costCenterValidation.errorsById[row.id] ? 'border-destructive' : ''}`}
+                          />
+
+                          {/* Mode */}
+                          <Select
+                            value={row.mode}
+                            onValueChange={(val) => updateRow(row.id, { mode: val as '$' | '%' })}
+                          >
+                            <SelectTrigger className="w-16">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="$">$</SelectItem>
+                              <SelectItem value="%">%</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          {/* Value */}
+                          <Input
+                            type="number"
+                            value={row.value}
+                            onChange={(e) => updateRow(row.id, { value: Number(e.target.value) || 0 })}
+                            className="w-24"
+                          />
+
+                          {/* Computed display */}
+                          <div className="text-sm text-muted-foreground w-32 text-right">
+                            {formatCurrency(row.computedAmount)} ({row.computedPercent.toFixed(1)}%)
+                          </div>
+
+                          {/* Delete */}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-5 w-5"
-                            onClick={() => moveRow(index, 'up')}
-                            disabled={index === 0}
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeRow(row)}
                           >
-                            <ArrowUp className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                            onClick={() => moveRow(index, 'down')}
-                            disabled={index === rows.length - 1}
-                          >
-                            <ArrowDown className="h-3 w-3" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-
-                        {/* Name */}
-                        <Input
-                          value={row.name}
-                          onChange={(e) => updateRow(row.id, { name: e.target.value })}
-                          placeholder="Cost center name"
-                          className="flex-1 min-w-[120px]"
-                        />
-
-                        {/* Mode */}
-                        <Select
-                          value={row.mode}
-                          onValueChange={(val) => updateRow(row.id, { mode: val as '$' | '%' })}
-                        >
-                          <SelectTrigger className="w-16">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="$">$</SelectItem>
-                            <SelectItem value="%">%</SelectItem>
-                          </SelectContent>
-                        </Select>
-
-                        {/* Value */}
-                        <Input
-                          type="number"
-                          value={row.value}
-                          onChange={(e) => updateRow(row.id, { value: Number(e.target.value) || 0 })}
-                          className="w-24"
-                        />
-
-                        {/* Computed display */}
-                        <div className="text-sm text-muted-foreground w-32 text-right">
-                          {formatCurrency(row.computedAmount)} ({row.computedPercent.toFixed(1)}%)
-                        </div>
-
-                        {/* Delete */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(row)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {costCenterValidation.errorsById[row.id] && (
+                          <p className="text-xs text-destructive ml-10">{costCenterValidation.errorsById[row.id]}</p>
+                        )}
                       </div>
                     ))
                   )}
@@ -314,6 +335,15 @@ export function EditAllocationsDialog({
                   </AlertDescription>
                 </Alert>
               )}
+
+              {!costCenterValidation.isValid && rows.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Fix cost center name errors to save.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
 
@@ -321,8 +351,8 @@ export function EditAllocationsDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!isBalanced}>
-              Save Allocations
+            <Button onClick={handleSave} disabled={!canSave}>
+              Save Budget Settings
             </Button>
           </DialogFooter>
         </DialogContent>
