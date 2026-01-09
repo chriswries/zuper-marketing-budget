@@ -33,7 +33,7 @@ import {
 } from '@/lib/forecastActualsVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, Receipt } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, Receipt, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 // Helper to compute variance percentage
@@ -470,6 +470,16 @@ export default function ForecastActualsVarianceReport() {
   
   return (
     <div className="space-y-6">
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => navigate('/reports')} 
+        className="gap-2"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+      
       <div className="flex items-center justify-between">
         <PageHeader
           title="Forecast vs Actuals Variance"
