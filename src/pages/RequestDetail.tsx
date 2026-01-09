@@ -139,6 +139,14 @@ export default function RequestDetail() {
     return '—';
   }, [request, fiscalYears]);
 
+  // Header title fallback: lineItemName → vendorName → request ID
+  const headerTitle = useMemo(() => {
+    if (!request) return '—';
+    if (request.lineItemName) return request.lineItemName;
+    if (request.vendorName) return request.vendorName;
+    return request.id.slice(0, 8);
+  }, [request]);
+
   // Format date range - single month or range
   const dateRangeDisplay = useMemo(() => {
     if (!request) return '';
@@ -146,6 +154,79 @@ export default function RequestDetail() {
       return MONTH_LABELS[request.startMonth];
     }
     return `${MONTH_LABELS[request.startMonth]} – ${MONTH_LABELS[request.endMonth]}`;
+  }, [request]);
+
+  // Next approver label for details panel
+  const nextApproverLabel = useMemo(() => {
+    if (!request || request.status !== 'pending') return '—';
+    const step = request.approvalSteps.find((s) => s.status === 'pending');
+    if (!step) return '—';
+    return levelLabels[step.level] || step.level;
+  }, [request]);
+
+  // Request type friendly label
+  const requestTypeLabel = useMemo(() => {
+    if (!request) return 'Spend request';
+    switch (request.originKind) {
+      case 'new_line_item':
+        return 'New line item';
+      case 'adjustment':
+        return 'Adjustment';
+      case 'delete_line_item':
+        return 'Delete line item';
+      case 'cancel_request':
+        return 'Withdraw / Cancel';
+      default:
+        return 'Spend request';
+    }
+  }, [request]);
+
+  // Sheet label
+  const sheetLabel = useMemo(() => {
+    if (!request?.originSheet) return '—';
+    switch (request.originSheet) {
+      case 'budget':
+        return 'Budget';
+      case 'forecast':
+        return 'Forecast';
+      default:
+        return '—';
+    }
+  }, [request]);
+
+  // Current and Revised amounts for adjustment requests
+  const { currentAmount, revisedAmount } = useMemo(() => {
+    if (!request) return { currentAmount: '—', revisedAmount: '—' };
+    
+    // For new line items, current is "—" and revised is the amount
+    if (request.originKind === 'new_line_item') {
+      return { 
+        currentAmount: '—', 
+        revisedAmount: `$${request.amount.toLocaleString()}` 
+      };
+    }
+    
+    // For adjustments, try to get old/new totals from metadata
+    if (request.originKind === 'adjustment') {
+      const meta = (request as any).adjustmentMeta;
+      if (meta?.oldFYTotal !== undefined && meta?.newFYTotal !== undefined) {
+        return {
+          currentAmount: `$${meta.oldFYTotal.toLocaleString()}`,
+          revisedAmount: `$${meta.newFYTotal.toLocaleString()}`,
+        };
+      }
+      // Fallback: show amount as revised if no meta
+      return { 
+        currentAmount: '—', 
+        revisedAmount: `$${request.amount.toLocaleString()}` 
+      };
+    }
+    
+    // For other types (delete, cancel), show current amount
+    return { 
+      currentAmount: `$${request.amount.toLocaleString()}`, 
+      revisedAmount: '—' 
+    };
   }, [request]);
 
   const refreshAuditEvents = useCallback(() => {
@@ -426,7 +507,7 @@ export default function RequestDetail() {
   return (
     <div>
       <PageHeader
-        title={`Request: ${request.vendorName}`}
+        title={`Request: ${headerTitle}`}
         description={`Created ${formatDate(request.createdAt, adminSettings.timeZone)}`}
       >
         <div className="flex gap-2 flex-wrap">
@@ -506,12 +587,20 @@ export default function RequestDetail() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Line Item</span>
-              <span className="font-medium">{lineItemName}</span>
+              <span className="text-muted-foreground">Next Approver</span>
+              <span className="font-medium">{nextApproverLabel}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Type</span>
+              <span className="font-medium">{requestTypeLabel}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
-              <Badge variant={statusVariant}>{request.status}</Badge>
+              <Badge variant={statusVariant}>{isDeleted ? 'Archived' : request.status}</Badge>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sheet</span>
+              <span className="font-medium">{sheetLabel}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cost Center</span>
@@ -522,18 +611,16 @@ export default function RequestDetail() {
               <span className="font-medium">{request.vendorName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Amount</span>
-              <span className="font-medium">
-                ${request.amount.toLocaleString()}
-              </span>
+              <span className="text-muted-foreground">Current Amount</span>
+              <span className="font-medium">{currentAmount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Revised Amount</span>
+              <span className="font-medium">{revisedAmount}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Date Range</span>
               <span className="font-medium">{dateRangeDisplay}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Contracted</span>
-              <span className="font-medium">{request.isContracted ? 'Yes' : 'No'}</span>
             </div>
             {request.justification && (
               <div className="pt-2 border-t">
