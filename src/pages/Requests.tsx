@@ -220,9 +220,23 @@ export default function Requests() {
           ) : filteredRequests.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground">
               <p>No matching requests found.</p>
-              <p className="text-sm mt-1">
-                Try adjusting your filters or search query.
-              </p>
+              {needsMyApproval && currentRole !== 'admin' ? (
+                <div className="mt-2">
+                  <p className="text-sm">No requests need your approval right now.</p>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="mt-1 h-auto p-0"
+                    onClick={() => setNeedsMyApproval(false)}
+                  >
+                    Clear "Needs my approval" to see all requests
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm mt-1">
+                  Try adjusting your filters or search query.
+                </p>
+              )}
             </div>
           ) : (
             <Table>
