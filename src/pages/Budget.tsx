@@ -20,16 +20,18 @@ import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
+import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
 import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
-import { createDefaultApprovalSteps } from '@/types/requests';
+import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import {
   loadApprovalAudit,
   appendApprovalAudit,
@@ -72,6 +74,7 @@ import {
   Bell,
   Copy,
   ShieldAlert,
+  ClipboardCheck,
 } from 'lucide-react';
 
 const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
@@ -148,6 +151,7 @@ export default function Budget() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
+  const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
 
@@ -239,7 +243,19 @@ export default function Budget() {
 
   const canSubmit = submissionBlockers.length === 0;
 
-  // Compute remaining amounts for each cost center and grand total
+  // Count budget line item requests needing approval by current role
+  const budgetApprovalsCount = useMemo(() => {
+    if (!selectedFiscalYearId || !currentRole) return 0;
+    
+    const validKinds: OriginKind[] = ['new_line_item', 'adjustment', 'delete_line_item', 'cancel_request'];
+    return requests.filter((r) => {
+      if (r.originSheet !== 'budget') return false;
+      if (r.originFiscalYearId !== selectedFiscalYearId) return false;
+      if (!r.originKind || !validKinds.includes(r.originKind)) return false;
+      return requestNeedsApprovalByRole(r, currentRole);
+    }).length;
+  }, [requests, selectedFiscalYearId, currentRole]);
+
   const remainingAmounts = useMemo(() => {
     if (!selectedFiscalYear) return { byCostCenter: new Map<string, number>(), grandTotal: 0 };
 
@@ -1206,6 +1222,24 @@ export default function Budget() {
             </>
           ) : null}
 
+          {/* Approvals button - only show for non-admin roles with pending approvals */}
+          {currentRole !== 'admin' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setApprovalsDrawerOpen(true)}
+              className="gap-2"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              Approvals
+              {budgetApprovalsCount > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {budgetApprovalsCount}
+                </Badge>
+              )}
+            </Button>
+          )}
+
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -1535,6 +1569,12 @@ export default function Budget() {
         description="This action bypasses the normal approval workflow. Please provide a justification for audit purposes."
         onCancel={handleOverrideCancel}
         onSubmit={handleOverrideSubmit}
+      />
+
+      <BulkLineItemApprovalsDrawer
+        open={approvalsDrawerOpen}
+        onOpenChange={setApprovalsDrawerOpen}
+        originSheet="budget"
       />
     </div>
   );
