@@ -263,7 +263,6 @@ export function ImportWizard() {
           {currentStep === "vendors" && normalizedTransactions.length > 0 && (
             <VendorNormalizationStep
               transactions={normalizedTransactions}
-              canonicalVendors={canonicalVendors.length > 0 ? canonicalVendors : initialCanonicalVendors}
               initialMappings={vendorMappings}
               onBack={handleBackToConfirm}
               onContinue={handleVendorNormalizationComplete}
