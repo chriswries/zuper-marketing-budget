@@ -596,38 +596,38 @@ export default function RequestDetail() {
           <CardHeader>
             <CardTitle className="text-lg">Request Details</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <span className="text-muted-foreground text-xs">Next Approver</span>
-            <span className="text-right break-words">{nextApproverLabel}</span>
+          <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <span className="text-muted-foreground text-sm">Next Approver</span>
+            <span className="text-right break-words text-sm">{nextApproverLabel}</span>
 
-            <span className="text-muted-foreground text-xs">Type</span>
-            <span className="text-right break-words">{requestTypeLabel}</span>
+            <span className="text-muted-foreground text-sm">Type</span>
+            <span className="text-right break-words text-sm">{requestTypeLabel}</span>
 
-            <span className="text-muted-foreground text-xs self-start">Justification</span>
-            <span className="text-right break-words">{justificationDisplay}</span>
+            <span className="text-muted-foreground text-sm self-start">Justification</span>
+            <span className="text-right break-words text-sm">{justificationDisplay}</span>
 
-            <span className="text-muted-foreground text-xs">Status</span>
+            <span className="text-muted-foreground text-sm">Status</span>
             <span className="text-right">
-              <Badge variant={statusVariant} className="text-xs">{isDeleted ? 'Archived' : request.status}</Badge>
+              <Badge variant={statusVariant} className="text-sm">{isDeleted ? 'Archived' : request.status}</Badge>
             </span>
 
-            <span className="text-muted-foreground text-xs">Sheet</span>
-            <span className="text-right break-words">{sheetLabel}</span>
+            <span className="text-muted-foreground text-sm">Sheet</span>
+            <span className="text-right break-words text-sm">{sheetLabel}</span>
 
-            <span className="text-muted-foreground text-xs">Cost Center</span>
-            <span className="text-right break-words">{request.costCenterName}</span>
+            <span className="text-muted-foreground text-sm">Cost Center</span>
+            <span className="text-right break-words text-sm">{request.costCenterName}</span>
 
-            <span className="text-muted-foreground text-xs">Vendor</span>
-            <span className="text-right break-words">{request.vendorName}</span>
+            <span className="text-muted-foreground text-sm">Vendor</span>
+            <span className="text-right break-words text-sm">{request.vendorName}</span>
 
-            <span className="text-muted-foreground text-xs">Current Amount</span>
-            <span className="text-right break-words">{currentAmount}</span>
+            <span className="text-muted-foreground text-sm">Current Amount</span>
+            <span className="text-right break-words text-sm">{currentAmount}</span>
 
-            <span className="text-muted-foreground text-xs">Revised Amount</span>
-            <span className="text-right break-words">{revisedAmount}</span>
+            <span className="text-muted-foreground text-sm">Revised Amount</span>
+            <span className="text-right break-words text-sm">{revisedAmount}</span>
 
-            <span className="text-muted-foreground text-xs">Date Range</span>
-            <span className="text-right break-words">{dateRangeDisplay}</span>
+            <span className="text-muted-foreground text-sm">Date Range</span>
+            <span className="text-right break-words text-sm">{dateRangeDisplay}</span>
           </CardContent>
         </Card>
 
