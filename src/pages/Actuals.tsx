@@ -8,7 +8,7 @@
  * Transaction import is handled in ActualsImport.tsx (Track B Prompt B1).
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, DollarSign, TrendingUp, Receipt, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -43,6 +43,25 @@ function formatCurrency(value: number): string {
 
 type SortMode = 'alpha' | 'total';
 
+// Legacy localStorage keys to clean up
+const LEGACY_ACTUALS_KEYS = [
+  'actuals_transactions_v1',
+  'actualsTransactions',
+  'actuals_matching_v1',
+  'actualsMatching',
+];
+
+// Clean up legacy localStorage artifacts
+function cleanupLegacyActualsStorage(): void {
+  for (const key of LEGACY_ACTUALS_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
+
 export default function Actuals() {
   const navigate = useNavigate();
   const { fiscalYears, selectedFiscalYearId, setSelectedFiscalYearId, selectedFiscalYear } = useFiscalYearBudget();
@@ -50,17 +69,27 @@ export default function Actuals() {
   
   const visibleFiscalYears = getVisibleFiscalYears(fiscalYears, settings.showArchivedFiscalYears);
 
+  // Determine if we have an active FY
+  const isActiveFY = selectedFiscalYear?.status === 'active';
+
+  // Clean up legacy localStorage artifacts on mount when no active FY
+  useEffect(() => {
+    if (!isActiveFY) {
+      cleanupLegacyActualsStorage();
+    }
+  }, [isActiveFY]);
+
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [ccSort, setCcSort] = useState<SortMode>('alpha');
   const [liSort, setLiSort] = useState<SortMode>('alpha');
   const [showZeroRows, setShowZeroRows] = useState(false);
 
-  // Fetch rollup when FY is selected
+  // Fetch rollup only when FY is active
   const rollup = useMemo<ActualsRollupResult | null>(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear) return null;
+    if (!selectedFiscalYearId || !selectedFiscalYear || !isActiveFY) return null;
     return getOrBuildActualsRollup(selectedFiscalYearId, selectedFiscalYear);
-  }, [selectedFiscalYearId, selectedFiscalYear]);
+  }, [selectedFiscalYearId, selectedFiscalYear, isActiveFY]);
 
   // Build CostCenter[] structure for SheetTable from rollup
   const displayCostCenters = useMemo((): CostCenter[] => {
@@ -183,12 +212,19 @@ export default function Actuals() {
         </CardContent>
       </Card>
 
-      {!selectedFiscalYearId ? (
-        <Card className="border-muted">
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Select a fiscal year to view actuals</p>
-            <p className="text-sm">Actuals are displayed from matched imported transactions.</p>
+      {/* Empty state when no active FY */}
+      {!isActiveFY ? (
+        <Card className="max-w-lg mx-auto">
+          <CardHeader>
+            <CardTitle className="text-center">No Active Actuals</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              Create and approve a fiscal year budget to generate a forecast and begin tracking actuals.
+            </p>
+            <Button onClick={() => navigate('/budget')}>
+              Go to Budget
+            </Button>
           </CardContent>
         </Card>
       ) : (
