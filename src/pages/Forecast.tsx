@@ -35,7 +35,7 @@ import { Lock, History, Plus, Info, ShieldAlert } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { createDefaultApprovalSteps, createCMOApprovalSteps } from '@/types/requests';
+import { createDefaultApprovalSteps, createCMOApprovalSteps, OriginKind } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
@@ -43,6 +43,10 @@ import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { formatAuditTimestamp } from '@/lib/dateTime';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 import { toast } from '@/hooks/use-toast';
+import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
+import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle } from 'lucide-react';
 
 // Deep clone cost centers to avoid mutating mock data
 function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
@@ -143,6 +147,7 @@ export default function Forecast() {
 
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set());
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
 
   // Justification dialog state
@@ -1049,6 +1054,19 @@ export default function Forecast() {
     ? Array.from(lockedMonths).map((m) => MONTH_LABELS[m]).join(', ')
     : 'None';
 
+  // Compute count of eligible approvals for current role
+  const forecastApprovalsCount = useMemo(() => {
+    if (!selectedFiscalYearId || !currentRole) return 0;
+    
+    const validKinds: OriginKind[] = ['new_line_item', 'adjustment', 'delete_line_item', 'cancel_request'];
+    return requests.filter((r) => {
+      if (r.originSheet !== 'forecast') return false;
+      if (r.originFiscalYearId !== selectedFiscalYearId) return false;
+      if (!r.originKind || !validKinds.includes(r.originKind)) return false;
+      return requestNeedsApprovalByRole(r, currentRole);
+    }).length;
+  }, [requests, selectedFiscalYearId, currentRole]);
+
   return (
     <div className="space-y-6">
       {/* Admin Override Banner */}
@@ -1093,6 +1111,24 @@ export default function Forecast() {
               </TooltipContent>
             </Tooltip>
           ) : null}
+
+          {currentRole !== 'admin' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setApprovalsDrawerOpen(true)}
+              className="gap-2"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Approvals
+              {forecastApprovalsCount > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {forecastApprovalsCount}
+                </Badge>
+              )}
+            </Button>
+          )}
+
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -1242,6 +1278,12 @@ export default function Forecast() {
         description="This action bypasses the normal approval workflow. Please provide a justification for audit purposes."
         onCancel={handleOverrideCancel}
         onSubmit={handleOverrideSubmit}
+      />
+
+      <BulkLineItemApprovalsDrawer
+        open={approvalsDrawerOpen}
+        onOpenChange={setApprovalsDrawerOpen}
+        originSheet="forecast"
       />
     </div>
   );
