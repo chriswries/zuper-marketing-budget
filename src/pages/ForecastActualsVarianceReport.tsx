@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
@@ -32,9 +33,10 @@ import {
   ForecastActualsReportResult,
 } from '@/lib/forecastActualsVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
-import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
+import { MONTHS, MONTH_LABELS, CostCenter, Month } from '@/types/budget';
 import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, Receipt, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { ScopeMode, sumYTD, getCurrentFiscalMonth, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
 
 // Helper to compute variance percentage
 function computeVariancePct(variance: number, forecast: number): number | null {
@@ -103,6 +105,11 @@ export default function ForecastActualsVarianceReport() {
   const [showMonthly, setShowMonthly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('variance_abs');
   
+  // Scope controls: FY vs YTD
+  const [scopeMode, setScopeMode] = useState<ScopeMode>('fy');
+  const [asOfMonth, setAsOfMonth] = useState<Month>(getCurrentFiscalMonth());
+  const [asOfMonthInitialized, setAsOfMonthInitialized] = useState(false);
+  
   // Expanded cost centers
   const [expandedCCs, setExpandedCCs] = useState<Set<string>>(new Set());
   
@@ -146,10 +153,24 @@ export default function ForecastActualsVarianceReport() {
     return buildForecastActualsReport(forecastCCs, actualsRollup);
   }, [forecastCCs, actualsRollup]);
   
+  // Auto-set asOfMonth to latest month with actuals (only once)
+  useEffect(() => {
+    if (report && !asOfMonthInitialized) {
+      const allActualsByMonth = report.costCenters.flatMap(cc => 
+        cc.lineItems.map(li => li.actualsByMonth)
+      );
+      const latestMonth = getLatestActualsMonthFromLineItems(allActualsByMonth);
+      if (latestMonth) {
+        setAsOfMonth(latestMonth);
+      }
+      setAsOfMonthInitialized(true);
+    }
+  }, [report, asOfMonthInitialized]);
+  
   // Table ref for scroll-to-table
   const tableRef = useRef<HTMLDivElement | null>(null);
   
-  // Filter, recompute totals, and sort
+  // Filter, apply YTD if needed, recompute totals, and sort
   const filteredReport = useMemo(() => {
     if (!report) return null;
     
@@ -170,6 +191,24 @@ export default function ForecastActualsVarianceReport() {
       
       if (varianceOnly) {
         lineItems = lineItems.filter(item => item.variance !== 0);
+      }
+      
+      // Apply YTD calculation if scopeMode is 'ytd'
+      if (scopeMode === 'ytd') {
+        lineItems = lineItems.map(item => {
+          const forecastTotal = sumYTD(item.forecastByMonth, asOfMonth);
+          const actualsTotal = sumYTD(item.actualsByMonth, asOfMonth);
+          const variance = actualsTotal - forecastTotal;
+          const variancePct = forecastTotal === 0 ? null : variance / forecastTotal;
+          
+          return {
+            ...item,
+            forecastTotal,
+            actualsTotal,
+            variance,
+            variancePct,
+          };
+        });
       }
       
       // Recompute cost center totals from filtered line items
@@ -240,7 +279,7 @@ export default function ForecastActualsVarianceReport() {
         variancePct: grandVariancePct,
       },
     };
-  }, [report, costCenterFilter, contractedOnly, varianceOnly, sortBy]);
+  }, [report, costCenterFilter, contractedOnly, varianceOnly, sortBy, scopeMode, asOfMonth]);
   
   const toggleCC = (ccId: string) => {
     setExpandedCCs(prev => {
@@ -260,10 +299,11 @@ export default function ForecastActualsVarianceReport() {
     setVarianceOnly(false);
     setShowMonthly(false);
     setSortBy('variance_abs');
+    setScopeMode('fy');
     setExpandedCCs(new Set());
   }, []);
   
-  const hasActiveFilters = costCenterFilter !== 'all' || contractedOnly || varianceOnly || showMonthly || sortBy !== 'variance_abs';
+  const hasActiveFilters = costCenterFilter !== 'all' || contractedOnly || varianceOnly || showMonthly || sortBy !== 'variance_abs' || scopeMode !== 'fy';
   
   const handleViewInForecast = (ccId: string, itemId: string) => {
     if (selectedFiscalYearId) {
@@ -481,10 +521,15 @@ export default function ForecastActualsVarianceReport() {
       </Button>
       
       <div className="flex items-center justify-between">
-        <PageHeader
-          title="Forecast vs Actuals Variance"
-          description={`Comparing forecast against matched actuals for ${selectedFiscalYear.name}`}
-        />
+        <div>
+          <PageHeader
+            title="Forecast vs Actuals Variance"
+            description={`Comparing forecast against matched actuals for ${selectedFiscalYear.name}`}
+          />
+          <div className="mt-1 text-sm text-muted-foreground">
+            Showing: {scopeMode === 'fy' ? 'Full FY' : `YTD through ${MONTH_LABELS[asOfMonth]}`}
+          </div>
+        </div>
         <Button onClick={handleExportCsv} variant="outline" className="gap-2">
           <Download className="h-4 w-4" />
           Export CSV
@@ -496,7 +541,7 @@ export default function ForecastActualsVarianceReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Forecast FY Total
+              Forecast {scopeMode === 'fy' ? 'FY' : 'YTD'} Total
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -509,7 +554,7 @@ export default function ForecastActualsVarianceReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Actuals FY Total
+              Actuals {scopeMode === 'fy' ? 'FY' : 'YTD'} Total
             </CardTitle>
           </CardHeader>
           <CardContent>
