@@ -78,7 +78,7 @@ export function getMonthFromDate(date: Date): Month {
  */
 export function autoDetectColumns(headers: string[]): Partial<ColumnMapping> {
   const mapping: Partial<ColumnMapping> = {
-    amountSignMode: 'expenses_negative', // Default assumption
+    amountSignMode: 'expenses_positive', // Default assumption: expenses come in as positive values
   };
   
   const lowerHeaders = headers.map(h => h.toLowerCase());
