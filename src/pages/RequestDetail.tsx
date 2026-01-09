@@ -597,37 +597,37 @@ export default function RequestDetail() {
             <CardTitle className="text-lg">Request Details</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <span className="text-muted-foreground text-sm">Next Approver</span>
-            <span className="text-right break-words text-sm">{nextApproverLabel}</span>
+            <span className="text-muted-foreground text-base">Next Approver</span>
+            <span className="text-right break-words text-base">{nextApproverLabel}</span>
 
-            <span className="text-muted-foreground text-sm">Type</span>
-            <span className="text-right break-words text-sm">{requestTypeLabel}</span>
+            <span className="text-muted-foreground text-base">Type</span>
+            <span className="text-right break-words text-base">{requestTypeLabel}</span>
 
-            <span className="text-muted-foreground text-sm self-start">Justification</span>
-            <span className="text-right break-words text-sm">{justificationDisplay}</span>
+            <span className="text-muted-foreground text-base self-start">Justification</span>
+            <span className="text-right break-words text-base">{justificationDisplay}</span>
 
-            <span className="text-muted-foreground text-sm">Status</span>
+            <span className="text-muted-foreground text-base">Status</span>
             <span className="text-right">
               <Badge variant={statusVariant} className="text-sm">{isDeleted ? 'Archived' : request.status}</Badge>
             </span>
 
-            <span className="text-muted-foreground text-sm">Sheet</span>
-            <span className="text-right break-words text-sm">{sheetLabel}</span>
+            <span className="text-muted-foreground text-base">Sheet</span>
+            <span className="text-right break-words text-base">{sheetLabel}</span>
 
-            <span className="text-muted-foreground text-sm">Cost Center</span>
-            <span className="text-right break-words text-sm">{request.costCenterName}</span>
+            <span className="text-muted-foreground text-base">Cost Center</span>
+            <span className="text-right break-words text-base">{request.costCenterName}</span>
 
-            <span className="text-muted-foreground text-sm">Vendor</span>
-            <span className="text-right break-words text-sm">{request.vendorName}</span>
+            <span className="text-muted-foreground text-base">Vendor</span>
+            <span className="text-right break-words text-base">{request.vendorName}</span>
 
-            <span className="text-muted-foreground text-sm">Current Amount</span>
-            <span className="text-right break-words text-sm">{currentAmount}</span>
+            <span className="text-muted-foreground text-base">Current Amount</span>
+            <span className="text-right break-words text-base">{currentAmount}</span>
 
-            <span className="text-muted-foreground text-sm">Revised Amount</span>
-            <span className="text-right break-words text-sm">{revisedAmount}</span>
+            <span className="text-muted-foreground text-base">Revised Amount</span>
+            <span className="text-right break-words text-base">{revisedAmount}</span>
 
-            <span className="text-muted-foreground text-sm">Date Range</span>
-            <span className="text-right break-words text-sm">{dateRangeDisplay}</span>
+            <span className="text-muted-foreground text-base">Date Range</span>
+            <span className="text-right break-words text-base">{dateRangeDisplay}</span>
           </CardContent>
         </Card>
 
