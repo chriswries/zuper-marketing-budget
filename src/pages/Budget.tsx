@@ -117,6 +117,17 @@ function createEmptyMonthlyValues(): MonthlyValues {
   };
 }
 
+function getApprovalStepLabel(level: string): string {
+  switch (level) {
+    case 'cmo':
+      return 'CMO';
+    case 'finance':
+      return 'Finance';
+    default:
+      return level.charAt(0).toUpperCase() + level.slice(1);
+  }
+}
+
 function getApprovalStatusBadge(status: BudgetApprovalStatus) {
   switch (status) {
     case 'draft':
@@ -1321,7 +1332,7 @@ export default function Budget() {
               <div key={step.level} className="flex items-center gap-2">
                 {getStepIcon(step.status)}
                 <div>
-                  <div className="text-sm font-medium capitalize">{step.level}</div>
+                  <div className="text-sm font-medium">{getApprovalStepLabel(step.level)}</div>
                   {step.updatedAt && (
                     <div className="text-xs text-muted-foreground">
                       {formatAuditTimestamp(step.updatedAt, adminSettings.timeZone)}
@@ -1510,8 +1521,8 @@ export default function Budget() {
               <div className="flex items-center gap-2 mb-3">
                 <Bell className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Notify Next Approver</span>
-                <Badge variant="outline" className="text-xs ml-auto capitalize">
-                  {nextPendingBudgetStep.level}
+                <Badge variant="outline" className="text-xs ml-auto">
+                  {getApprovalStepLabel(nextPendingBudgetStep.level)}
                 </Badge>
               </div>
               <BudgetNotifyApprover
