@@ -1,4 +1,4 @@
-export type ApprovalEntityType = 'request' | 'budget';
+export type ApprovalEntityType = 'request' | 'budget' | 'vendor_registry';
 
 export type ApprovalAuditAction =
   | 'created'
@@ -18,7 +18,14 @@ export type ApprovalAuditAction =
   | 'fy_archived'
   | 'fy_restored'
   | 'fy_hard_deleted'
-  | 'fy_bundle_imported';
+  | 'fy_bundle_imported'
+  // Vendor registry actions
+  | 'vendor_created'
+  | 'vendor_updated'
+  | 'vendor_deactivated'
+  | 'vendor_alias_created'
+  | 'vendor_alias_updated'
+  | 'vendor_alias_deactivated';
 
 export type ApprovalActorRole = 'admin' | 'manager' | 'cmo' | 'finance';
 

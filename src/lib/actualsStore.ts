@@ -19,6 +19,7 @@ function rowToTransaction(row: {
   amount: number;
   source: string | null;
   raw: Json;
+  canonical_vendor_id?: string | null;
 }): ActualsTransaction {
   const raw = row.raw as Record<string, unknown>;
   return {
@@ -35,6 +36,7 @@ function rowToTransaction(row: {
     externalId: raw.externalId as string | undefined,
     raw: raw.raw as Record<string, unknown> ?? raw,
     createdAt: raw.createdAt as string ?? new Date().toISOString(),
+    canonicalVendorId: row.canonical_vendor_id ?? (raw.canonicalVendorId as string | undefined) ?? null,
   };
 }
 
@@ -47,6 +49,7 @@ function transactionToRow(txn: ActualsTransaction): {
   amount: number;
   source: string | null;
   raw: Json;
+  canonical_vendor_id: string | null;
 } {
   return {
     fiscal_year_id: txn.fiscalYearId,
@@ -56,6 +59,7 @@ function transactionToRow(txn: ActualsTransaction): {
     amount: txn.amount,
     source: txn.source || null,
     raw: txn as unknown as Json,
+    canonical_vendor_id: txn.canonicalVendorId ?? null,
   };
 }
 

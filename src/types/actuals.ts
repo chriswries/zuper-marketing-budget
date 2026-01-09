@@ -19,6 +19,7 @@ export interface ActualsTransaction {
   externalId?: string; // if provided by Ramp/bank
   raw: Record<string, unknown>; // original row for traceability
   createdAt: string; // ISO timestamp
+  canonicalVendorId?: string | null; // Global canonical vendor reference
 }
 
 export interface ActualsSummary {

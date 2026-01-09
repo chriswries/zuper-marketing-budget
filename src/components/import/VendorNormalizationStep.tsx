@@ -38,12 +38,11 @@ import {
   listCanonicalVendors, 
   upsertCanonicalVendor, 
   upsertVendorAlias,
-  resolveCanonicalVendorForMerchant,
-  normalizeVendorKey,
+  bulkResolveVendors,
   logVendorRegistryAudit,
 } from "@/lib/vendorRegistryStore";
 import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 interface VendorNormalizationStepProps {
   transactions: ImportedTransactionDraft[];
@@ -69,6 +68,7 @@ export function VendorNormalizationStep({
   onContinue,
 }: VendorNormalizationStepProps) {
   const { currentRole, actualRole } = useCurrentUserRole();
+  const { toast } = useToast();
   const isAdmin = actualRole === 'admin';
   const [vendorMappings, setVendorMappings] = useState<Record<string, string>>(initialMappings);
   const [canonicalVendors, setCanonicalVendors] = useState<CanonicalVendor[]>([]);
@@ -80,7 +80,7 @@ export function VendorNormalizationStep({
   const [isSaving, setIsSaving] = useState(false);
   const [createAliasOnSave, setCreateAliasOnSave] = useState(true);
 
-  // Load global canonical vendors on mount
+  // Load global canonical vendors on mount with bulk resolution
   useEffect(() => {
     async function loadVendors() {
       setIsLoading(true);
@@ -88,20 +88,25 @@ export function VendorNormalizationStep({
         const vendors = await listCanonicalVendors();
         setCanonicalVendors(vendors);
         
-        // Auto-resolve existing aliases for each raw vendor
+        // Get unique raw vendor names and bulk resolve
+        const uniqueRawNames = [...new Set(transactions.map(tx => tx.rawVendorName))];
+        const resolved = await bulkResolveVendors(uniqueRawNames);
+        
+        // Build new mappings from bulk resolution
         const newMappings = { ...vendorMappings };
-        for (const tx of transactions) {
-          if (newMappings[tx.rawVendorName]) continue;
-          
-          const resolved = await resolveCanonicalVendorForMerchant(tx.rawVendorName);
-          if (resolved) {
-            newMappings[tx.rawVendorName] = resolved.id;
+        for (const [rawName, vendor] of resolved.entries()) {
+          if (!newMappings[rawName] && vendor) {
+            newMappings[rawName] = vendor.id;
           }
         }
         setVendorMappings(newMappings);
       } catch (err) {
         console.error('Failed to load vendors:', err);
-        toast.error('Failed to load vendor registry');
+        toast({
+          title: 'Error',
+          description: 'Failed to load vendor registry',
+          variant: 'destructive',
+        });
       } finally {
         setIsLoading(false);
       }
@@ -146,40 +151,56 @@ export function VendorNormalizationStep({
   const totalCount = vendorGroups.length;
   const allMapped = mappedCount === totalCount;
 
-  // Auto-map exact matches using vendor name or existing aliases
+  // Auto-map using bulk resolution
   const handleAutoMap = async () => {
+    // Get all unmapped vendor names
+    const unmappedNames = vendorGroups
+      .filter(g => !vendorMappings[g.rawVendorName])
+      .map(g => g.rawVendorName);
+    
+    if (unmappedNames.length === 0) {
+      toast({
+        title: 'Already mapped',
+        description: 'All vendors are already mapped',
+      });
+      return;
+    }
+
+    // Bulk resolve
+    const resolved = await bulkResolveVendors(unmappedNames);
+    
     const newMappings = { ...vendorMappings };
     let autoMappedCount = 0;
     
-    for (const group of vendorGroups) {
-      if (newMappings[group.rawVendorName]) continue; // Already mapped
-      
-      // First try to resolve via alias
-      const resolved = await resolveCanonicalVendorForMerchant(group.rawVendorName);
-      if (resolved) {
-        newMappings[group.rawVendorName] = resolved.id;
+    for (const [rawName, vendor] of resolved.entries()) {
+      if (vendor) {
+        newMappings[rawName] = vendor.id;
         autoMappedCount++;
-        continue;
-      }
-      
-      // Then try exact name match
-      const rawLower = group.rawVendorName.toLowerCase().trim();
-      const match = canonicalVendors.find(v => 
-        v.name.toLowerCase().trim() === rawLower
-      );
-      
-      if (match) {
-        newMappings[group.rawVendorName] = match.id;
-        autoMappedCount++;
+      } else {
+        // Try exact name match as fallback
+        const rawLower = rawName.toLowerCase().trim();
+        const match = canonicalVendors.find(v => 
+          v.name.toLowerCase().trim() === rawLower
+        );
+        if (match) {
+          newMappings[rawName] = match.id;
+          autoMappedCount++;
+        }
       }
     }
     
     setVendorMappings(newMappings);
     
     if (autoMappedCount > 0) {
-      toast.success(`Auto-mapped ${autoMappedCount} vendor(s)`);
+      toast({
+        title: 'Auto-mapped',
+        description: `Auto-mapped ${autoMappedCount} vendor(s)`,
+      });
     } else {
-      toast.info('No additional vendors could be auto-mapped');
+      toast({
+        title: 'No matches',
+        description: 'No additional vendors could be auto-mapped',
+      });
     }
   };
 
@@ -200,7 +221,11 @@ export function VendorNormalizationStep({
       const newVendor = await upsertCanonicalVendor(newVendorName.trim());
       
       if (!newVendor) {
-        toast.error('Failed to create vendor');
+        toast({
+          title: 'Error',
+          description: 'Failed to create vendor',
+          variant: 'destructive',
+        });
         return;
       }
 
@@ -208,7 +233,7 @@ export function VendorNormalizationStep({
       await logVendorRegistryAudit(
         'vendor_created',
         newVendor.id,
-        currentRole || 'admin',
+        actualRole || 'admin',
         { vendorId: newVendor.id, vendorName: newVendor.name }
       );
 
@@ -219,7 +244,7 @@ export function VendorNormalizationStep({
           await logVendorRegistryAudit(
             'vendor_alias_created',
             alias.id,
-            currentRole || 'admin',
+            actualRole || 'admin',
             { 
               vendorId: newVendor.id, 
               vendorName: newVendor.name,
@@ -240,46 +265,65 @@ export function VendorNormalizationStep({
       const updatedVendors = await listCanonicalVendors();
       setCanonicalVendors(updatedVendors);
       
-      toast.success(`Created vendor "${newVendor.name}"`);
+      toast({
+        title: 'Vendor created',
+        description: `Created vendor "${newVendor.name}"`,
+      });
       setNewVendorName("");
       setAddingForRawVendor(null);
       setNewVendorDialogOpen(false);
     } catch (err) {
       console.error('Failed to create vendor:', err);
-      toast.error('Failed to create vendor');
+      toast({
+        title: 'Error',
+        description: 'Failed to create vendor',
+        variant: 'destructive',
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Handle continue - optionally create aliases for new mappings
+  // Handle continue - optionally create aliases for new mappings (batch operation)
   const handleContinue = async () => {
     setIsSaving(true);
     try {
-      // Create aliases for each mapping if admin and enabled
+      // Create aliases for each mapping if admin and enabled - batch with Promise.all
       if (isAdmin && createAliasOnSave) {
+        // First, get all current aliases to check which need creating
+        const existingResolutions = await bulkResolveVendors(Object.keys(vendorMappings));
+        
+        // Build list of aliases to create
+        const aliasesToCreate: { rawName: string; vendorId: string }[] = [];
         for (const [rawVendorName, vendorId] of Object.entries(vendorMappings)) {
-          // Check if alias already exists
-          const resolved = await resolveCanonicalVendorForMerchant(rawVendorName);
-          if (!resolved || resolved.id !== vendorId) {
-            // Create new alias
-            const alias = await upsertVendorAlias(rawVendorName, vendorId);
-            if (alias) {
-              const vendor = canonicalVendors.find(v => v.id === vendorId);
-              await logVendorRegistryAudit(
-                'vendor_alias_created',
-                alias.id,
-                currentRole || 'admin',
-                { 
-                  vendorId, 
-                  vendorName: vendor?.name,
-                  aliasId: alias.id,
-                  aliasKey: alias.aliasKey,
-                  aliasDisplay: alias.aliasDisplay,
-                }
-              );
-            }
+          const existing = existingResolutions.get(rawVendorName);
+          if (!existing || existing.id !== vendorId) {
+            aliasesToCreate.push({ rawName: rawVendorName, vendorId });
           }
+        }
+        
+        // Create aliases in parallel
+        if (aliasesToCreate.length > 0) {
+          await Promise.all(
+            aliasesToCreate.map(async ({ rawName, vendorId }) => {
+              const alias = await upsertVendorAlias(rawName, vendorId);
+              if (alias) {
+                const vendor = canonicalVendors.find(v => v.id === vendorId);
+                await logVendorRegistryAudit(
+                  'vendor_alias_created',
+                  alias.id,
+                  actualRole || 'admin',
+                  { 
+                    vendorId, 
+                    vendorName: vendor?.name,
+                    aliasId: alias.id,
+                    aliasKey: alias.aliasKey,
+                    aliasDisplay: alias.aliasDisplay,
+                  }
+                );
+              }
+            })
+          );
         }
       }
 
@@ -301,7 +345,11 @@ export function VendorNormalizationStep({
       });
     } catch (err) {
       console.error('Failed to save aliases:', err);
-      toast.error('Failed to save vendor mappings');
+      toast({
+        title: 'Error',
+        description: 'Failed to save vendor mappings',
+        variant: 'destructive',
+      });
     } finally {
       setIsSaving(false);
     }

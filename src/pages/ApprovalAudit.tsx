@@ -35,6 +35,8 @@ import {
   FileText,
   Calendar,
   ExternalLink,
+  Building2,
+  Edit,
 } from 'lucide-react';
 import { ApprovalAuditEvent, ApprovalActorRole, ApprovalEntityType } from '@/types/approvalAudit';
 import {
@@ -47,7 +49,7 @@ import { useRequests } from '@/contexts/RequestsContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 
-type EntityFilter = 'all' | 'request' | 'budget';
+type EntityFilter = 'all' | 'request' | 'budget' | 'vendor_registry';
 type CategoryFilter = 'all' | 'approvals' | 'notifications';
 type RoleFilter = 'all' | ApprovalActorRole;
 type DatePreset = '24h' | '7d' | '30d' | 'custom';
@@ -60,6 +62,13 @@ const actionIcons: Record<string, React.ReactNode> = {
   reset: <RotateCcw className="h-4 w-4 text-muted-foreground" />,
   final_approved: <CheckCircle2 className="h-4 w-4 text-green-600" />,
   notified_next_approver: <Bell className="h-4 w-4 text-blue-500" />,
+  // Vendor registry actions
+  vendor_created: <Plus className="h-4 w-4 text-green-600" />,
+  vendor_updated: <Edit className="h-4 w-4 text-blue-500" />,
+  vendor_deactivated: <XCircle className="h-4 w-4 text-amber-500" />,
+  vendor_alias_created: <Plus className="h-4 w-4 text-green-600" />,
+  vendor_alias_updated: <Edit className="h-4 w-4 text-blue-500" />,
+  vendor_alias_deactivated: <XCircle className="h-4 w-4 text-amber-500" />,
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
@@ -219,6 +228,7 @@ export default function ApprovalAudit() {
       setSelectedFiscalYearId(event.entityId);
       navigate('/budget');
     }
+    // vendor_registry events: no navigation for now (no vendor admin page yet)
   };
 
   const clearFilters = () => {
@@ -245,9 +255,20 @@ export default function ApprovalAudit() {
         return `${reqInfo.vendorName} • ${reqInfo.costCenterName}`;
       }
       return `Request ${event.entityId.slice(0, 8)}...`;
-    } else {
+    } else if (event.entityType === 'budget') {
       const budgetName = budgetMap.get(event.entityId);
       return budgetName || `Budget ${event.entityId.slice(0, 8)}...`;
+    } else if (event.entityType === 'vendor_registry') {
+      // Show vendor name from meta if available
+      const meta = event.meta as { vendorName?: string; aliasDisplay?: string } | null;
+      if (meta?.vendorName) {
+        return meta.aliasDisplay 
+          ? `${meta.vendorName} (alias: ${meta.aliasDisplay})`
+          : meta.vendorName;
+      }
+      return `Vendor ${event.entityId.slice(0, 8)}...`;
+    } else {
+      return `${event.entityType} ${event.entityId.slice(0, 8)}...`;
     }
   };
 
@@ -288,6 +309,7 @@ export default function ApprovalAudit() {
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="request">Requests</SelectItem>
                   <SelectItem value="budget">Budgets</SelectItem>
+                  <SelectItem value="vendor_registry">Vendor Registry</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -437,10 +459,14 @@ export default function ApprovalAudit() {
                       <Badge variant="outline" className="text-xs capitalize">
                         {event.entityType === 'request' ? (
                           <FileText className="h-3 w-3 mr-1" />
-                        ) : (
+                        ) : event.entityType === 'budget' ? (
                           <Calendar className="h-3 w-3 mr-1" />
+                        ) : event.entityType === 'vendor_registry' ? (
+                          <Building2 className="h-3 w-3 mr-1" />
+                        ) : (
+                          <Clock className="h-3 w-3 mr-1" />
                         )}
-                        {event.entityType}
+                        {event.entityType === 'vendor_registry' ? 'vendor' : event.entityType}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium text-sm truncate max-w-[200px]">
