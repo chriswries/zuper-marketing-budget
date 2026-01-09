@@ -1203,10 +1203,26 @@ export default function Budget() {
                 Add line item
               </Button>
 
-              <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
-                <Settings2 className="h-4 w-4" />
-                Edit allocations
-              </Button>
+              {currentRole === 'admin' || currentRole === 'cmo' ? (
+                <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  Edit Budget Settings
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button variant="outline" size="sm" disabled className="gap-2">
+                        <Settings2 className="h-4 w-4" />
+                        Edit Budget Settings
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Only Admin or CMO can edit budget settings.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </>
           ) : isFinance && (selectedFiscalYear.approval?.status === 'draft' || selectedFiscalYear.approval?.status === 'rejected') ? (
             <>
@@ -1229,12 +1245,12 @@ export default function Budget() {
                   <span>
                     <Button variant="outline" size="sm" disabled className="gap-2">
                       <Settings2 className="h-4 w-4" />
-                      Edit allocations
+                      Edit Budget Settings
                     </Button>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Finance is read-only</p>
+                  <p>Finance is read-only. Only Admin or CMO can edit budget settings.</p>
                 </TooltipContent>
               </Tooltip>
             </>
