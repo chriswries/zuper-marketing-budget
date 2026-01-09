@@ -9,46 +9,27 @@ import { CostCenter, LineItem } from '@/types/budget';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 
-const LEGACY_FORECAST_KEY = 'forecast_cost_centers_v1';
-
-function loadLegacyForecast(): CostCenter[] | null {
-  try {
-    const stored = localStorage.getItem(LEGACY_FORECAST_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {
-    // Ignore
-  }
-  return null;
-}
-
-function saveLegacyForecast(costCenters: CostCenter[]): void {
-  try {
-    localStorage.setItem(LEGACY_FORECAST_KEY, JSON.stringify(costCenters));
-  } catch {
-    // Ignore
-  }
-}
-
 /**
  * Load forecast data for the given request's origin.
+ * Returns null if no fiscal year ID is set (legacy requests are no longer supported).
  */
 function loadForecastForRequest(request: SpendRequest): CostCenter[] | null {
   if (request.originFiscalYearId) {
     return loadForecastForFY(request.originFiscalYearId);
   }
-  // Legacy mode (null FY ID)
-  return loadLegacyForecast();
+  // Legacy mode is no longer supported - return null
+  return null;
 }
 
 /**
  * Save forecast data for the given request's origin.
+ * Does nothing if no fiscal year ID is set (legacy requests are no longer supported).
  */
 function saveForecastForRequest(request: SpendRequest, costCenters: CostCenter[]): void {
   if (request.originFiscalYearId) {
     saveForecastForFY(request.originFiscalYearId, costCenters);
-  } else {
-    saveLegacyForecast(costCenters);
   }
+  // Legacy mode is no longer supported - do nothing
 }
 
 /**

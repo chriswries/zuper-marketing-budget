@@ -6,7 +6,7 @@ import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
-import { mockCostCenters } from '@/data/mock-budget-data';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues } from '@/types/budget';
 import { AuditEntry } from '@/types/audit';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Lock, History, Plus, Info, ShieldAlert } from 'lucide-react';
+import { Lock, History, Plus, ShieldAlert } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
@@ -49,39 +49,13 @@ import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle } from 'lucide-react';
 
-// Deep clone cost centers to avoid mutating mock data
-function deepCloneCostCenters(costCenters: CostCenter[]): CostCenter[] {
-  return costCenters.map((cc) => ({
-    ...cc,
-    lineItems: cc.lineItems.map((item) => ({
-      ...item,
-      vendor: item.vendor ? { ...item.vendor } : null,
-      budgetValues: { ...item.budgetValues },
-      forecastValues: { ...item.forecastValues },
-      actualValues: { ...item.actualValues },
-    })),
-  }));
-}
-
+// Legacy localStorage key - only used for cleanup
 const LEGACY_FORECAST_STORAGE_KEY = 'forecast_cost_centers_v1';
 
-// Load legacy forecast state from localStorage or default to mock data
-function loadLegacyForecastState(): CostCenter[] {
+// Clean up any legacy localStorage artifacts (one-time on mount)
+function cleanupLegacyForecastStorage(): void {
   try {
-    const stored = localStorage.getItem(LEGACY_FORECAST_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored) as CostCenter[];
-    }
-  } catch {
-    // Ignore parse errors
-  }
-  return deepCloneCostCenters(mockCostCenters);
-}
-
-// Save legacy forecast state to localStorage
-function saveLegacyForecastState(costCenters: CostCenter[]): void {
-  try {
-    localStorage.setItem(LEGACY_FORECAST_STORAGE_KEY, JSON.stringify(costCenters));
+    localStorage.removeItem(LEGACY_FORECAST_STORAGE_KEY);
   } catch {
     // Ignore storage errors
   }
@@ -119,19 +93,16 @@ export default function Forecast() {
   // Read query params for focus and mode override
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
   const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
-  const forecastModeParam = searchParams.get('forecastMode'); // 'legacy' | 'fy' | null
-
-  // Determine if we should use FY-specific forecast or legacy
-  // Allow forecastMode param to override
-  const defaultIsActiveFY = selectedFiscalYear?.status === 'active';
-  const isActiveFY = forecastModeParam === 'legacy' 
-    ? false 
-    : forecastModeParam === 'fy' 
-      ? defaultIsActiveFY 
-      : defaultIsActiveFY;
+  // Check if we have an active FY
+  const isActiveFY = selectedFiscalYear?.status === 'active';
   const fyId = selectedFiscalYearId;
 
-  // Initialize cost centers based on active FY or legacy
+  // Clean up legacy localStorage artifacts on mount
+  useEffect(() => {
+    cleanupLegacyForecastStorage();
+  }, []);
+
+  // Initialize cost centers - empty array until active FY loads
   const [costCenters, setCostCenters] = useState<CostCenter[]>(() => {
     if (isActiveFY && fyId) {
       const fyForecast = loadForecastForFY(fyId);
@@ -143,7 +114,8 @@ export default function Forecast() {
         return newForecast;
       }
     }
-    return loadLegacyForecastState();
+    // No active FY - return empty array
+    return [];
   });
 
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set());
@@ -183,11 +155,6 @@ export default function Forecast() {
     setSearchParams({});
   }, [setSearchParams]);
 
-  // Track the current FY mode for display
-  const usingLegacyForecast = useMemo(() => {
-    return !isActiveFY;
-  }, [isActiveFY]);
-
   // Reload cost centers when FY changes
   useEffect(() => {
     if (isActiveFY && fyId) {
@@ -201,30 +168,26 @@ export default function Forecast() {
         setCostCenters(newForecast);
       }
     } else {
-      setCostCenters(loadLegacyForecastState());
+      // No active FY - clear cost centers
+      setCostCenters([]);
     }
   }, [isActiveFY, fyId, selectedFiscalYear]);
 
-  // Persist costCenters to appropriate storage whenever they change
+  // Persist costCenters to storage only when we have an active FY
   useEffect(() => {
-    if (isActiveFY && fyId) {
+    if (isActiveFY && fyId && costCenters.length > 0) {
       saveForecastForFY(fyId, costCenters);
-    } else {
-      saveLegacyForecastState(costCenters);
     }
   }, [costCenters, isActiveFY, fyId]);
 
   // Sync line item approval/adjustment status with request status
   // Also reload from storage since the resolver modifies storage directly
   useEffect(() => {
-    // First, reload from storage to pick up any resolution changes
-    // (e.g., when cancel_request or delete_line_item is approved/rejected)
-    let freshData: CostCenter[] | null = null;
-    if (isActiveFY && fyId) {
-      freshData = loadForecastForFY(fyId);
-    } else {
-      freshData = loadLegacyForecastState();
-    }
+    // Skip if no active FY
+    if (!isActiveFY || !fyId) return;
+    
+    // Reload from storage to pick up any resolution changes
+    const freshData = loadForecastForFY(fyId);
     
     // Use fresh data if available, otherwise continue with current state
     const baseData = freshData ?? costCenters;
@@ -1098,27 +1061,28 @@ export default function Forecast() {
           description="Current forecast — updated throughout the year as plans change."
         />
         
-        <div className="flex items-center gap-2">
-          {isEditable ? (
-            <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add line item
-            </Button>
-          ) : isFinance ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button size="sm" className="gap-2" disabled>
-                    <Plus className="h-4 w-4" />
-                    Add line item
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Finance is read-only</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+        {isActiveFY && (
+          <div className="flex items-center gap-2">
+            {isEditable ? (
+              <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add line item
+              </Button>
+            ) : isFinance ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button size="sm" className="gap-2" disabled>
+                      <Plus className="h-4 w-4" />
+                      Add line item
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Finance is read-only</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
 
           {currentRole !== 'admin' && (
             <Button
@@ -1224,76 +1188,85 @@ export default function Forecast() {
               </div>
             </PopoverContent>
           </Popover>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Legacy forecast banner */}
-      {usingLegacyForecast && selectedFiscalYear && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            Forecast for {selectedFiscalYear.name} will be available after budget approval. 
-            Currently viewing legacy forecast.
-          </AlertDescription>
-        </Alert>
+      {/* Empty state when no active FY */}
+      {!isActiveFY ? (
+        <Card className="max-w-lg mx-auto mt-8">
+          <CardHeader>
+            <CardTitle className="text-center">No Active Forecast</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-muted-foreground">
+              Create and approve a fiscal year budget to generate a forecast.
+            </p>
+            <Button onClick={() => navigate('/budget')}>
+              Go to Budget
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            <Lock className="inline h-3 w-3 mr-1" />
+            Locked: {lockedMonthsDisplay}
+          </p>
+          
+          <SheetTable
+            costCenters={costCenters}
+            valueType="forecastValues"
+            editable={isEditable || isAdminOverride}
+            onCellChange={(isEditable || isAdminOverride) ? handleCellChange : undefined}
+            onRowAction={handleRowAction}
+            onDeleteLineItem={isAdminOverride ? handleDeleteLineItem : undefined}
+            currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
+            lockedMonths={lockedMonths}
+            focusCostCenterId={focusCostCenterId}
+            focusLineItemId={focusLineItemId}
+            onFocusLineItemNotFound={handleFocusLineItemNotFound}
+            adminOverrideEnabled={adminSettings.adminOverrideEnabled}
+          />
+
+          <AddLineItemDialog
+            open={addLineItemOpen}
+            onOpenChange={setAddLineItemOpen}
+            costCenters={costCenters}
+            lockedMonths={lockedMonths}
+            onCreateLineItem={handleCreateLineItem}
+            checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters })}
+          />
+
+          <AdjustmentJustificationDialog
+            open={justificationDialogOpen}
+            data={pendingAdjustment}
+            onCancel={handleJustificationCancel}
+            onSubmit={handleJustificationSubmit}
+          />
+
+          <RowActionDialog
+            open={rowActionDialogOpen}
+            data={pendingRowAction}
+            onCancel={handleRowActionCancel}
+            onSubmit={handleRowActionSubmit}
+          />
+
+          <AdminOverrideDialog
+            open={overrideDialogOpen}
+            title={pendingOverrideAction?.type === 'delete_line_item' ? 'Delete Line Item (Override)' : 'Edit Cell (Override)'}
+            description="This action bypasses the normal approval workflow. Please provide a justification for audit purposes."
+            onCancel={handleOverrideCancel}
+            onSubmit={handleOverrideSubmit}
+          />
+
+          <BulkLineItemApprovalsDrawer
+            open={approvalsDrawerOpen}
+            onOpenChange={setApprovalsDrawerOpen}
+            originSheet="forecast"
+          />
+        </>
       )}
-
-      <p className="text-sm text-muted-foreground">
-        <Lock className="inline h-3 w-3 mr-1" />
-        Locked: {lockedMonthsDisplay}
-      </p>
-      
-      <SheetTable
-        costCenters={costCenters}
-        valueType="forecastValues"
-        editable={isEditable || isAdminOverride}
-        onCellChange={(isEditable || isAdminOverride) ? handleCellChange : undefined}
-        onRowAction={handleRowAction}
-        onDeleteLineItem={isAdminOverride ? handleDeleteLineItem : undefined}
-        currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
-        lockedMonths={lockedMonths}
-        focusCostCenterId={focusCostCenterId}
-        focusLineItemId={focusLineItemId}
-        onFocusLineItemNotFound={handleFocusLineItemNotFound}
-        adminOverrideEnabled={adminSettings.adminOverrideEnabled}
-      />
-
-      <AddLineItemDialog
-        open={addLineItemOpen}
-        onOpenChange={setAddLineItemOpen}
-        costCenters={costCenters}
-        lockedMonths={lockedMonths}
-        onCreateLineItem={handleCreateLineItem}
-        checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters })}
-      />
-
-      <AdjustmentJustificationDialog
-        open={justificationDialogOpen}
-        data={pendingAdjustment}
-        onCancel={handleJustificationCancel}
-        onSubmit={handleJustificationSubmit}
-      />
-
-      <RowActionDialog
-        open={rowActionDialogOpen}
-        data={pendingRowAction}
-        onCancel={handleRowActionCancel}
-        onSubmit={handleRowActionSubmit}
-      />
-
-      <AdminOverrideDialog
-        open={overrideDialogOpen}
-        title={pendingOverrideAction?.type === 'delete_line_item' ? 'Delete Line Item (Override)' : 'Edit Cell (Override)'}
-        description="This action bypasses the normal approval workflow. Please provide a justification for audit purposes."
-        onCancel={handleOverrideCancel}
-        onSubmit={handleOverrideSubmit}
-      />
-
-      <BulkLineItemApprovalsDrawer
-        open={approvalsDrawerOpen}
-        onOpenChange={setApprovalsDrawerOpen}
-        originSheet="forecast"
-      />
     </div>
   );
 }
