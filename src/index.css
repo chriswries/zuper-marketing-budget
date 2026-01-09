@@ -161,3 +161,11 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* SheetTable first column - responsive width with clamp */
+.sheet-first-col {
+  width: clamp(280px, 35vw, 640px);
+  min-width: 280px;
+  max-width: 640px;
+  overflow: hidden;
+}
