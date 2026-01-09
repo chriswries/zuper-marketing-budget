@@ -45,6 +45,9 @@ export interface SpendRequest {
   deletedAt?: string;
   deletedByRole?: string;
   deletedJustification?: string;
+  // For adjustment requests: original and revised FY totals (threshold-triggered increases)
+  currentAmount?: number;
+  revisedAmount?: number;
 }
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
