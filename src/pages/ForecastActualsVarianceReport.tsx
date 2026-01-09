@@ -595,6 +595,43 @@ export default function ForecastActualsVarianceReport() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
+            {/* Scope Toggle */}
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Scope</Label>
+              <ToggleGroup 
+                type="single" 
+                value={scopeMode} 
+                onValueChange={(val) => val && setScopeMode(val as ScopeMode)}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="fy" aria-label="Full FY" className="text-xs px-3">
+                  FY
+                </ToggleGroupItem>
+                <ToggleGroupItem value="ytd" aria-label="Year to Date" className="text-xs px-3">
+                  YTD
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            
+            {/* As Of Month Dropdown (only when YTD) */}
+            {scopeMode === 'ytd' && (
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">As of</Label>
+                <Select value={asOfMonth} onValueChange={(v) => setAsOfMonth(v as Month)}>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map(month => (
+                      <SelectItem key={month} value={month}>
+                        {MONTH_LABELS[month]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             <div className="flex items-center gap-2">
               <Label className="text-sm">Cost Center</Label>
               <Select value={costCenterFilter} onValueChange={setCostCenterFilter}>
