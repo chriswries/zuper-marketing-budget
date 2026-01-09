@@ -48,31 +48,49 @@ interface PostToActualsStepProps {
 
 /**
  * Convert ImportedTransactionMapped to ActualsTransaction for DB storage.
+ * 
+ * Field mapping:
+ * - id: Pure UUID (DB column is text, but we use clean UUIDs for consistency)
+ * - fiscalYearId: From wizard's selected fiscal year
+ * - txnDate: ISO date string from transactionDate
+ * - merchantName: Canonical vendor name for display
+ * - description: Memo from import
+ * - amount: Dollar amount (numeric, NOT cents) - already in correct unit from import
+ * - canonicalVendorId: UUID reference to canonical_vendors table
+ * - raw: JSON blob for traceability containing:
+ *   - rowIndex, rawVendorName, recognizedMonth (fiscal month)
+ *   - costCenterId, costCenterName, lineItemId, lineItemName (mapped forecast refs)
+ *   - memo, transactionDate (original import values)
  */
 function convertToActualsTransaction(
   txn: ImportedTransactionMapped,
   fiscalYearId: string
 ): ActualsTransaction {
   return {
-    id: `txn_${crypto.randomUUID()}`,
+    id: crypto.randomUUID(), // Pure UUID - DB txn_id column is text type
     source: 'bank', // Default to bank for imported transactions
     fiscalYearId,
-    txnDate: txn.transactionDate,
+    txnDate: txn.transactionDate, // ISO date string (YYYY-MM-DD)
     merchantName: txn.canonicalVendorName,
     description: txn.memo,
-    amount: txn.amount,
+    amount: txn.amount, // Dollar amount (numeric, not cents)
     currency: 'USD',
     raw: {
+      // Original import data for traceability
       rowIndex: txn.rowIndex,
       rawVendorName: txn.rawVendorName,
+      memo: txn.memo,
+      transactionDate: txn.transactionDate,
+      // Fiscal month for reconciliation
       recognizedMonth: txn.recognizedMonth,
+      // Mapped forecast references (no dedicated DB columns, stored in raw JSON)
       costCenterId: txn.costCenterId,
       costCenterName: txn.costCenterName,
       lineItemId: txn.lineItemId,
       lineItemName: txn.lineItemName,
     },
     createdAt: new Date().toISOString(),
-    canonicalVendorId: txn.canonicalVendorId,
+    canonicalVendorId: txn.canonicalVendorId || null,
   };
 }
 
@@ -175,11 +193,15 @@ export function PostToActualsStep({
     }
   };
 
+  const [clearedBatch, setClearedBatch] = useState(false);
+
   const handleClearExisting = () => {
     clearLatestActualsImport();
-    // Force re-render by navigating to same page
-    window.location.reload();
+    setClearedBatch(true);
   };
+
+  // Compute effective existing batch (null if cleared)
+  const effectiveExistingBatch = clearedBatch ? null : existingBatch;
 
   const previewTransactions = transactions.slice(0, 10);
 
@@ -222,13 +244,13 @@ export function PostToActualsStep({
       </div>
 
       {/* Existing batch warning */}
-      {existingBatch && (
+      {effectiveExistingBatch && (
         <Alert>
           <AlertDescription className="flex items-center justify-between">
             <span>
-              An existing import exists ({existingBatch.transactionCount}{" "}
-              transactions from {existingBatch.fileName || "unknown file"},
-              posted {formatDate(existingBatch.createdAt, adminSettings.timeZone)}).
+              An existing import exists ({effectiveExistingBatch.transactionCount}{" "}
+              transactions from {effectiveExistingBatch.fileName || "unknown file"},
+              posted {formatDate(effectiveExistingBatch.createdAt, adminSettings.timeZone)}).
               Posting will add more transactions.
             </span>
             <Button
