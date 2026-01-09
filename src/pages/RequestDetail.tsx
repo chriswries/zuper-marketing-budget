@@ -194,39 +194,57 @@ export default function RequestDetail() {
     }
   }, [request]);
 
-  // Current and Revised amounts for adjustment requests
+  // Current and Revised amounts based on request type
   const { currentAmount, revisedAmount } = useMemo(() => {
-    if (!request) return { currentAmount: '—', revisedAmount: '—' };
+    if (!request) return { currentAmount: 'n/a', revisedAmount: 'n/a' };
     
-    // For new line items, current is "—" and revised is the amount
+    // NEW LINE ITEM: Current Amount = requested amount, Revised = n/a
     if (request.originKind === 'new_line_item') {
       return { 
-        currentAmount: '—', 
-        revisedAmount: `$${request.amount.toLocaleString()}` 
+        currentAmount: `$${request.amount.toLocaleString()}`, 
+        revisedAmount: 'n/a' 
       };
     }
     
-    // For adjustments, try to get old/new totals from metadata
+    // ADJUSTMENT: Current = original before increase, Revised = new after increase
     if (request.originKind === 'adjustment') {
-      const meta = (request as any).adjustmentMeta;
-      if (meta?.oldFYTotal !== undefined && meta?.newFYTotal !== undefined) {
+      // Try explicit fields first
+      if ((request as any).currentAmount !== undefined && (request as any).revisedAmount !== undefined) {
         return {
-          currentAmount: `$${meta.oldFYTotal.toLocaleString()}`,
-          revisedAmount: `$${meta.newFYTotal.toLocaleString()}`,
+          currentAmount: `$${(request as any).currentAmount.toLocaleString()}`,
+          revisedAmount: `$${(request as any).revisedAmount.toLocaleString()}`,
         };
       }
-      // Fallback: show amount as revised if no meta
+      // Try adjustmentMeta
+      const meta = (request as any).adjustmentMeta;
+      if (meta) {
+        const oldVal = meta.oldFYTotal ?? meta.oldTotal ?? meta.oldAmount ?? meta.adjustmentBeforeTotal;
+        const newVal = meta.newFYTotal ?? meta.newTotal ?? meta.newAmount ?? meta.adjustmentAfterTotal;
+        if (oldVal !== undefined && newVal !== undefined) {
+          return {
+            currentAmount: `$${oldVal.toLocaleString()}`,
+            revisedAmount: `$${newVal.toLocaleString()}`,
+          };
+        }
+      }
+      // Fallback: no old/new amounts found
       return { 
-        currentAmount: '—', 
+        currentAmount: 'n/a', 
         revisedAmount: `$${request.amount.toLocaleString()}` 
       };
     }
     
-    // For other types (delete, cancel), show current amount
+    // NON-ADJUSTMENT (delete_line_item, cancel_request, etc.): Current = amount, Revised = n/a
     return { 
       currentAmount: `$${request.amount.toLocaleString()}`, 
-      revisedAmount: '—' 
+      revisedAmount: 'n/a' 
     };
+  }, [request]);
+
+  // Justification display with n/a fallback
+  const justificationDisplay = useMemo(() => {
+    if (!request?.justification || !request.justification.trim()) return 'n/a';
+    return request.justification;
   }, [request]);
 
   const refreshAuditEvents = useCallback(() => {
@@ -594,6 +612,10 @@ export default function RequestDetail() {
               <span className="text-muted-foreground">Type</span>
               <span className="font-medium">{requestTypeLabel}</span>
             </div>
+            <div className="flex justify-between items-start">
+              <span className="text-muted-foreground">Justification</span>
+              <span className="font-medium text-right max-w-[60%]">{justificationDisplay}</span>
+            </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <Badge variant={statusVariant}>{isDeleted ? 'Archived' : request.status}</Badge>
@@ -622,12 +644,6 @@ export default function RequestDetail() {
               <span className="text-muted-foreground">Date Range</span>
               <span className="font-medium">{dateRangeDisplay}</span>
             </div>
-            {request.justification && (
-              <div className="pt-2 border-t">
-                <span className="text-muted-foreground text-sm">Justification</span>
-                <p className="mt-1 text-sm">{request.justification}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
 
