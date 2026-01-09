@@ -10,6 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import type { ImportedTransactionMapped } from "@/types/import";
 import type { ActualsImportBatch } from "@/types/actualsImport";
@@ -31,6 +41,7 @@ interface PostToActualsStepProps {
   transactions: ImportedTransactionMapped[];
   fileName?: string;
   fiscalYearId: string;
+  fiscalYearName: string;
   onBack: () => void;
   onPosted: (batchId: string) => void;
 }
@@ -69,6 +80,7 @@ export function PostToActualsStep({
   transactions,
   fileName,
   fiscalYearId,
+  fiscalYearName,
   onBack,
   onPosted,
 }: PostToActualsStepProps) {
@@ -76,6 +88,7 @@ export function PostToActualsStep({
   const { settings: adminSettings } = useAdminSettings();
   const [isPosted, setIsPosted] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [postedBatchId, setPostedBatchId] = useState<string | null>(null);
 
   // Check if there's an existing import
@@ -100,7 +113,13 @@ export function PostToActualsStep({
     return agg;
   }, [transactions]);
 
-  const handlePost = async () => {
+  const handlePostClick = () => {
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmPost = async () => {
+    setShowConfirmDialog(false);
+    
     if (!fiscalYearId) {
       toast({
         title: "Error",
@@ -285,7 +304,7 @@ export function PostToActualsStep({
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Line Items
         </Button>
-        <Button onClick={handlePost} disabled={isPosting}>
+        <Button onClick={handlePostClick} disabled={isPosting}>
           {isPosting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -299,6 +318,22 @@ export function PostToActualsStep({
           )}
         </Button>
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Post actuals to {fiscalYearName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will add {transactions.length} transactions totaling {formatUSD(totalAmount)} to Actuals for {fiscalYearName}. You can't undo this from the import wizard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmPost}>Post Actuals</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
