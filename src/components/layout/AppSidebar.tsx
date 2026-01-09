@@ -31,7 +31,7 @@ const navItems = [
   { title: "Requests", url: "/requests", icon: FileText },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
-  { title: "Import", url: "/import", icon: Upload },
+  { title: "Import Actuals", url: "/import", icon: Upload },
   { title: "Admin", url: "/admin", icon: Settings },
 ];
 

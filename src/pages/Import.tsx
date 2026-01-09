@@ -6,7 +6,7 @@ export default function Import() {
     <div>
       <PageHeader
         title="Import Actuals"
-        description="Upload and process CSV files from bank and Ramp to import actual spend transactions."
+        description="Upload and process CSV files from bank and Ramp to import and reconcile actual spend transactions with forecast."
       />
       <ImportWizard />
     </div>
