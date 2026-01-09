@@ -603,47 +603,38 @@ export default function RequestDetail() {
           <CardHeader>
             <CardTitle className="text-lg">Request Details</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Next Approver</span>
-              <span className="font-medium">{nextApproverLabel}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Type</span>
-              <span className="font-medium">{requestTypeLabel}</span>
-            </div>
-            <div className="flex justify-between items-start">
-              <span className="text-muted-foreground">Justification</span>
-              <span className="font-medium text-right max-w-[60%]">{justificationDisplay}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Status</span>
-              <Badge variant={statusVariant}>{isDeleted ? 'Archived' : request.status}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Sheet</span>
-              <span className="font-medium">{sheetLabel}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cost Center</span>
-              <span className="font-medium">{request.costCenterName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Vendor</span>
-              <span className="font-medium">{request.vendorName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Current Amount</span>
-              <span className="font-medium">{currentAmount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Revised Amount</span>
-              <span className="font-medium">{revisedAmount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Date Range</span>
-              <span className="font-medium">{dateRangeDisplay}</span>
-            </div>
+          <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <span className="text-muted-foreground text-xs">Next Approver</span>
+            <span className="text-right break-words">{nextApproverLabel}</span>
+
+            <span className="text-muted-foreground text-xs">Type</span>
+            <span className="text-right break-words">{requestTypeLabel}</span>
+
+            <span className="text-muted-foreground text-xs self-start">Justification</span>
+            <span className="text-right break-words">{justificationDisplay}</span>
+
+            <span className="text-muted-foreground text-xs">Status</span>
+            <span className="text-right">
+              <Badge variant={statusVariant} className="text-xs">{isDeleted ? 'Archived' : request.status}</Badge>
+            </span>
+
+            <span className="text-muted-foreground text-xs">Sheet</span>
+            <span className="text-right break-words">{sheetLabel}</span>
+
+            <span className="text-muted-foreground text-xs">Cost Center</span>
+            <span className="text-right break-words">{request.costCenterName}</span>
+
+            <span className="text-muted-foreground text-xs">Vendor</span>
+            <span className="text-right break-words">{request.vendorName}</span>
+
+            <span className="text-muted-foreground text-xs">Current Amount</span>
+            <span className="text-right break-words">{currentAmount}</span>
+
+            <span className="text-muted-foreground text-xs">Revised Amount</span>
+            <span className="text-right break-words">{revisedAmount}</span>
+
+            <span className="text-muted-foreground text-xs">Date Range</span>
+            <span className="text-right break-words">{dateRangeDisplay}</span>
           </CardContent>
         </Card>
 
