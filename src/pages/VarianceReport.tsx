@@ -26,6 +26,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
@@ -36,9 +37,10 @@ import {
   VarianceReportResult,
 } from '@/lib/budgetForecastVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
-import { MONTHS, MONTH_LABELS, CostCenter } from '@/types/budget';
+import { MONTHS, MONTH_LABELS, CostCenter, Month } from '@/types/budget';
 import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, ArrowLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { ScopeMode, sumYTD, getCurrentFiscalMonth } from '@/lib/ytdHelpers';
 
 // Helper to compute variance percentage
 function computeVariancePct(variance: number, budget: number): number | null {
@@ -107,6 +109,10 @@ export default function VarianceReport() {
   const [showMonthly, setShowMonthly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('variance_abs');
   
+  // Scope controls: FY vs YTD
+  const [scopeMode, setScopeMode] = useState<ScopeMode>('fy');
+  const [asOfMonth, setAsOfMonth] = useState<Month>(getCurrentFiscalMonth());
+  
   // Expanded cost centers
   const [expandedCCs, setExpandedCCs] = useState<Set<string>>(new Set());
   
@@ -145,7 +151,7 @@ export default function VarianceReport() {
   // Table ref for scroll-to-table
   const tableRef = useRef<HTMLDivElement | null>(null);
   
-  // Filter, recompute totals, and sort
+  // Filter, apply YTD if needed, recompute totals, and sort
   const filteredReport = useMemo(() => {
     if (!report) return null;
     
@@ -166,6 +172,24 @@ export default function VarianceReport() {
       
       if (varianceOnly) {
         lineItems = lineItems.filter(item => item.variance !== 0);
+      }
+      
+      // Apply YTD calculation if scopeMode is 'ytd'
+      if (scopeMode === 'ytd') {
+        lineItems = lineItems.map(item => {
+          const budgetTotal = sumYTD(item.budgetByMonth, asOfMonth);
+          const forecastTotal = sumYTD(item.forecastByMonth, asOfMonth);
+          const variance = forecastTotal - budgetTotal;
+          const variancePct = budgetTotal === 0 ? null : variance / budgetTotal;
+          
+          return {
+            ...item,
+            budgetTotal,
+            forecastTotal,
+            variance,
+            variancePct,
+          };
+        });
       }
       
       // Recompute cost center totals from filtered line items
@@ -236,7 +260,7 @@ export default function VarianceReport() {
         variancePct: grandVariancePct,
       },
     };
-  }, [report, costCenterFilter, contractedOnly, varianceOnly, sortBy]);
+  }, [report, costCenterFilter, contractedOnly, varianceOnly, sortBy, scopeMode, asOfMonth]);
   
   const toggleCC = (ccId: string) => {
     setExpandedCCs(prev => {
@@ -256,10 +280,12 @@ export default function VarianceReport() {
     setVarianceOnly(false);
     setShowMonthly(false);
     setSortBy('variance_abs');
+    setScopeMode('fy');
+    setAsOfMonth(getCurrentFiscalMonth());
     setExpandedCCs(new Set());
   }, []);
   
-  const hasActiveFilters = costCenterFilter !== 'all' || contractedOnly || varianceOnly || showMonthly || sortBy !== 'variance_abs';
+  const hasActiveFilters = costCenterFilter !== 'all' || contractedOnly || varianceOnly || showMonthly || sortBy !== 'variance_abs' || scopeMode !== 'fy';
   
   const handleViewInBudget = (ccId: string, itemId: string) => {
     if (selectedFiscalYearId) {
@@ -444,10 +470,15 @@ export default function VarianceReport() {
       </Button>
       
       <div className="flex items-center justify-between">
-        <PageHeader
-          title="Budget vs Forecast Variance"
-          description={`Comparing approved budget against current forecast for ${selectedFiscalYear.name}`}
-        />
+        <div>
+          <PageHeader
+            title="Budget vs Forecast Variance"
+            description={`Comparing approved budget against current forecast for ${selectedFiscalYear.name}`}
+          />
+          <div className="mt-1 text-sm text-muted-foreground">
+            Showing: {scopeMode === 'fy' ? 'Full FY' : `YTD through ${MONTH_LABELS[asOfMonth]}`}
+          </div>
+        </div>
         <Button onClick={handleExportCsv} variant="outline" className="gap-2">
           <Download className="h-4 w-4" />
           Export CSV
@@ -459,7 +490,7 @@ export default function VarianceReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Budget FY Total
+              Budget {scopeMode === 'fy' ? 'FY' : 'YTD'} Total
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -472,7 +503,7 @@ export default function VarianceReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Forecast FY Total
+              Forecast {scopeMode === 'fy' ? 'FY' : 'YTD'} Total
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -513,6 +544,43 @@ export default function VarianceReport() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
+            {/* Scope Toggle */}
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Scope</Label>
+              <ToggleGroup 
+                type="single" 
+                value={scopeMode} 
+                onValueChange={(val) => val && setScopeMode(val as ScopeMode)}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="fy" aria-label="Full FY" className="text-xs px-3">
+                  FY
+                </ToggleGroupItem>
+                <ToggleGroupItem value="ytd" aria-label="Year to Date" className="text-xs px-3">
+                  YTD
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            
+            {/* As Of Month Dropdown (only when YTD) */}
+            {scopeMode === 'ytd' && (
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">As of</Label>
+                <Select value={asOfMonth} onValueChange={(v) => setAsOfMonth(v as Month)}>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map(month => (
+                      <SelectItem key={month} value={month}>
+                        {MONTH_LABELS[month]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             <div className="flex items-center gap-2">
               <Label className="text-sm">Cost Center</Label>
               <Select value={costCenterFilter} onValueChange={setCostCenterFilter}>
