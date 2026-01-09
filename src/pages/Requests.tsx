@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,14 +37,25 @@ type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export default function Requests() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { requests } = useRequests();
   const { setSelectedFiscalYearId } = useFiscalYearBudget();
   const { currentRole } = useCurrentUserRole();
   const { settings: adminSettings } = useAdminSettings();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
-  const [needsMyApproval, setNeedsMyApproval] = useState(false);
+  const [needsMyApproval, setNeedsMyApproval] = useState(true);
   const [showDeleted, setShowDeleted] = useState(false);
+
+  // Reset filters to "My pending approvals" view on every navigation to /requests
+  useEffect(() => {
+    if (location.pathname === '/requests') {
+      setStatusFilter('pending');
+      setNeedsMyApproval(true);
+      setSearchQuery('');
+      setShowDeleted(false);
+    }
+  }, [location.pathname]);
 
   // Admin override mode
   const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
