@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { clearForecastCache } from '@/lib/forecastStore';
 import { clearActualsCache } from '@/lib/actualsStore';
 import { clearMatchingCache } from '@/lib/actualsMatchingStore';
+import { invalidateAllVendorCaches } from '@/lib/vendorRegistryStore';
 
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
@@ -186,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearForecastCache();
     clearActualsCache();
     clearMatchingCache();
+    invalidateAllVendorCaches();
     
     await supabase.auth.signOut();
     setSession(null);

@@ -185,6 +185,13 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   fy_restored: 'Fiscal year restored',
   fy_hard_deleted: 'Fiscal year hard deleted',
   fy_bundle_imported: 'Fiscal year bundle imported',
+  // Vendor registry actions
+  vendor_created: 'Vendor created',
+  vendor_updated: 'Vendor updated',
+  vendor_deactivated: 'Vendor deactivated',
+  vendor_alias_created: 'Vendor alias created',
+  vendor_alias_updated: 'Vendor alias updated',
+  vendor_alias_deactivated: 'Vendor alias deactivated',
 };
 
 const roleLabels: Record<ApprovalActorRole, string> = {
