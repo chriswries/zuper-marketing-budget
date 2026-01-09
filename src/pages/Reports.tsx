@@ -51,11 +51,11 @@ export default function Reports() {
           </CardContent>
         </Card>
 
-        {/* Coming Soon Cards */}
-        <Card className="flex flex-col opacity-60">
+        {/* Burn Rate / Runway - Available */}
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Flame className="h-5 w-5 text-muted-foreground" />
+              <Flame className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Burn Rate / Runway</CardTitle>
             </div>
             <CardDescription>
@@ -63,11 +63,13 @@ export default function Reports() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button disabled variant="outline" className="w-full">
-              Coming Soon
+            <Button onClick={() => navigate('/reports/burn-rate')} className="w-full">
+              View Report
             </Button>
           </CardContent>
         </Card>
+
+        {/* Coming Soon Cards */}
 
         <Card className="flex flex-col opacity-60">
           <CardHeader>
