@@ -217,12 +217,15 @@ export default function Requests() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Request Type</TableHead>
                   <TableHead>Next Approver</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Sheet</TableHead>
                   <TableHead>Cost Center</TableHead>
+                  <TableHead>Line Item</TableHead>
                   <TableHead>Vendor</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Current Amount</TableHead>
+                  <TableHead className="text-right">Revised Amount</TableHead>
                   <TableHead>Date Range</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
@@ -236,14 +239,6 @@ export default function Requests() {
                     onClick={() => navigate(`/requests/${request.id}`)}
                   >
                     <TableCell>
-                      <Badge variant={statusVariant(request.status)}>
-                        {request.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{getRequestKindLabel(request.originKind)}</span>
-                    </TableCell>
-                    <TableCell>
                       {(() => {
                         const nextStep = getNextPendingStep(request);
                         return nextStep ? (
@@ -253,13 +248,40 @@ export default function Requests() {
                         );
                       })()}
                     </TableCell>
+                    <TableCell>
+                      <span className="text-sm">{getRequestKindLabel(request.originKind)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(request.status)}>
+                        {request.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {request.originSheet ? (
+                        <span className="capitalize">{request.originSheet}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{request.costCenterName}</TableCell>
+                    <TableCell>
+                      {request.lineItemName || <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell>{request.vendorName}</TableCell>
                     <TableCell className="text-right">
                       ${request.amount.toLocaleString()}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {request.status === 'pending' && request.originKind === 'adjustment' ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
-                      {MONTH_LABELS[request.startMonth]} – {MONTH_LABELS[request.endMonth]}
+                      {request.startMonth === request.endMonth
+                        ? MONTH_LABELS[request.startMonth]
+                        : `${MONTH_LABELS[request.startMonth]} – ${MONTH_LABELS[request.endMonth]}`}
                     </TableCell>
                     <TableCell>
                       {formatDate(request.createdAt, adminSettings.timeZone)}
