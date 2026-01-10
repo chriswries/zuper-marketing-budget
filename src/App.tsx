@@ -27,6 +27,7 @@ import VarianceReport from "./pages/VarianceReport";
 import ForecastActualsVarianceReport from "./pages/ForecastActualsVarianceReport";
 import BurnRateRunwayReport from "./pages/BurnRateRunwayReport";
 import CostCenterLeaderboardReport from "./pages/CostCenterLeaderboardReport";
+import ForecastAccuracyReport from "./pages/ForecastAccuracyReport";
 import ActualsImport from "./pages/ActualsImport";
 import ActualsMatching from "./pages/ActualsMatching";
 import FYTools from "./pages/FYTools";
@@ -136,6 +137,7 @@ const App = () => (
                       <Route path="/reports/forecast-actuals-variance" element={<ForecastActualsVarianceReport />} />
                       <Route path="/reports/burn-rate" element={<BurnRateRunwayReport />} />
                       <Route path="/reports/cost-center-leaderboard" element={<CostCenterLeaderboardReport />} />
+                      <Route path="/reports/forecast-accuracy" element={<ForecastAccuracyReport />} />
                       <Route path="*" element={<NotFound />} />
                     </Route>
                   </Routes>

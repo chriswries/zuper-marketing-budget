@@ -88,10 +88,10 @@ export default function Reports() {
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col opacity-60">
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-muted-foreground" />
+              <Target className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Forecast Accuracy</CardTitle>
             </div>
             <CardDescription>
@@ -99,8 +99,8 @@ export default function Reports() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button disabled variant="outline" className="w-full">
-              Coming Soon
+            <Button onClick={() => navigate('/reports/forecast-accuracy')} className="w-full">
+              View Report
             </Button>
           </CardContent>
         </Card>
