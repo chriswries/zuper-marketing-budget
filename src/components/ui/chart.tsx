@@ -58,6 +58,39 @@ const ChartContainer = React.forwardRef<
 });
 ChartContainer.displayName = "Chart";
 
+/**
+ * Validates that a color value is a safe CSS color format.
+ * Prevents potential CSS injection attacks by only allowing known-safe patterns.
+ */
+function sanitizeCssColor(color: string): string | null {
+  if (!color || typeof color !== 'string') {
+    return null;
+  }
+  
+  // Only allow valid CSS color formats:
+  // - Hex colors: #RGB, #RRGGBB, #RRGGBBAA
+  // - RGB/RGBA: rgb(...), rgba(...)
+  // - HSL/HSLA: hsl(...), hsla(...)
+  // - Named colors: lowercase letters only
+  // - CSS variables: var(--...)
+  const validColorRegex = /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|[a-z]+|var\(--[a-zA-Z0-9-]+\))$/;
+  
+  const trimmed = color.trim();
+  if (!validColorRegex.test(trimmed)) {
+    console.warn(`ChartStyle: Invalid or potentially unsafe CSS color value rejected: ${color}`);
+    return null;
+  }
+  
+  return trimmed;
+}
+
+/**
+ * Generates CSS custom properties for chart theming using inline styles.
+ * Uses sanitized color values to prevent CSS injection.
+ * 
+ * Security note: This replaces the previous dangerouslySetInnerHTML approach
+ * with a safer inline styles method that validates all color values.
+ */
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
 
@@ -65,25 +98,31 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null;
   }
 
+  // Build CSS string with sanitized values
+  const cssString = Object.entries(THEMES)
+    .map(([theme, prefix]) => {
+      const properties = colorConfig
+        .map(([key, itemConfig]) => {
+          const rawColor = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
+          const color = rawColor ? sanitizeCssColor(rawColor) : null;
+          return color ? `  --color-${key}: ${color};` : null;
+        })
+        .filter(Boolean)
+        .join("\n");
+      
+      return properties ? `${prefix} [data-chart=${id}] {\n${properties}\n}` : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  if (!cssString) {
+    return null;
+  }
+
+  // Use a style element with textContent instead of dangerouslySetInnerHTML
+  // This is still creating a style element but with validated content
   return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
-  })
-  .join("\n")}
-}
-`,
-          )
-          .join("\n"),
-      }}
-    />
+    <style>{cssString}</style>
   );
 };
 

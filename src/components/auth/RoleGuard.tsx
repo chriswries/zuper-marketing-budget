@@ -4,6 +4,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShieldX, Loader2, ArrowLeft } from 'lucide-react';
 
+/**
+ * RoleGuard - Client-Side UI Access Control
+ * 
+ * ⚠️ SECURITY NOTICE: This component is a UI convenience ONLY and does NOT provide security.
+ * 
+ * RoleGuard controls which UI elements are displayed to users based on their role.
+ * It does NOT prevent unauthorized access to data or actions - that security is
+ * enforced server-side by:
+ * 
+ * 1. Row Level Security (RLS) policies on all database tables
+ * 2. The has_any_role() and is_admin() database functions used in RLS policies
+ * 3. Admin role validation in Edge Functions for privileged operations
+ * 4. RESTRICTIVE policies that prevent role escalation
+ * 
+ * A malicious user CAN bypass this component (e.g., via browser DevTools or direct
+ * API calls), but will still be blocked by the server-side authorization listed above.
+ * 
+ * This component exists to:
+ * - Provide a clean UX by hiding inaccessible features from legitimate users
+ * - Reduce confusion by not showing admin options to non-admin users
+ * - Give immediate feedback when a user lacks required permissions
+ * 
+ * All REAL security is enforced at the database and edge function level.
+ */
 interface RoleGuardProps {
   allowedRoles: UserRole[];
   children: React.ReactNode;
