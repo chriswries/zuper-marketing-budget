@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
+import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -188,7 +189,10 @@ export default function Budget() {
   // Admin override mode
   const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
 
-  // Focus props from URL params
+  // Edit tags dialog state
+  const [editTagsOpen, setEditTagsOpen] = useState(false);
+  const [editTagsData, setEditTagsData] = useState<EditTagsData | null>(null);
+
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
   const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
 
@@ -909,7 +913,46 @@ export default function Budget() {
     [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, updateRequest, isAdminOverride]
   );
 
-  // Admin override handlers
+  // Handle edit tags action
+  const handleEditTags = useCallback((args: EditTagsArgs) => {
+    setEditTagsData({
+      costCenterId: args.costCenterId,
+      costCenterName: args.costCenterName,
+      lineItem: args.lineItem,
+    });
+    setEditTagsOpen(true);
+  }, []);
+
+  // Handle save tags
+  const handleSaveTags = useCallback((costCenterId: string, lineItemId: string, tags: TagValues) => {
+    if (!selectedFiscalYearId) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+      ...fy,
+      updatedAt: new Date().toISOString(),
+      costCenters: fy.costCenters.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            if (item.id !== lineItemId) return item;
+            return {
+              ...item,
+              isContracted: tags.isContracted,
+              isAccrual: tags.isAccrual,
+              isSoftwareSubscription: tags.isSoftwareSubscription,
+            };
+          }),
+        };
+      }),
+    }));
+
+    toast({
+      title: 'Tags updated',
+      description: 'Line item tags have been saved.',
+    });
+  }, [selectedFiscalYearId, updateFiscalYearBudget]);
+
   const handleOverrideCancel = useCallback(() => {
     setOverrideDialogOpen(false);
     setPendingOverrideAction(null);
@@ -1567,6 +1610,8 @@ export default function Budget() {
         showEmptyCostCenters={true}
         onCellChange={isFinance ? undefined : handleCellChange}
         onDeleteLineItem={isFinance ? undefined : handleDeleteLineItem}
+        onEditTags={handleEditTags}
+        tagsEditable={selectedFiscalYear.status !== 'closed' && selectedFiscalYear.status !== 'archived'}
         currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
         renderCostCenterFYMeta={renderCostCenterFYMeta}
         renderGrandTotalFYMeta={renderGrandTotalFYMeta}
@@ -1583,6 +1628,13 @@ export default function Budget() {
         lockedMonths={new Set()} // No locked months for Budget
         onCreateLineItem={handleCreateLineItem}
         checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters: selectedFiscalYear.costCenters })}
+      />
+
+      <EditTagsDialog
+        open={editTagsOpen}
+        onOpenChange={setEditTagsOpen}
+        data={editTagsData}
+        onSave={handleSaveTags}
       />
 
       <EditAllocationsDialog
