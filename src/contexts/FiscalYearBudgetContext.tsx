@@ -49,7 +49,7 @@ interface FiscalYearBudgetContextValue {
   listFiscalYears: () => FiscalYearBudget[];
   getSelectedFiscalYearId: () => string | null;
   setSelectedFiscalYearId: (id: string | null) => void;
-  createFiscalYearBudget: (draft: FiscalYearBudget) => Promise<void>;
+  createFiscalYearBudget: (draft: FiscalYearBudget) => Promise<boolean>;
   updateFiscalYearBudget: (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => Promise<void>;
   deleteFiscalYearBudget: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
@@ -208,7 +208,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     setSelectedFiscalYearIdState(id);
   }, []);
 
-  const createFiscalYearBudget = useCallback(async (draft: FiscalYearBudget) => {
+  const createFiscalYearBudget = useCallback(async (draft: FiscalYearBudget): Promise<boolean> => {
     // Optimistically add to state
     setFiscalYears((prev) => [draft, ...prev]);
 
@@ -221,7 +221,9 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       console.error('Failed to create fiscal year:', error);
       // Remove from state on error
       setFiscalYears((prev) => prev.filter((fy) => fy.id !== draft.id));
+      return false;
     }
+    return true;
   }, []);
 
   const updateFiscalYearBudget = useCallback(async (id: string, updater: (fy: FiscalYearBudget) => FiscalYearBudget) => {
