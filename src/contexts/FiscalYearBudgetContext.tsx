@@ -152,21 +152,52 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
       if (error) {
         console.error('Failed to fetch fiscal years:', error);
-        return;
+        return [];
       }
 
       const mapped = (data || []).map(rowToFiscalYear);
       setFiscalYears(mapped);
+      return mapped;
     } catch (err) {
       console.error('Error fetching fiscal years:', err);
+      return [];
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load
+  // Initial load with auto-selection logic
   useEffect(() => {
-    fetchFiscalYears();
+    const initializeFiscalYears = async () => {
+      const loadedFYs = await fetchFiscalYears();
+      
+      if (loadedFYs.length === 0) {
+        // No FYs exist - clear any stale selection
+        setSelectedFiscalYearIdState(null);
+        return;
+      }
+
+      // Check if current selection is valid
+      const storedId = loadSelectedFromStorage();
+      const storedIsValid = storedId && loadedFYs.some(fy => fy.id === storedId);
+      
+      if (storedIsValid) {
+        // Stored selection is valid, ensure state matches
+        setSelectedFiscalYearIdState(storedId);
+      } else {
+        // Auto-select: prefer newest active FY, otherwise newest FY
+        const activeFYs = loadedFYs.filter(fy => fy.status === 'active');
+        const defaultFY = activeFYs.length > 0 ? activeFYs[0] : loadedFYs[0];
+        
+        if (defaultFY) {
+          console.log('Auto-selecting fiscal year:', defaultFY.name);
+          setSelectedFiscalYearIdState(defaultFY.id);
+          saveSelectedToStorage(defaultFY.id);
+        }
+      }
+    };
+    
+    initializeFiscalYears();
   }, [fetchFiscalYears]);
 
   // Set up realtime subscription
@@ -285,6 +316,11 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
   const selectedFiscalYear = fiscalYears.find((fy) => fy.id === selectedFiscalYearId) ?? null;
 
+  // Wrapper to make refetch return Promise<void> for external callers
+  const refetch = useCallback(async (): Promise<void> => {
+    await fetchFiscalYears();
+  }, [fetchFiscalYears]);
+
   const value: FiscalYearBudgetContextValue = {
     fiscalYears,
     selectedFiscalYearId,
@@ -296,7 +332,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     createFiscalYearBudget,
     updateFiscalYearBudget,
     deleteFiscalYearBudget,
-    refetch: fetchFiscalYears,
+    refetch,
   };
 
   return (
