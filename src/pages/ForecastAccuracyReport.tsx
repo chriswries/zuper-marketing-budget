@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
-import { getOrBuildActualsRollup } from '@/lib/actualsRollupStore';
+import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, CostCenter } from '@/types/budget';
-import { ArrowLeft, Receipt, Target } from 'lucide-react';
+import { ArrowLeft, Receipt, Target, Loader2 } from 'lucide-react';
 import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelpers';
 import {
   ChartContainer,
@@ -95,13 +95,12 @@ export default function ForecastAccuracyReport() {
     setInitialized(true);
   }, [selectedFiscalYearId, selectedFiscalYear]);
   
-  // Get actuals rollup
-  const actualsRollup = useMemo(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear || selectedFiscalYear.status !== 'active') {
-      return null;
-    }
-    return getOrBuildActualsRollup(selectedFiscalYearId, selectedFiscalYear);
-  }, [selectedFiscalYearId, selectedFiscalYear]);
+  // Use the hook to ensure actuals are loaded from DB before computing rollup
+  const isActiveFY = selectedFiscalYear?.status === 'active';
+  const { isLoading: isLoadingActuals, rollup: actualsRollup } = useEnsureActualsLoaded(
+    isActiveFY ? selectedFiscalYearId : null,
+    isActiveFY ? selectedFiscalYear : null
+  );
   
   // Determine the latest month with actuals
   const latestActualsMonthIndex = useMemo(() => {
@@ -205,7 +204,7 @@ export default function ForecastAccuracyReport() {
   };
   
   // Render empty states
-  if (!initialized) {
+  if (!initialized || isLoadingActuals) {
     return (
       <div>
         <PageHeader
@@ -213,8 +212,9 @@ export default function ForecastAccuracyReport() {
           description="Measure how accurately forecasts predict actual spending"
         />
         <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Loading...
+          <CardContent className="p-6 text-center text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading actuals...
           </CardContent>
         </Card>
       </div>

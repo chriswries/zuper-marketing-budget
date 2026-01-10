@@ -25,7 +25,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
-import { getOrBuildActualsRollup } from '@/lib/actualsRollupStore';
+import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import {
   buildForecastActualsReport,
   ForecastActualsCostCenterRow,
@@ -34,7 +34,7 @@ import {
 } from '@/lib/forecastActualsVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter, Month } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, Receipt, ArrowLeft } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, Receipt, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ScopeMode, sumYTD, getCurrentFiscalMonth, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
 
@@ -139,13 +139,12 @@ export default function ForecastActualsVarianceReport() {
     setInitialized(true);
   }, [selectedFiscalYearId, selectedFiscalYear]);
   
-  // Get actuals rollup
-  const actualsRollup = useMemo(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear || selectedFiscalYear.status !== 'active') {
-      return null;
-    }
-    return getOrBuildActualsRollup(selectedFiscalYearId, selectedFiscalYear);
-  }, [selectedFiscalYearId, selectedFiscalYear]);
+  // Use the hook to ensure actuals are loaded from DB before computing rollup
+  const isActiveFY = selectedFiscalYear?.status === 'active';
+  const { isLoading: isLoadingActuals, rollup: actualsRollup } = useEnsureActualsLoaded(
+    isActiveFY ? selectedFiscalYearId : null,
+    isActiveFY ? selectedFiscalYear : null
+  );
   
   // Build variance report
   const report = useMemo(() => {
@@ -414,7 +413,7 @@ export default function ForecastActualsVarianceReport() {
   const hasMatchedActuals = actualsRollup && actualsRollup.summary.matchedCount > 0;
   
   // Render empty states
-  if (!initialized) {
+  if (!initialized || isLoadingActuals) {
     return (
       <div>
         <PageHeader
@@ -422,8 +421,9 @@ export default function ForecastActualsVarianceReport() {
           description="Compare current forecast against matched actuals"
         />
         <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Loading...
+          <CardContent className="p-6 text-center text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading actuals...
           </CardContent>
         </Card>
       </div>
