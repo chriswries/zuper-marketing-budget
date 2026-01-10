@@ -1,3 +1,9 @@
+/**
+ * Storage module for actuals import batches.
+ * Uses sessionStorage (instead of localStorage) for security.
+ * Session storage clears on tab close, reducing exposure of financial data.
+ */
+
 import type { ActualsImportBatch } from '@/types/actualsImport';
 
 const STORAGE_KEY = 'lovable_actuals_import_latest';
@@ -16,28 +22,31 @@ const LEGACY_ACTUALS_IMPORT_KEYS = [
 
 export function saveLatestActualsImport(batch: ActualsImportBatch): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(batch));
+    // Use sessionStorage instead of localStorage for security
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(batch));
   } catch (error) {
-    console.error('Failed to save actuals import to localStorage:', error);
+    console.error('Failed to save actuals import to sessionStorage:', error);
   }
 }
 
 export function loadLatestActualsImport(): ActualsImportBatch | null {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Use sessionStorage instead of localStorage for security
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (!stored) return null;
     return JSON.parse(stored) as ActualsImportBatch;
   } catch (error) {
-    console.error('Failed to load actuals import from localStorage:', error);
+    console.error('Failed to load actuals import from sessionStorage:', error);
     return null;
   }
 }
 
 export function clearLatestActualsImport(): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    // Use sessionStorage instead of localStorage
+    sessionStorage.removeItem(STORAGE_KEY);
   } catch (error) {
-    console.error('Failed to clear actuals import from localStorage:', error);
+    console.error('Failed to clear actuals import from sessionStorage:', error);
   }
 }
 
@@ -53,12 +62,20 @@ export function clearLegacyActualsImportLocalStorage(): { clearedKeys: string[] 
 
   for (const key of LEGACY_ACTUALS_IMPORT_KEYS) {
     try {
+      // Clear from localStorage (legacy data)
       if (localStorage.getItem(key) !== null) {
         localStorage.removeItem(key);
         clearedKeys.push(key);
       }
+      // Also clear from sessionStorage (current data)
+      if (sessionStorage.getItem(key) !== null) {
+        sessionStorage.removeItem(key);
+        if (!clearedKeys.includes(key)) {
+          clearedKeys.push(key);
+        }
+      }
     } catch (error) {
-      console.error(`Failed to clear localStorage key "${key}":`, error);
+      console.error(`Failed to clear storage key "${key}":`, error);
     }
   }
 
