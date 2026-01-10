@@ -30,7 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink, ArrowUpDown } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink, ArrowUpDown, Tags } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -70,6 +70,12 @@ export interface RowActionArgs {
   targetRequestId?: string; // For cancellations/withdrawals, the request being cancelled/withdrawn
 }
 
+export interface EditTagsArgs {
+  costCenterId: string;
+  costCenterName: string;
+  lineItem: LineItem;
+}
+
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
 interface SheetTableProps {
@@ -80,6 +86,7 @@ interface SheetTableProps {
   onCellChange?: (args: CellChangeArgs) => void;
   onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
   onRowAction?: (args: RowActionArgs) => void;
+  onEditTags?: (args: EditTagsArgs) => void;
   currentUserRole?: UserRole;
   lockedMonths?: Set<Month>;
   renderCostCenterFYMeta?: (costCenter: CostCenter, spent: number) => React.ReactNode;
@@ -90,6 +97,8 @@ interface SheetTableProps {
   onFocusLineItemNotFound?: () => void;
   // Admin override mode - allows admin to edit/delete without normal restrictions
   adminOverrideEnabled?: boolean;
+  // Controls whether tag editing is enabled (for archived FYs)
+  tagsEditable?: boolean;
 }
 
 const formatCurrency = (value: number): string => {
@@ -118,7 +127,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, onEditTags, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false, tagsEditable = false }: SheetTableProps) {
   const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
@@ -184,8 +193,10 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const hasRowActions = (valueType === 'forecastValues' || valueType === 'budgetValues') && !!onRowAction;
   // Legacy canDelete for backwards compatibility - also respects admin override
   const canDelete = ((editable && baseEditable) || isAdminOverride) && !!onDeleteLineItem;
-  // Show action column if either new or legacy handler exists
-  const showActionColumn = hasRowActions || canDelete;
+  // Check if tag editing is available
+  const canEditTags = tagsEditable && !!onEditTags && currentUserRole !== 'finance';
+  // Show action column if either new or legacy handler exists OR if tags are editable
+  const showActionColumn = hasRowActions || canDelete || canEditTags;
 
   // Check if any filter is active
   const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly || accrualOnly || softwareOnly;
@@ -427,7 +438,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[72px] min-w-[72px] sticky top-0 z-20 bg-muted border-b"></TableHead>
+                <TableHead className="w-[100px] min-w-[100px] sticky top-0 z-20 bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -638,7 +649,35 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 {formatCurrency(itemFYTotal)}
                               </TableCell>
                               {showActionColumn && (
-                                <TableCell className="w-[72px] min-w-[72px] text-center">
+                                <TableCell className="w-[100px] min-w-[100px] text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    {/* Edit Tags button */}
+                                    {canEditTags && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onEditTags?.({
+                                                  costCenterId: costCenter.id,
+                                                  costCenterName: costCenter.name,
+                                                  lineItem: item,
+                                                });
+                                              }}
+                                            >
+                                              <Tags className="h-4 w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Edit tags</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
 {(() => {
                                     // Determine action type and permissions
                                     const isPending = item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending';
@@ -913,6 +952,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                     
                                     return null;
                                   })()}
+                                  </div>
                                 </TableCell>
                               )}
                             </TableRow>
@@ -937,7 +977,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                     <div>{formatCurrency(grandFYTotal)}</div>
                     {renderGrandTotalFYMeta?.(grandFYTotal)}
                   </TableCell>
-                  {showActionColumn && <TableCell className="w-[72px] min-w-[72px]"></TableCell>}
+                  {showActionColumn && <TableCell className="w-[100px] min-w-[100px]"></TableCell>}
                 </TableRow>
               </>
             )}

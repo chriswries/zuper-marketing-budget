@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, RowActionArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
+import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
@@ -144,6 +145,10 @@ export default function Forecast() {
     newValue?: number;
     updatedValues?: MonthlyValues;
   } | null>(null);
+
+  // Edit tags dialog state
+  const [editTagsOpen, setEditTagsOpen] = useState(false);
+  const [editTagsData, setEditTagsData] = useState<EditTagsData | null>(null);
 
   const handleFocusLineItemNotFound = useCallback(() => {
     toast({
@@ -392,6 +397,42 @@ export default function Forecast() {
       })
     );
   }, [costCenters, updateRequest, isAdminOverride]);
+
+  // Handle edit tags action
+  const handleEditTags = useCallback((args: EditTagsArgs) => {
+    setEditTagsData({
+      costCenterId: args.costCenterId,
+      costCenterName: args.costCenterName,
+      lineItem: args.lineItem,
+    });
+    setEditTagsOpen(true);
+  }, []);
+
+  // Handle save tags
+  const handleSaveTags = useCallback((costCenterId: string, lineItemId: string, tags: TagValues) => {
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            if (item.id !== lineItemId) return item;
+            return {
+              ...item,
+              isContracted: tags.isContracted,
+              isAccrual: tags.isAccrual,
+              isSoftwareSubscription: tags.isSoftwareSubscription,
+            };
+          }),
+        };
+      })
+    );
+
+    toast({
+      title: 'Tags updated',
+      description: 'Line item tags have been saved.',
+    });
+  }, []);
 
   // Row action handler - opens dialog for justification
   const handleRowAction = useCallback(({ costCenterId, lineItem, actionType, targetRequestId }: RowActionArgs) => {
@@ -1221,6 +1262,8 @@ export default function Forecast() {
             onCellChange={(isEditable || isAdminOverride) ? handleCellChange : undefined}
             onRowAction={handleRowAction}
             onDeleteLineItem={isAdminOverride ? handleDeleteLineItem : undefined}
+            onEditTags={handleEditTags}
+            tagsEditable={selectedFiscalYear?.status !== 'closed' && selectedFiscalYear?.status !== 'archived'}
             currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
             lockedMonths={lockedMonths}
             focusCostCenterId={focusCostCenterId}
@@ -1236,6 +1279,13 @@ export default function Forecast() {
             lockedMonths={lockedMonths}
             onCreateLineItem={handleCreateLineItem}
             checkDuplicateName={(name) => findDuplicateLineItemName({ name, costCenters })}
+          />
+
+          <EditTagsDialog
+            open={editTagsOpen}
+            onOpenChange={setEditTagsOpen}
+            data={editTagsData}
+            onSave={handleSaveTags}
           />
 
           <AdjustmentJustificationDialog
