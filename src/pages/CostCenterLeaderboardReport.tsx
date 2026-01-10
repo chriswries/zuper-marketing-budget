@@ -237,12 +237,15 @@ export default function CostCenterLeaderboardReport() {
           title="Cost Center Leaderboard"
           description="Rank cost centers by spend and variance"
         />
-        <div className="mb-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/reports')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Reports
-          </Button>
-        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => navigate('/reports')} 
+          className="gap-2 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
         <Card className="max-w-lg mx-auto">
           <CardContent className="p-8 text-center space-y-4">
             <Receipt className="h-12 w-12 mx-auto text-muted-foreground" />
@@ -273,12 +276,15 @@ export default function CostCenterLeaderboardReport() {
           title="Cost Center Leaderboard"
           description="Rank cost centers by spend and variance"
         />
-        <div className="mb-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/reports')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Reports
-          </Button>
-        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => navigate('/reports')} 
+          className="gap-2 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">
             No cost center data available.
@@ -290,18 +296,20 @@ export default function CostCenterLeaderboardReport() {
   
   return (
     <div className="space-y-6">
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => navigate('/reports')} 
+        className="gap-2"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+      
       <PageHeader
         title="Cost Center Leaderboard"
         description="Rank cost centers by spend and variance"
       />
-      
-      {/* Back button */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/reports')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Reports
-        </Button>
-      </div>
       
       {/* Two leaderboards side by side */}
       <div className="grid gap-6 lg:grid-cols-2">

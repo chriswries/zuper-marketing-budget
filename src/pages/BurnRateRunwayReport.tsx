@@ -340,12 +340,15 @@ export default function BurnRateRunwayReport() {
           title="Burn Rate / Runway"
           description="Track spending velocity and forecast when budget will be exhausted"
         />
-        <div className="mb-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/reports')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Reports
-          </Button>
-        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => navigate('/reports')} 
+          className="gap-2 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
         <Card className="max-w-lg mx-auto">
           <CardContent className="p-8 text-center space-y-4">
             <Receipt className="h-12 w-12 mx-auto text-muted-foreground" />
@@ -387,18 +390,20 @@ export default function BurnRateRunwayReport() {
   
   return (
     <div className="space-y-6">
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => navigate('/reports')} 
+        className="gap-2"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+      
       <PageHeader
         title="Burn Rate / Runway"
         description="Track spending velocity and forecast when budget will be exhausted"
       />
-      
-      {/* Back button */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/reports')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Reports
-        </Button>
-      </div>
       
       {/* Controls */}
       <Card>
