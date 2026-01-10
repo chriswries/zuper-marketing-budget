@@ -71,10 +71,10 @@ export default function Reports() {
 
         {/* Coming Soon Cards */}
 
-        <Card className="flex flex-col opacity-60">
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-muted-foreground" />
+              <Trophy className="h-5 w-5 text-primary" />
               <CardTitle className="text-lg">Cost Center Leaderboard</CardTitle>
             </div>
             <CardDescription>
@@ -82,8 +82,8 @@ export default function Reports() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button disabled variant="outline" className="w-full">
-              Coming Soon
+            <Button onClick={() => navigate('/reports/cost-center-leaderboard')} className="w-full">
+              View Report
             </Button>
           </CardContent>
         </Card>
