@@ -1,6 +1,8 @@
 /**
  * Storage module for computed actuals rollups.
- * Persists rollups to localStorage keyed by fiscal year.
+ * Persists rollups to sessionStorage (instead of localStorage) for better security.
+ * Session storage clears on tab close, reducing exposure of financial data.
+ * Also includes TTL (time-to-live) for cache expiration.
  */
 
 import type { ActualsRollupResult, buildActualsRollup } from './actualsRollup';
@@ -9,22 +11,44 @@ import { loadActualsMatching } from './actualsMatchingStore';
 import { buildActualsRollup as computeRollup } from './actualsRollup';
 import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 
+// Cache TTL: 1 hour (in milliseconds)
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
 export interface StoredRollup {
   generatedAt: string; // ISO
   rollup: ActualsRollupResult;
+  expiresAt: number; // Timestamp for TTL expiration
 }
 
 function getStorageKey(fiscalYearId: string): string {
   return `actuals_rollup_${fiscalYearId}`;
 }
 
+/**
+ * Check if cached data is still valid (not expired).
+ */
+function isCacheValid(stored: StoredRollup): boolean {
+  return Date.now() < stored.expiresAt;
+}
+
 export function loadActualsRollup(fiscalYearId: string): StoredRollup | null {
   try {
-    const stored = localStorage.getItem(getStorageKey(fiscalYearId));
+    // Use sessionStorage instead of localStorage for security
+    const stored = sessionStorage.getItem(getStorageKey(fiscalYearId));
     if (!stored) return null;
-    return JSON.parse(stored) as StoredRollup;
+    
+    const parsed = JSON.parse(stored) as StoredRollup;
+    
+    // Check TTL expiration
+    if (!isCacheValid(parsed)) {
+      // Cache expired, remove it
+      sessionStorage.removeItem(getStorageKey(fiscalYearId));
+      return null;
+    }
+    
+    return parsed;
   } catch {
-    console.error('Failed to load actuals rollup from localStorage');
+    console.error('Failed to load actuals rollup from sessionStorage');
     return null;
   }
 }
@@ -33,11 +57,13 @@ export function saveActualsRollup(fiscalYearId: string, rollup: ActualsRollupRes
   const stored: StoredRollup = {
     generatedAt: new Date().toISOString(),
     rollup,
+    expiresAt: Date.now() + CACHE_TTL_MS,
   };
   try {
-    localStorage.setItem(getStorageKey(fiscalYearId), JSON.stringify(stored));
+    // Use sessionStorage instead of localStorage for security
+    sessionStorage.setItem(getStorageKey(fiscalYearId), JSON.stringify(stored));
   } catch (error) {
-    console.error('Failed to save actuals rollup to localStorage:', error);
+    console.error('Failed to save actuals rollup to sessionStorage:', error);
   }
 }
 
@@ -79,8 +105,9 @@ export function getOrBuildActualsRollup(
  */
 export function deleteActualsRollupForFY(fiscalYearId: string): void {
   try {
-    localStorage.removeItem(getStorageKey(fiscalYearId));
+    // Use sessionStorage instead of localStorage
+    sessionStorage.removeItem(getStorageKey(fiscalYearId));
   } catch (error) {
-    console.error('Failed to delete actuals rollup from localStorage:', error);
+    console.error('Failed to delete actuals rollup from sessionStorage:', error);
   }
 }
