@@ -1,6 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ShieldX, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ShieldX, Loader2, ArrowLeft } from 'lucide-react';
 
 interface RoleGuardProps {
   allowedRoles: UserRole[];
@@ -9,6 +11,7 @@ interface RoleGuardProps {
 }
 
 export function RoleGuard({ allowedRoles, children, fallback }: RoleGuardProps) {
+  const navigate = useNavigate();
   const { role, loading, profileLoading, session } = useAuth();
 
   // Show loading while auth is initializing OR while we have a session but profile isn't loaded yet
@@ -28,14 +31,23 @@ export function RoleGuard({ allowedRoles, children, fallback }: RoleGuardProps) 
 
     return (
       <div className="flex min-h-[400px] items-center justify-center p-8">
-        <Alert variant="destructive" className="max-w-md">
-          <ShieldX className="h-4 w-4" />
-          <AlertTitle>Access Denied</AlertTitle>
-          <AlertDescription>
-            You don't have permission to access this page. This area is restricted to{' '}
-            {allowedRoles.join(', ')} users only.
-          </AlertDescription>
-        </Alert>
+        <Card className="max-w-md text-center">
+          <CardHeader>
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+              <ShieldX className="h-6 w-6 text-destructive" />
+            </div>
+            <CardTitle>Access Denied</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              You need Admin permissions to view this page.
+            </p>
+            <Button onClick={() => navigate('/reports')} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Reports
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
