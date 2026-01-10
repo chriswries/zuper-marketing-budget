@@ -129,7 +129,7 @@ export interface ImportBundleArgs {
   // Store operations
   existingFiscalYears: FiscalYearBudget[];
   existingRequests: SpendRequest[];
-  createFiscalYearBudget: (fy: FiscalYearBudget) => void;
+  createFiscalYearBudget: (fy: FiscalYearBudget) => Promise<boolean>;
   deleteFiscalYearBudget: (id: string) => Promise<void>;
   setRequests: (updater: (prev: SpendRequest[]) => SpendRequest[]) => void;
 }
@@ -428,21 +428,24 @@ export async function importFiscalYearBundleV1(args: ImportBundleArgs): Promise<
 
   // 5. Perform import writes
   try {
-    // a) Create/insert FY into FY store
-    createFiscalYearBudget(bundle.fiscalYear);
-
-    // b) Forecast
-    if (bundle.forecast === null) {
-      clearForecastForFY(fyId);
-    } else {
-      saveForecastForFY(fyId, bundle.forecast);
+    // a) Create/insert FY into FY store - MUST complete before child table inserts
+    const fyCreated = await createFiscalYearBudget(bundle.fiscalYear);
+    if (!fyCreated) {
+      return { ok: false, errors: ['Failed to create fiscal year in database'] };
     }
 
-    // c) Actuals
-    replaceActuals(fyId, bundle.actualsTransactions);
+    // b) Forecast (can now reference the FY due to foreign key)
+    if (bundle.forecast === null) {
+      await clearForecastForFY(fyId);
+    } else {
+      await saveForecastForFY(fyId, bundle.forecast);
+    }
 
-    // d) Actuals matching
-    replaceActualsMatchingForFY(fyId, bundle.actualsMatching);
+    // c) Actuals (can now reference the FY due to foreign key)
+    await replaceActuals(fyId, bundle.actualsTransactions);
+
+    // d) Actuals matching (can now reference the FY due to foreign key)
+    await replaceActualsMatchingForFY(fyId, bundle.actualsMatching);
 
     // e) Requests - merge without duplicates
     setRequests((prev) => {
