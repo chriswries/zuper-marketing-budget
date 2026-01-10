@@ -10,7 +10,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, DollarSign, TrendingUp, Receipt, Search } from 'lucide-react';
+import { AlertTriangle, ArrowRight, DollarSign, TrendingUp, Receipt, Search, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable } from '@/components/sheet/SheetTable';
 import { Button } from '@/components/ui/button';
@@ -28,9 +28,9 @@ import {
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
-import { getOrBuildActualsRollup, type StoredRollup } from '@/lib/actualsRollupStore';
-import type { ActualsRollupResult, LineItemRollup } from '@/lib/actualsRollup';
-import type { CostCenter, MonthlyValues, LineItem, MONTHS } from '@/types/budget';
+import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
+import type { LineItemRollup } from '@/lib/actualsRollup';
+import type { CostCenter, MonthlyValues, LineItem } from '@/types/budget';
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -85,11 +85,11 @@ export default function Actuals() {
   const [liSort, setLiSort] = useState<SortMode>('alpha');
   const [showZeroRows, setShowZeroRows] = useState(false);
 
-  // Fetch rollup only when FY is active
-  const rollup = useMemo<ActualsRollupResult | null>(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear || !isActiveFY) return null;
-    return getOrBuildActualsRollup(selectedFiscalYearId, selectedFiscalYear);
-  }, [selectedFiscalYearId, selectedFiscalYear, isActiveFY]);
+  // Use the hook to ensure actuals are loaded from DB before computing rollup
+  const { isLoading: isLoadingActuals, rollup } = useEnsureActualsLoaded(
+    isActiveFY ? selectedFiscalYearId : null,
+    isActiveFY ? selectedFiscalYear : null
+  );
 
   // Build CostCenter[] structure for SheetTable from rollup
   const displayCostCenters = useMemo((): CostCenter[] => {
@@ -225,6 +225,13 @@ export default function Actuals() {
             <Button onClick={() => navigate('/budget')}>
               Go to Budget
             </Button>
+          </CardContent>
+        </Card>
+      ) : isLoadingActuals ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p>Loading actuals...</p>
           </CardContent>
         </Card>
       ) : (

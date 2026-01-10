@@ -7,9 +7,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
-import { getOrBuildActualsRollup } from '@/lib/actualsRollupStore';
+import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, CostCenter, MonthlyValues } from '@/types/budget';
-import { ArrowLeft, Receipt, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, Receipt, ArrowUpDown, Loader2 } from 'lucide-react';
 import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelpers';
 import { cn } from '@/lib/utils';
 
@@ -87,13 +87,12 @@ export default function CostCenterLeaderboardReport() {
     setInitialized(true);
   }, [selectedFiscalYearId, selectedFiscalYear]);
   
-  // Get actuals rollup
-  const actualsRollup = useMemo(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear || selectedFiscalYear.status !== 'active') {
-      return null;
-    }
-    return getOrBuildActualsRollup(selectedFiscalYearId, selectedFiscalYear);
-  }, [selectedFiscalYearId, selectedFiscalYear]);
+  // Use the hook to ensure actuals are loaded from DB before computing rollup
+  const isActiveFY = selectedFiscalYear?.status === 'active';
+  const { isLoading: isLoadingActuals, rollup: actualsRollup } = useEnsureActualsLoaded(
+    isActiveFY ? selectedFiscalYearId : null,
+    isActiveFY ? selectedFiscalYear : null
+  );
   
   // Determine the latest month with actuals
   const latestActualsMonthIndex = useMemo(() => {
@@ -182,7 +181,7 @@ export default function CostCenterLeaderboardReport() {
   const hasActuals = actualsRollup && actualsRollup.summary.matchedCount > 0;
   
   // Render empty states
-  if (!initialized) {
+  if (!initialized || isLoadingActuals) {
     return (
       <div>
         <PageHeader
@@ -190,8 +189,9 @@ export default function CostCenterLeaderboardReport() {
           description="Rank cost centers by spend and variance"
         />
         <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Loading...
+          <CardContent className="p-6 text-center text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading actuals...
           </CardContent>
         </Card>
       </div>
