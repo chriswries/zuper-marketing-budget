@@ -196,7 +196,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   // Check if tag editing is available
   const canEditTags = tagsEditable && !!onEditTags && currentUserRole !== 'finance';
   // Show action column if either new or legacy handler exists OR if tags are editable
-  const showActionColumn = hasRowActions || canDelete || canEditTags;
+  const showActionColumn = hasRowActions || canDelete;
 
   // Check if any filter is active
   const hasActiveFilter = searchQuery.trim() !== '' || contractedOnly || accrualOnly || softwareOnly;
@@ -438,7 +438,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[100px] min-w-[100px] sticky top-0 z-20 bg-muted border-b"></TableHead>
+                <TableHead className="w-[72px] min-w-[72px] sticky top-0 z-20 bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -515,8 +515,36 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="sheet-first-col sticky left-0 z-10 bg-background border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                                 <div className="flex items-start gap-2 pl-6 min-w-0">
                                   <div className="flex-1 min-w-0">
-                                    <div className="font-medium whitespace-normal break-words text-foreground">
-                                      {item.name}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium whitespace-normal break-words text-foreground">
+                                        {item.name}
+                                      </span>
+                                      {canEditTags && (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onEditTags?.({
+                                                    costCenterId: costCenter.id,
+                                                    costCenterName: costCenter.name,
+                                                    lineItem: item,
+                                                  });
+                                                }}
+                                              >
+                                                <Tags className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>Edit tags</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
                                     </div>
                                     <div className="mt-1 flex flex-wrap gap-1 max-w-full">
                                       {/* Approval pending badge */}
@@ -649,35 +677,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 {formatCurrency(itemFYTotal)}
                               </TableCell>
                               {showActionColumn && (
-                                <TableCell className="w-[100px] min-w-[100px] text-center">
+                                <TableCell className="w-[72px] min-w-[72px] text-center">
                                   <div className="flex items-center justify-center gap-1">
-                                    {/* Edit Tags button */}
-                                    {canEditTags && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onEditTags?.({
-                                                  costCenterId: costCenter.id,
-                                                  costCenterName: costCenter.name,
-                                                  lineItem: item,
-                                                });
-                                              }}
-                                            >
-                                              <Tags className="h-4 w-4" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Edit tags</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
 {(() => {
                                     // Determine action type and permissions
                                     const isPending = item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending';
