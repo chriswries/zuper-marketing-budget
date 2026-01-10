@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CostCenter } from '@/types/budget';
 import type { Json } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
@@ -136,14 +137,19 @@ function fiscalYearToRow(fy: FiscalYearBudget): {
 }
 
 export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) {
+  const { session, loading: authLoading } = useAuth();
   const [fiscalYears, setFiscalYears] = useState<FiscalYearBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFiscalYearId, setSelectedFiscalYearIdState] = useState<string | null>(() => 
     loadSelectedFromStorage()
   );
+  
+  // Track if we've initialized for the current session to avoid double-fetches
+  const initializedForSessionRef = useRef<string | null>(null);
 
   // Fetch fiscal years from DB
-  const fetchFiscalYears = useCallback(async () => {
+  const fetchFiscalYears = useCallback(async (): Promise<FiscalYearBudget[]> => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('fiscal_years')
@@ -166,9 +172,34 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
-  // Initial load with auto-selection logic
+  // Auth-aware initialization: fetch FYs when session becomes available
   useEffect(() => {
+    // Still loading auth - do nothing yet
+    if (authLoading) {
+      return;
+    }
+
+    // No session (logged out) - clear in-memory state
+    if (!session) {
+      setFiscalYears([]);
+      setSelectedFiscalYearIdState(null);
+      setLoading(false);
+      initializedForSessionRef.current = null;
+      return;
+    }
+
+    // Session exists - check if we've already initialized for this session
+    const sessionKey = session.user?.id ?? 'unknown';
+    if (initializedForSessionRef.current === sessionKey) {
+      // Already initialized for this session, skip
+      return;
+    }
+
+    // Mark as initializing for this session
+    initializedForSessionRef.current = sessionKey;
+
     const initializeFiscalYears = async () => {
+      console.log('Initializing fiscal years for session:', sessionKey);
       const loadedFYs = await fetchFiscalYears();
       
       if (loadedFYs.length === 0) {
@@ -198,7 +229,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     };
     
     initializeFiscalYears();
-  }, [fetchFiscalYears]);
+  }, [authLoading, session, fetchFiscalYears]);
 
   // Set up realtime subscription
   useEffect(() => {
