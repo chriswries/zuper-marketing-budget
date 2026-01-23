@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
+import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -192,6 +193,10 @@ export default function Budget() {
   // Edit tags dialog state
   const [editTagsOpen, setEditTagsOpen] = useState(false);
   const [editTagsData, setEditTagsData] = useState<EditTagsData | null>(null);
+
+  // Row action dialog state
+  const [rowActionDialogOpen, setRowActionDialogOpen] = useState(false);
+  const [pendingRowAction, setPendingRowAction] = useState<RowActionData | null>(null);
 
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
   const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
@@ -913,6 +918,110 @@ export default function Budget() {
     [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, updateRequest, isAdminOverride]
   );
 
+  // Handle row action (open dialog for withdraw_request, cancel_request, delete_line_item)
+  const handleRowAction = useCallback(({ costCenterId, lineItem, actionType, targetRequestId }: RowActionArgs) => {
+    setPendingRowAction({
+      type: actionType,
+      costCenterId,
+      lineItem,
+      targetRequestId,
+    });
+    setRowActionDialogOpen(true);
+  }, []);
+
+  // Handle row action submission
+  const handleRowActionSubmit = useCallback((justification: string) => {
+    if (!pendingRowAction || !selectedFiscalYear || !selectedFiscalYearId) return;
+
+    const { type, costCenterId, lineItem, targetRequestId } = pendingRowAction;
+
+    // Handle withdraw_request for managers - cancel the request and remove/revert line item
+    if (type === 'withdraw_request' && targetRequestId) {
+      // Cancel the pending request
+      updateRequest(targetRequestId, (request) => ({
+        ...request,
+        status: 'cancelled' as const,
+        approvalSteps: request.approvalSteps.map((step) =>
+          step.status === 'pending'
+            ? { ...step, status: 'rejected' as const, updatedAt: new Date().toISOString() }
+            : step
+        ),
+      }));
+
+      // If approvalStatus pending (new line item), remove the line item
+      if (lineItem.approvalStatus === 'pending') {
+        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+          ...fy,
+          updatedAt: new Date().toISOString(),
+          costCenters: fy.costCenters.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+          }),
+        }));
+      }
+
+      // If adjustmentStatus pending, revert to before values
+      if (lineItem.adjustmentStatus === 'pending' && lineItem.adjustmentBeforeValues) {
+        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+          ...fy,
+          updatedAt: new Date().toISOString(),
+          costCenters: fy.costCenters.map((cc) => {
+            if (cc.id !== costCenterId) return cc;
+            return {
+              ...cc,
+              lineItems: cc.lineItems.map((item) =>
+                item.id === lineItem.id
+                  ? {
+                      ...item,
+                      budgetValues: lineItem.adjustmentBeforeValues!,
+                      adjustmentStatus: undefined,
+                      adjustmentRequestId: undefined,
+                      adjustmentBeforeValues: undefined,
+                    }
+                  : item
+              ),
+            };
+          }),
+        }));
+      }
+
+      // Append audit event (use 'reset' action for withdrawal)
+      if (currentRole && currentRole !== 'admin') {
+        appendApprovalAudit('request', targetRequestId, {
+          action: 'reset',
+          actorRole: currentRole as 'manager' | 'cmo' | 'finance',
+          note: justification ? `Withdrawn: ${justification}` : 'Withdrawn by user',
+        });
+      }
+
+      toast({
+        title: 'Request withdrawn',
+        description: 'The pending request has been cancelled.',
+      });
+    }
+
+    // Handle delete_line_item (no pending request)
+    if (type === 'delete_line_item') {
+      updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+        ...fy,
+        updatedAt: new Date().toISOString(),
+        costCenters: fy.costCenters.map((cc) => {
+          if (cc.id !== costCenterId) return cc;
+          return { ...cc, lineItems: cc.lineItems.filter((item) => item.id !== lineItem.id) };
+        }),
+      }));
+
+      toast({
+        title: 'Line item deleted',
+        description: `"${lineItem.name}" has been removed from the budget.`,
+      });
+    }
+
+    // Close dialog and clear state
+    setRowActionDialogOpen(false);
+    setPendingRowAction(null);
+  }, [pendingRowAction, selectedFiscalYear, selectedFiscalYearId, updateRequest, updateFiscalYearBudget, currentRole]);
+
   // Handle edit tags action
   const handleEditTags = useCallback((args: EditTagsArgs) => {
     setEditTagsData({
@@ -1615,6 +1724,7 @@ export default function Budget() {
         showEmptyCostCenters={true}
         onCellChange={isFinance ? undefined : handleCellChange}
         onDeleteLineItem={isFinance ? undefined : handleDeleteLineItem}
+        onRowAction={isFinance ? undefined : handleRowAction}
         onEditTags={handleEditTags}
         tagsEditable={selectedFiscalYear.status !== 'closed' && selectedFiscalYear.status !== 'archived'}
         currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
@@ -1668,6 +1778,16 @@ export default function Budget() {
         open={approvalsDrawerOpen}
         onOpenChange={setApprovalsDrawerOpen}
         originSheet="budget"
+      />
+
+      <RowActionDialog
+        open={rowActionDialogOpen}
+        data={pendingRowAction}
+        onCancel={() => {
+          setRowActionDialogOpen(false);
+          setPendingRowAction(null);
+        }}
+        onSubmit={handleRowActionSubmit}
       />
     </div>
   );
