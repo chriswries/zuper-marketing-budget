@@ -1242,11 +1242,6 @@ export default function Budget() {
         <div className="flex items-center gap-2">
           {isEditable ? (
             <>
-              <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add line item
-              </Button>
-
               {currentRole === 'admin' || currentRole === 'cmo' ? (
                 <Button variant="outline" size="sm" onClick={() => setEditAllocationsOpen(true)} className="gap-2">
                   <Settings2 className="h-4 w-4" />
@@ -1270,20 +1265,6 @@ export default function Budget() {
             </>
           ) : isFinance && (selectedFiscalYear.approval?.status === 'draft' || selectedFiscalYear.approval?.status === 'rejected') ? (
             <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Button size="sm" className="gap-2" disabled>
-                      <Plus className="h-4 w-4" />
-                      Add line item
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Finance is read-only</p>
-                </TooltipContent>
-              </Tooltip>
-
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
@@ -1602,6 +1583,30 @@ export default function Budget() {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Line Item button - left justified above table */}
+      <div className="flex items-center">
+        {isEditable ? (
+          <Button onClick={() => setAddLineItemOpen(true)} size="sm" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add line item
+          </Button>
+        ) : isFinance && (selectedFiscalYear.approval?.status === 'draft' || selectedFiscalYear.approval?.status === 'rejected') ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button size="sm" className="gap-2" disabled>
+                  <Plus className="h-4 w-4" />
+                  Add line item
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Finance is read-only</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
 
       <SheetTable
         costCenters={selectedFiscalYear.costCenters}
