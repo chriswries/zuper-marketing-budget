@@ -30,7 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink, ArrowUpDown, Tags } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Search, Lock, Trash2, XCircle, ExternalLink, ArrowUpDown, Tags, Pencil } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -76,6 +76,12 @@ export interface EditTagsArgs {
   lineItem: LineItem;
 }
 
+export interface EditLineItemNameArgs {
+  costCenterId: string;
+  costCenterName: string;
+  lineItem: LineItem;
+}
+
 export type UserRole = 'admin' | 'manager' | 'cmo' | 'finance';
 
 interface SheetTableProps {
@@ -87,6 +93,8 @@ interface SheetTableProps {
   onDeleteLineItem?: (args: DeleteLineItemArgs) => void;
   onRowAction?: (args: RowActionArgs) => void;
   onEditTags?: (args: EditTagsArgs) => void;
+  onEditLineItemName?: (args: EditLineItemNameArgs) => void;
+  canEditLineItemName?: boolean;
   currentUserRole?: UserRole;
   lockedMonths?: Set<Month>;
   renderCostCenterFYMeta?: (costCenter: CostCenter, spent: number) => React.ReactNode;
@@ -127,7 +135,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, onEditTags, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false, tagsEditable = false }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, onEditTags, onEditLineItemName, canEditLineItemName = false, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false, tagsEditable = false }: SheetTableProps) {
   const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
@@ -519,6 +527,32 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                       <span className="font-medium whitespace-normal break-words text-foreground">
                                         {item.name}
                                       </span>
+                                      {canEditLineItemName && onEditLineItemName && (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onEditLineItemName({
+                                                    costCenterId: costCenter.id,
+                                                    costCenterName: costCenter.name,
+                                                    lineItem: item,
+                                                  });
+                                                }}
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>Admin: Rename line item</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
                                       {canEditTags && (
                                         <TooltipProvider>
                                           <Tooltip>

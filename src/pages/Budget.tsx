@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
+import { EditLineItemNameDialog, EditLineItemNameData } from '@/components/sheet/EditLineItemNameDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -197,6 +198,10 @@ export default function Budget() {
   // Row action dialog state
   const [rowActionDialogOpen, setRowActionDialogOpen] = useState(false);
   const [pendingRowAction, setPendingRowAction] = useState<RowActionData | null>(null);
+
+  // Edit line item name dialog state (admin only)
+  const [editNameOpen, setEditNameOpen] = useState(false);
+  const [editNameData, setEditNameData] = useState<EditLineItemNameData | null>(null);
 
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
   const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
@@ -1062,6 +1067,45 @@ export default function Budget() {
     });
   }, [selectedFiscalYearId, updateFiscalYearBudget]);
 
+  // Handle edit line item name (admin only)
+  const handleEditLineItemName = useCallback((args: EditLineItemNameArgs) => {
+    setEditNameData({
+      costCenterId: args.costCenterId,
+      costCenterName: args.costCenterName,
+      lineItem: args.lineItem,
+    });
+    setEditNameOpen(true);
+  }, []);
+
+  // Handle save line item name
+  const handleSaveLineItemName = useCallback((
+    costCenterId: string,
+    lineItemId: string,
+    newName: string
+  ) => {
+    if (!selectedFiscalYear || !selectedFiscalYearId) return;
+
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
+      ...fy,
+      updatedAt: new Date().toISOString(),
+      costCenters: fy.costCenters.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) =>
+            item.id === lineItemId ? { ...item, name: newName.trim() } : item
+          ),
+        };
+      }),
+    }));
+
+    setEditNameOpen(false);
+    toast({
+      title: 'Line item renamed',
+      description: `Updated to "${newName.trim()}"`,
+    });
+  }, [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]);
+
   const handleOverrideCancel = useCallback(() => {
     setOverrideDialogOpen(false);
     setPendingOverrideAction(null);
@@ -1726,6 +1770,8 @@ export default function Budget() {
         onDeleteLineItem={isFinance ? undefined : handleDeleteLineItem}
         onRowAction={isFinance ? undefined : handleRowAction}
         onEditTags={handleEditTags}
+        onEditLineItemName={isAdmin ? handleEditLineItemName : undefined}
+        canEditLineItemName={isAdmin && selectedFiscalYear.status !== 'closed' && selectedFiscalYear.status !== 'archived'}
         tagsEditable={selectedFiscalYear.status !== 'closed' && selectedFiscalYear.status !== 'archived'}
         currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
         renderCostCenterFYMeta={renderCostCenterFYMeta}
@@ -1750,6 +1796,20 @@ export default function Budget() {
         onOpenChange={setEditTagsOpen}
         data={editTagsData}
         onSave={handleSaveTags}
+      />
+
+      <EditLineItemNameDialog
+        open={editNameOpen}
+        onOpenChange={setEditNameOpen}
+        data={editNameData}
+        onSave={handleSaveLineItemName}
+        checkDuplicateName={(name, excludeId) => 
+          findDuplicateLineItemName({ 
+            name, 
+            costCenters: selectedFiscalYear.costCenters, 
+            excludeLineItemId: excludeId 
+          })
+        }
       />
 
       <EditAllocationsDialog

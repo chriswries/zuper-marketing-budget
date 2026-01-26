@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
+import { EditLineItemNameDialog, EditLineItemNameData } from '@/components/sheet/EditLineItemNameDialog';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
@@ -149,6 +150,10 @@ export default function Forecast() {
   // Edit tags dialog state
   const [editTagsOpen, setEditTagsOpen] = useState(false);
   const [editTagsData, setEditTagsData] = useState<EditTagsData | null>(null);
+
+  // Edit line item name dialog state (admin only)
+  const [editNameOpen, setEditNameOpen] = useState(false);
+  const [editNameData, setEditNameData] = useState<EditLineItemNameData | null>(null);
 
   const handleFocusLineItemNotFound = useCallback(() => {
     toast({
@@ -431,6 +436,41 @@ export default function Forecast() {
     toast({
       title: 'Tags updated',
       description: 'Line item tags have been saved.',
+    });
+  }, []);
+
+  // Handle edit line item name (admin only)
+  const handleEditLineItemName = useCallback((args: EditLineItemNameArgs) => {
+    setEditNameData({
+      costCenterId: args.costCenterId,
+      costCenterName: args.costCenterName,
+      lineItem: args.lineItem,
+    });
+    setEditNameOpen(true);
+  }, []);
+
+  // Handle save line item name
+  const handleSaveLineItemName = useCallback((
+    costCenterId: string,
+    lineItemId: string,
+    newName: string
+  ) => {
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        if (cc.id !== costCenterId) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) =>
+            item.id === lineItemId ? { ...item, name: newName.trim() } : item
+          ),
+        };
+      })
+    );
+
+    setEditNameOpen(false);
+    toast({
+      title: 'Line item renamed',
+      description: `Updated to "${newName.trim()}"`,
     });
   }, []);
 
@@ -1263,6 +1303,8 @@ export default function Forecast() {
             onRowAction={handleRowAction}
             onDeleteLineItem={isAdminOverride ? handleDeleteLineItem : undefined}
             onEditTags={handleEditTags}
+            onEditLineItemName={currentRole === 'admin' ? handleEditLineItemName : undefined}
+            canEditLineItemName={currentRole === 'admin' && selectedFiscalYear?.status !== 'closed' && selectedFiscalYear?.status !== 'archived'}
             tagsEditable={selectedFiscalYear?.status !== 'closed' && selectedFiscalYear?.status !== 'archived'}
             currentUserRole={currentRole as 'admin' | 'manager' | 'cmo' | 'finance'}
             lockedMonths={lockedMonths}
@@ -1286,6 +1328,20 @@ export default function Forecast() {
             onOpenChange={setEditTagsOpen}
             data={editTagsData}
             onSave={handleSaveTags}
+          />
+
+          <EditLineItemNameDialog
+            open={editNameOpen}
+            onOpenChange={setEditNameOpen}
+            data={editNameData}
+            onSave={handleSaveLineItemName}
+            checkDuplicateName={(name, excludeId) => 
+              findDuplicateLineItemName({ 
+                name, 
+                costCenters, 
+                excludeLineItemId: excludeId 
+              })
+            }
           />
 
           <AdjustmentJustificationDialog
