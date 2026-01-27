@@ -142,8 +142,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [contractedOnly, setContractedOnly] = useState(false);
   const [accrualOnly, setAccrualOnly] = useState(false);
   const [softwareOnly, setSoftwareOnly] = useState(false);
-  const [costCenterSort, setCostCenterSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
-  const [lineItemSort, setLineItemSort] = useState<'default' | 'name' | 'fy-high' | 'fy-low'>('default');
+  const [costCenterSort, setCostCenterSort] = useState<'name' | 'fy-high' | 'fy-low'>('name');
+  const [lineItemSort, setLineItemSort] = useState<'name' | 'fy-high' | 'fy-low'>('name');
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -376,7 +376,6 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Default</SelectItem>
               <SelectItem value="name">Name (A→Z)</SelectItem>
               <SelectItem value="fy-high">FY Total (High→Low)</SelectItem>
               <SelectItem value="fy-low">FY Total (Low→High)</SelectItem>
@@ -390,7 +389,6 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Default</SelectItem>
               <SelectItem value="name">Name (A→Z)</SelectItem>
               <SelectItem value="fy-high">FY Total (High→Low)</SelectItem>
               <SelectItem value="fy-low">FY Total (Low→High)</SelectItem>
