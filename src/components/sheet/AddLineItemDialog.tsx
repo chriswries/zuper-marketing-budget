@@ -262,6 +262,17 @@ export function AddLineItemDialog({
             </Select>
           </div>
 
+          {/* Vendor Name */}
+          <div className="space-y-2">
+            <Label htmlFor="vendor">Vendor name</Label>
+            <Input
+              id="vendor"
+              value={vendorName}
+              onChange={(e) => setVendorName(e.target.value)}
+              placeholder="e.g., Google"
+            />
+          </div>
+
           {/* Line Item Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Line item name *</Label>
@@ -281,17 +292,6 @@ export function AddLineItemDialog({
                 . Please choose a unique name.
               </p>
             )}
-          </div>
-
-          {/* Vendor Name */}
-          <div className="space-y-2">
-            <Label htmlFor="vendor">Vendor name</Label>
-            <Input
-              id="vendor"
-              value={vendorName}
-              onChange={(e) => setVendorName(e.target.value)}
-              placeholder="e.g., Google"
-            />
           </div>
 
           {/* Flags */}
