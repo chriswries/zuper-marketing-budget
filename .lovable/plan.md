@@ -1,77 +1,65 @@
 
-## What’s actually happening (based on your latest details + code review)
+# Plan: Move Allocation Mode Control to List Level
 
-You confirmed in Chrome:
-- The **page** gets a horizontal scrollbar.
-- Trackpad horizontal swipe scrolls the **page**, not the table container.
-- Therefore the first column can’t “stick” relative to the expected scroll container, because the scroll is happening on the wrong element.
+## Current Behavior
+Each cost center row has its own dropdown to toggle between `$` (dollar) and `%` (percentage) input modes. This creates visual clutter and requires users to change each row individually if they want to work in a different mode.
 
-From inspecting `SheetTable.tsx`, the table is correctly placed inside a div with:
-- `overflow-x-auto` (good)
-- `min-w-0 w-full max-w-full` (good)
+## Desired Behavior
+A single global toggle at the top of the cost centers list that switches ALL cost centers between `$` and `%` modes simultaneously.
 
-So the persistent issue is not inside the `SheetTable` scroll container anymore.
+## Changes
 
-### Root cause
-The **overall layout is still allowing horizontal overflow at the page level**.
+### File: `src/components/budget/EditAllocationsDialog.tsx`
 
-A key red flag in the layout stack:
-- `AppLayout`’s `<main>` has `min-w-0 overflow-x-clip` (good)
-- But `SidebarInset` (from `src/components/ui/sidebar.tsx`) is a `flex-1` container **without `min-w-0`**, meaning in a flex layout it can still be forced wider than the viewport by wide descendants (like our `w-max` table). When that happens, the browser creates a **page-level horizontal overflow**, and trackpad horizontal gestures scroll the page instead of the intended inner div.
+1. **Add global mode state**
+   - Add a new state variable: `const [globalMode, setGlobalMode] = useState<'$' | '%'>('$');`
+   - Remove the `mode` property from the `AllocationRow` interface (it will be derived from the global state)
 
-In flexbox, this is a classic issue: you often need `min-w-0` on the flex child that should be allowed to shrink; otherwise it can overflow and create page scrollbars even if inner children have overflow scrolling.
+2. **Update `AllocationRow` interface**
+   - Remove `mode: '$' | '%'` field since mode is now global
+   - Keep `value` which will be interpreted based on the global mode
 
-## The fix (minimal, layout-correct, and should make sticky work again)
+3. **Update row initialization**
+   - When dialog opens, initialize all rows with dollar values (current behavior)
+   - When global mode changes, convert all row values at once
 
-### Change 1 — Make the main content flex child shrinkable
-**File:** `src/components/ui/sidebar.tsx`  
-**Component:** `SidebarInset`
+4. **Replace per-row mode selector with global control**
+   - Move the `$` / `%` Select dropdown from inside each row to the header area next to "Cost Centers" label
+   - Position it inline with the "Add" button
 
-Add `min-w-0` to the SidebarInset’s root class list:
-- Current: `"relative flex min-h-svh flex-1 flex-col bg-background ..."`
-- Updated: add `min-w-0` (and optionally `max-w-full` for extra containment)
+5. **Update `handleModeChange` to be global**
+   - Rename to `handleGlobalModeChange`
+   - When mode changes, convert ALL rows' values simultaneously:
+     - `$` to `%`: `newValue = (dollarValue / targetBudget) * 100`
+     - `%` to `$`: `newValue = (percentValue / 100) * targetBudget`
 
-This prevents the app’s content area (where the tables render) from expanding the entire page width.
+6. **Update `computedRows` logic**
+   - Use the global `globalMode` instead of per-row `row.mode` to compute amounts
 
-### Change 2 — Hard-stop page-level horizontal overflow (scoped to the app wrapper)
-If Change 1 alone doesn’t fully eliminate the page scrollbar (sometimes a fixed-position or border/shadow combo can still create a 1–2px overflow), we’ll add a safety belt:
+7. **Update row rendering**
+   - Remove the per-row Select dropdown
+   - The value input remains but is interpreted based on globalMode
+   - Add a subtle indicator showing the current mode (e.g., prefix the input with `$` or `%` symbol)
 
-**Option A (preferred):** Add `overflow-x-hidden` to the app wrapper in `SidebarProvider` (same file).
-- The wrapper is currently:
-  - `"group/sidebar-wrapper flex min-h-svh w-full ..."`
-- Add `min-w-0 overflow-x-hidden` there as well.
+## UI Layout After Change
 
-This keeps all horizontal overflow contained inside intended scroll regions (like the SheetTable scroll div), and stops Chrome from ever scrolling the page horizontally.
+```text
+Target Budget (USD)
+[ $1,000,000 ]
 
-**Why not rely on `overflow-x-clip` in `AppLayout`?**
-Because that only applies to the `<main>` content column, not necessarily to the full page / root scrolling element. If the flex container that houses `<main>` is wider than viewport, the browser will still create a horizontal scrollbar at the document level.
+Cost Centers                        [$|%] [+ Add]
+┌──────────────────────────────────────────────────┐
+│ [↑↓] [Marketing        ] [   250000 ] $250k 25% │
+│ [↑↓] [Sales            ] [   350000 ] $350k 35% │
+│ [↑↓] [Engineering      ] [   400000 ] $400k 40% │
+└──────────────────────────────────────────────────┘
+```
 
-## Why this will restore the expected behavior
+The mode toggle appears once at the list header level, affecting how all values are entered and displayed.
 
-Once the page no longer overflows horizontally:
-- Trackpad horizontal swipes will scroll the **nearest horizontal scroll container under the pointer** (your SheetTable wrapper with `overflow-x-auto`)
-- `position: sticky; left: 0` will then work correctly because the scroll is happening inside the table’s scroll context
-- The first column will remain fixed while other columns scroll under it (with the existing z-index + opaque background setup you already have)
+## Technical Details
 
-## Verification checklist (Chrome)
-
-On `/budget` and `/forecast` after the change:
-1. Confirm **no page-level horizontal scrollbar** appears (important).
-2. Put cursor over the SheetTable and two-finger swipe left/right:
-   - Only the table scrolls horizontally
-   - First column stays pinned
-3. Vertical scroll still works:
-   - Header row remains sticky
-4. Confirm no regressions:
-   - Row hover still highlights correctly
-   - EditableCell focus/cursor remains stable while horizontally scrolling
-
-## Files we will edit
-- `src/components/ui/sidebar.tsx`
-  - Update `SidebarInset` classes to include `min-w-0` (and likely `max-w-full`)
-  - If needed, update the SidebarProvider wrapper to include `overflow-x-hidden` (and `min-w-0`)
-
-## Notes / constraints
-- We will not change the SheetTable sticky architecture, z-index, or background rules unless the page-scrollbar issue is fully resolved and sticky still fails (unlikely once horizontal overflow is correctly contained).
-- This change is safe for the rest of the app because it only affects how the main content area participates in flex sizing; it doesn’t remove any necessary scroll regions.
-
+- The computed display on the right side of each row will continue to show both the dollar amount and percentage for clarity
+- When adding a new cost center, its initial value will be `0` (interpreted in the current global mode)
+- Value conversion uses the same rounding logic currently in place
+- Auto-select on focus behavior for inputs is preserved
