@@ -38,7 +38,6 @@ import { toast } from '@/hooks/use-toast';
 interface AllocationRow {
   id: string;
   name: string;
-  mode: '$' | '%';
   value: number;
   hasLineItems: boolean;
   isNew?: boolean;
@@ -62,11 +61,11 @@ export function EditAllocationsDialog({
   onSave,
 }: EditAllocationsDialogProps) {
   const [targetBudget, setTargetBudget] = useState(fiscalYearBudget.targetBudget);
+  const [globalMode, setGlobalMode] = useState<'$' | '%'>('$');
   const [rows, setRows] = useState<AllocationRow[]>(() =>
     fiscalYearBudget.costCenters.map((cc) => ({
       id: cc.id,
       name: cc.name,
-      mode: '$' as const,
       value: cc.annualLimit,
       hasLineItems: cc.lineItems.length > 0,
     }))
@@ -82,11 +81,11 @@ export function EditAllocationsDialog({
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (nextOpen) {
       setTargetBudget(fiscalYearBudget.targetBudget);
+      setGlobalMode('$');
       setRows(
         fiscalYearBudget.costCenters.map((cc) => ({
           id: cc.id,
           name: cc.name,
-          mode: '$' as const,
           value: cc.annualLimit,
           hasLineItems: cc.lineItems.length > 0,
         }))
@@ -106,11 +105,11 @@ export function EditAllocationsDialog({
   // Compute amounts
   const computedRows = useMemo(() => {
     return rows.map((row) => {
-      const amount = row.mode === '%' ? targetBudget * (row.value / 100) : row.value;
+      const amount = globalMode === '%' ? targetBudget * (row.value / 100) : row.value;
       const percent = targetBudget > 0 ? (amount / targetBudget) * 100 : 0;
       return { ...row, computedAmount: Math.round(amount), computedPercent: percent };
     });
-  }, [rows, targetBudget]);
+  }, [rows, targetBudget, globalMode]);
 
   const totalAllocated = useMemo(() => {
     return computedRows.reduce((sum, r) => sum + r.computedAmount, 0);
@@ -136,7 +135,7 @@ export function EditAllocationsDialog({
     const newId = crypto.randomUUID();
     setRows((prev) => [
       ...prev,
-      { id: newId, name: '', mode: '$', value: 0, hasLineItems: false, isNew: true },
+      { id: newId, name: '', value: 0, hasLineItems: false, isNew: true },
     ]);
   };
 
@@ -167,25 +166,25 @@ export function EditAllocationsDialog({
     resetDeleteConfirmation();
   };
 
-  const handleModeChange = (rowId: string, newMode: '$' | '%') => {
+  const handleGlobalModeChange = (newMode: '$' | '%') => {
+    if (newMode === globalMode) return;
+    
     setRows((prev) =>
       prev.map((r) => {
-        if (r.id !== rowId) return r;
-        
         let newValue: number;
-        if (r.mode === '$' && newMode === '%') {
+        if (globalMode === '$' && newMode === '%') {
+          // Converting from $ to %
           newValue = targetBudget > 0 
             ? Math.round((r.value / targetBudget) * 100 * 100) / 100 
             : 0;
-        } else if (r.mode === '%' && newMode === '$') {
-          newValue = Math.round((r.value / 100) * targetBudget);
         } else {
-          newValue = r.value;
+          // Converting from % to $
+          newValue = Math.round((r.value / 100) * targetBudget);
         }
-        
-        return { ...r, mode: newMode, value: newValue };
+        return { ...r, value: newValue };
       })
     );
+    setGlobalMode(newMode);
   };
 
   const moveRow = (index: number, direction: 'up' | 'down') => {
@@ -260,10 +259,24 @@ export function EditAllocationsDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Cost Centers</Label>
-                <Button variant="outline" size="sm" onClick={addRow}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={globalMode}
+                    onValueChange={(val) => handleGlobalModeChange(val as '$' | '%')}
+                  >
+                    <SelectTrigger className="w-16">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="$">$</SelectItem>
+                      <SelectItem value="%">%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={addRow}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
 
               <div className="max-h-[300px] overflow-y-auto border rounded-md">
@@ -306,28 +319,19 @@ export function EditAllocationsDialog({
                             className={`flex-1 min-w-[120px] ${costCenterValidation.errorsById[row.id] ? 'border-destructive' : ''}`}
                           />
 
-                          {/* Mode */}
-                          <Select
-                            value={row.mode}
-                            onValueChange={(val) => handleModeChange(row.id, val as '$' | '%')}
-                          >
-                            <SelectTrigger className="w-16">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="$">$</SelectItem>
-                              <SelectItem value="%">%</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          {/* Value */}
-                          <Input
-                            type="number"
-                            value={row.value}
-                            onChange={(e) => updateRow(row.id, { value: Number(e.target.value) || 0 })}
-                            onFocus={(e) => e.target.select()}
-                            className="w-24"
-                          />
+                          {/* Value with mode indicator */}
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                              {globalMode}
+                            </span>
+                            <Input
+                              type="number"
+                              value={row.value}
+                              onChange={(e) => updateRow(row.id, { value: Number(e.target.value) || 0 })}
+                              onFocus={(e) => e.target.select()}
+                              className="w-28 pl-6"
+                            />
+                          </div>
 
                           {/* Computed display */}
                           <div className="text-sm text-muted-foreground w-32 text-right">
