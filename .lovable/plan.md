@@ -1,65 +1,119 @@
 
-# Plan: Move Allocation Mode Control to List Level
 
-## Current Behavior
-Each cost center row has its own dropdown to toggle between `$` (dollar) and `%` (percentage) input modes. This creates visual clutter and requires users to change each row individually if they want to work in a different mode.
+## Summary
 
-## Desired Behavior
-A single global toggle at the top of the cost centers list that switches ALL cost centers between `$` and `%` modes simultaneously.
+Update the Edit Budget Settings dialog to:
+1. Simplify the per-row computed display to show only the dollar amount (remove percentage)
+2. Make the footer totals display percentages when the global mode is set to `%`
 
 ## Changes
 
 ### File: `src/components/budget/EditAllocationsDialog.tsx`
 
-1. **Add global mode state**
-   - Add a new state variable: `const [globalMode, setGlobalMode] = useState<'$' | '%'>('$');`
-   - Remove the `mode` property from the `AllocationRow` interface (it will be derived from the global state)
+#### Change 1: Simplify per-row computed display (Line 338)
 
-2. **Update `AllocationRow` interface**
-   - Remove `mode: '$' | '%'` field since mode is now global
-   - Keep `value` which will be interpreted based on the global mode
-
-3. **Update row initialization**
-   - When dialog opens, initialize all rows with dollar values (current behavior)
-   - When global mode changes, convert all row values at once
-
-4. **Replace per-row mode selector with global control**
-   - Move the `$` / `%` Select dropdown from inside each row to the header area next to "Cost Centers" label
-   - Position it inline with the "Add" button
-
-5. **Update `handleModeChange` to be global**
-   - Rename to `handleGlobalModeChange`
-   - When mode changes, convert ALL rows' values simultaneously:
-     - `$` to `%`: `newValue = (dollarValue / targetBudget) * 100`
-     - `%` to `$`: `newValue = (percentValue / 100) * targetBudget`
-
-6. **Update `computedRows` logic**
-   - Use the global `globalMode` instead of per-row `row.mode` to compute amounts
-
-7. **Update row rendering**
-   - Remove the per-row Select dropdown
-   - The value input remains but is interpreted based on globalMode
-   - Add a subtle indicator showing the current mode (e.g., prefix the input with `$` or `%` symbol)
-
-## UI Layout After Change
-
-```text
-Target Budget (USD)
-[ $1,000,000 ]
-
-Cost Centers                        [$|%] [+ Add]
-┌──────────────────────────────────────────────────┐
-│ [↑↓] [Marketing        ] [   250000 ] $250k 25% │
-│ [↑↓] [Sales            ] [   350000 ] $350k 35% │
-│ [↑↓] [Engineering      ] [   400000 ] $400k 40% │
-└──────────────────────────────────────────────────┘
+**Current:**
+```tsx
+<div className="text-sm text-muted-foreground w-32 text-right">
+  {formatCurrency(row.computedAmount)} ({row.computedPercent.toFixed(1)}%)
+</div>
 ```
 
-The mode toggle appears once at the list header level, affecting how all values are entered and displayed.
+**Updated:**
+```tsx
+<div className="text-sm text-muted-foreground w-32 text-right">
+  {formatCurrency(row.computedAmount)}
+</div>
+```
 
-## Technical Details
+This removes the percentage display from each cost center row, showing only the dollar amount (e.g., "$138,000" instead of "$138,000 (6.0%)").
 
-- The computed display on the right side of each row will continue to show both the dollar amount and percentage for clarity
-- When adding a new cost center, its initial value will be `0` (interpreted in the current global mode)
-- Value conversion uses the same rounding logic currently in place
-- Auto-select on focus behavior for inputs is preserved
+#### Change 2: Make footer totals respect global mode (Lines 363-372)
+
+**Current:**
+```tsx
+<div className="flex items-center justify-between text-sm">
+  <span>Total Allocated:</span>
+  <span className={isBalanced ? 'text-foreground' : 'text-destructive font-medium'}>
+    {formatCurrency(totalAllocated)}
+  </span>
+</div>
+<div className="flex items-center justify-between text-sm">
+  <span>Target Budget:</span>
+  <span>{formatCurrency(targetBudget)}</span>
+</div>
+```
+
+**Updated:**
+```tsx
+<div className="flex items-center justify-between text-sm">
+  <span>Total Allocated:</span>
+  <span className={isBalanced ? 'text-foreground' : 'text-destructive font-medium'}>
+    {globalMode === '%' 
+      ? `${(targetBudget > 0 ? (totalAllocated / targetBudget) * 100 : 0).toFixed(1)}%`
+      : formatCurrency(totalAllocated)}
+  </span>
+</div>
+<div className="flex items-center justify-between text-sm">
+  <span>Target Budget:</span>
+  <span>{globalMode === '%' ? '100%' : formatCurrency(targetBudget)}</span>
+</div>
+```
+
+When `globalMode === '%'`:
+- **Total Allocated** shows the percentage of target budget allocated (e.g., "100.0%")
+- **Target Budget** shows "100%" (since target is always 100% of itself)
+
+When `globalMode === '$'`:
+- Both values continue to show dollar amounts as before
+
+#### Change 3: Update the over/under alert to match mode (Lines 374-384)
+
+The alert message showing "Over by $X" or "Under by $X" should also respect the global mode:
+
+**Current:**
+```tsx
+{difference > 0
+  ? `Over by ${formatCurrency(difference)}`
+  : `Under by ${formatCurrency(Math.abs(difference))}`}
+. Allocations must equal the target budget (±$1).
+```
+
+**Updated:**
+```tsx
+{difference > 0
+  ? `Over by ${globalMode === '%' 
+      ? `${((difference / targetBudget) * 100).toFixed(1)}%` 
+      : formatCurrency(difference)}`
+  : `Under by ${globalMode === '%' 
+      ? `${((Math.abs(difference) / targetBudget) * 100).toFixed(1)}%` 
+      : formatCurrency(Math.abs(difference))}`}
+. Allocations must equal the target budget {globalMode === '%' ? '(±0.1%)' : '(±$1)'}.
+```
+
+## Visual Result
+
+**In $ mode:**
+```
+Cost Centers                        [$|%] [+ Add]
+┌──────────────────────────────────────────────────┐
+│ [↑↓] [Marketing        ] [$250000 ]    $250,000 │
+│ [↑↓] [Sales            ] [$350000 ]    $350,000 │
+└──────────────────────────────────────────────────┘
+
+Total Allocated:                         $600,000
+Target Budget:                           $600,000
+```
+
+**In % mode:**
+```
+Cost Centers                        [$|%] [+ Add]
+┌──────────────────────────────────────────────────┐
+│ [↑↓] [Marketing        ] [% 41.67 ]    $250,000 │
+│ [↑↓] [Sales            ] [% 58.33 ]    $350,000 │
+└──────────────────────────────────────────────────┘
+
+Total Allocated:                            100.0%
+Target Budget:                               100%
+```
+
