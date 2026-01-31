@@ -370,7 +370,7 @@ export function EditAllocationsDialog({
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span>Target Budget:</span>
-                <span>{globalMode === '%' ? '100%' : formatCurrency(targetBudget)}</span>
+                <span>{globalMode === '%' ? '100.0%' : formatCurrency(targetBudget)}</span>
               </div>
 
               {!isBalanced && (
