@@ -419,7 +419,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
           // No preventDefault here - allow native scrolling
         }}
       >
-        <Table className="min-w-max w-max table-fixed border-separate border-spacing-0">
+        <Table className="min-w-max w-max border-separate border-spacing-0">
           <TableHeader>
             <TableRow>
               <TableHead className="sheet-first-col sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
