@@ -257,7 +257,7 @@ export function EditAllocationsDialog({
             </div>
 
             {/* Cost Centers List */}
-            <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Cost Centers</Label>
                 <Button variant="outline" size="sm" onClick={addRow}>
@@ -266,7 +266,7 @@ export function EditAllocationsDialog({
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 max-h-[300px] border rounded-md">
+              <ScrollArea className="max-h-[300px] border rounded-md">
                 <div className="p-4 space-y-3">
                   {rows.length === 0 ? (
                     <p className="text-muted-foreground text-sm text-center py-4">
