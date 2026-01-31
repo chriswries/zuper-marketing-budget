@@ -167,6 +167,27 @@ export function EditAllocationsDialog({
     resetDeleteConfirmation();
   };
 
+  const handleModeChange = (rowId: string, newMode: '$' | '%') => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        
+        let newValue: number;
+        if (r.mode === '$' && newMode === '%') {
+          newValue = targetBudget > 0 
+            ? Math.round((r.value / targetBudget) * 100 * 100) / 100 
+            : 0;
+        } else if (r.mode === '%' && newMode === '$') {
+          newValue = Math.round((r.value / 100) * targetBudget);
+        } else {
+          newValue = r.value;
+        }
+        
+        return { ...r, mode: newMode, value: newValue };
+      })
+    );
+  };
+
   const moveRow = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === rows.length - 1) return;
@@ -245,7 +266,7 @@ export function EditAllocationsDialog({
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 border rounded-md">
+              <ScrollArea className="flex-1 max-h-[300px] border rounded-md">
                 <div className="p-4 space-y-3">
                   {rows.length === 0 ? (
                     <p className="text-muted-foreground text-sm text-center py-4">
@@ -288,7 +309,7 @@ export function EditAllocationsDialog({
                           {/* Mode */}
                           <Select
                             value={row.mode}
-                            onValueChange={(val) => updateRow(row.id, { mode: val as '$' | '%' })}
+                            onValueChange={(val) => handleModeChange(row.id, val as '$' | '%')}
                           >
                             <SelectTrigger className="w-16">
                               <SelectValue />
@@ -304,6 +325,7 @@ export function EditAllocationsDialog({
                             type="number"
                             value={row.value}
                             onChange={(e) => updateRow(row.id, { value: Number(e.target.value) || 0 })}
+                            onFocus={(e) => e.target.select()}
                             className="w-24"
                           />
 
