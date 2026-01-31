@@ -1,73 +1,124 @@
 
-# Fix Horizontal Scrolling with Locked First Column in Budget Table
 
-## Problem
+# Rebuild SheetTable Sticky Column and Horizontal Scroll
 
-The Budget sheet table should allow horizontal scrolling through month columns while keeping the first column (Cost Center / Line Item) fixed in place. Currently, the table doesn't scroll horizontally because:
+## Problem Summary
 
-1. **Parent overflow conflict**: The `AppLayout` component has `overflow-x-hidden` on the main content area (line 20), which clips horizontal content before the table's scroll container can handle it
-2. The table's scroll container has `overflow-x-auto` but can't scroll when the parent clips
+The current implementation has z-index layering issues that cause columns to "bleed through" the sticky first column during horizontal scroll:
 
-## Current Implementation (Already Correct)
+| Element | Current Z-Index | Required Z-Index |
+|---------|-----------------|------------------|
+| Top-left header cell | `z-30` | `z-30` (correct) |
+| Other header cells | `z-20` | `z-10` |
+| First column body cells | `z-10` | `z-20` |
 
-The `SheetTable.tsx` already has the correct sticky column setup:
-- First column header: `sticky left-0 z-30` 
-- First column cells: `sticky left-0 z-10`
-- Shadow effect for visual separation: `shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]`
-- CSS responsive width: `sheet-first-col` class with `clamp(280px, 35vw, 640px)`
+The header cells are currently at `z-20`, which is **equal to or above** the first column body cells at `z-10`. This means header cells can appear in front of the first column during scroll.
+
+Additionally:
+- The scroll container lacks `isolate` for proper stacking context
+- Table uses `min-w-full` which can prevent horizontal overflow
+- First column labels use `break-words` allowing wrapping instead of staying single-line
 
 ## Solution
 
-Allow the table container to overflow horizontally within its own bounds while preventing page-level horizontal panning.
+### File: `src/components/sheet/SheetTable.tsx`
 
-### File: `src/components/layout/AppLayout.tsx`
+#### Change 1: Add `isolate` to scroll container (Line 405)
 
-**Change:** Replace `overflow-x-hidden` with `overflow-x-clip` on the main element.
-
-The difference:
-- `overflow-x-hidden`: Clips content and prevents any overflow, including from child scroll containers
-- `overflow-x-clip`: Clips content at the element's padding box but allows descendant elements with their own overflow handling to scroll
+Add `isolate` to create a proper stacking context for z-index layering:
 
 ```tsx
-// Before (line 20)
-<main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+// Before
+className="relative min-w-0 w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
 
 // After
-<main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip p-4 md:p-6">
+className="relative min-w-0 w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
 ```
 
-## How It Works After Fix
+#### Change 2: Fix table sizing (Line 422)
 
-1. User navigates to `/budget`
-2. Table renders with all 12 month columns + vendor + FY total
-3. When horizontal space is limited, user can:
-   - Use trackpad two-finger horizontal swipe
-   - Hold Shift + scroll wheel (already implemented)
-   - Use the horizontal scrollbar
-4. First column stays fixed on the left
-5. Other columns scroll behind the first column's right edge
-6. Shadow on first column provides visual separation
+Remove `min-w-full` and keep `table-fixed` since column widths are explicitly defined:
+
+```tsx
+// Before
+<Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
+
+// After
+<Table className="min-w-max w-max table-fixed border-separate border-spacing-0">
+```
+
+#### Change 3: Fix header cell z-indexes (Lines 428, 432-434, 443, 447)
+
+Change non-top-left header cells from `z-20` to `z-10`:
+
+- Line 428: `z-20` to `z-10` (Vendor header)
+- Line 434: `z-20` to `z-10` (Month headers)
+- Line 443: `z-20` to `z-10` (FY Total header)
+- Line 447: `z-20` to `z-10` (Action column header)
+
+#### Change 4: Fix first column body z-indexes (Lines 473, 521, 1000)
+
+Change first column body cells from `z-10` to `z-20`:
+
+- Line 473: `z-10` to `z-20` (Cost center row first cell)
+- Line 521: `z-10` to `z-20` (Line item row first cell)
+- Line 1000: `z-10` to `z-20` (Grand total row first cell)
+
+#### Change 5: First column labels - prevent wrapping (Lines 483, 525)
+
+Replace `whitespace-normal break-words` with `whitespace-nowrap truncate`:
+
+- Line 483: Cost center name span
+- Line 525: Line item name span
+
+This keeps labels single-line with ellipsis for overflow.
+
+## Z-Index Layering After Fix
+
+| Element | Z-Index | Background | Behavior |
+|---------|---------|------------|----------|
+| Top-left header (sticky top + left) | `z-30` | `bg-muted` | Stays above everything |
+| Other header cells (sticky top) | `z-10` | `bg-muted` | Below first column during horizontal scroll |
+| First column body cells (sticky left) | `z-20` | `bg-muted`/`bg-background`/`bg-accent` | Above scrolling columns, below top-left |
+| Non-sticky body cells | none | row-based | Scroll under sticky elements |
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/components/layout/AppLayout.tsx` | Change `overflow-x-hidden` to `overflow-x-clip` |
+| File | Changes |
+|------|---------|
+| `src/components/sheet/SheetTable.tsx` | 8 targeted line edits as described above |
 
-## Edge Cases
+## Summary of Line Changes
 
-| Scenario | Behavior |
-|----------|----------|
-| Narrow viewport | Horizontal scroll activates, first column stays fixed |
-| Wide viewport | No scroll needed, all columns visible |
-| Mobile devices | Touch horizontal scroll works with fixed first column |
-| Many line items | Both vertical and horizontal scroll work independently |
+| Line | Element | Change |
+|------|---------|--------|
+| 405 | Scroll container | Add `isolate` |
+| 422 | Table element | `min-w-full` to `min-w-max` |
+| 428 | Vendor header | `z-20` to `z-10` |
+| 434 | Month headers | `z-20` to `z-10` |
+| 443 | FY Total header | `z-20` to `z-10` |
+| 447 | Action header | `z-20` to `z-10` |
+| 473 | Cost center first cell | `z-10` to `z-20` |
+| 483 | Cost center name | `whitespace-normal break-words` to `whitespace-nowrap truncate` |
+| 521 | Line item first cell | `z-10` to `z-20` |
+| 525 | Line item name | `whitespace-normal break-words` to `whitespace-nowrap truncate` |
+| 1000 | Grand total first cell | `z-10` to `z-20` |
 
-## Acceptance Criteria
+## What This Does NOT Change
 
-1. Table horizontally scrolls when viewport is narrower than table width
-2. First column (Cost Center / Line Item) stays fixed on left edge
-3. Other columns disappear behind the first column as user scrolls right
-4. Shadow on first column provides clear visual separation
-5. Page-level horizontal scroll is still prevented (no accidental panning)
-6. Vertical scrolling continues to work correctly
+- Data fetching, schemas, or business logic
+- Column order, labels, or features
+- EditableCell behavior (already correctly uses local state)
+- Row hover/striping (preserved)
+- Non-sticky cell backgrounds (not adding unnecessary `bg-background`)
+
+## Verification Checklist
+
+1. Navigate to `/budget` and `/forecast`
+2. Shrink browser window to force horizontal overflow
+3. Scroll horizontally - columns must disappear UNDER the first column (no bleed-through)
+4. Scroll vertically - header must stay sticky at top
+5. Hover over rows - no flicker/ghosting under sticky column
+6. Click into an editable cell, type 15+ characters - focus/cursor must remain stable
+7. Test in dark mode - sticky backgrounds must remain opaque
+
