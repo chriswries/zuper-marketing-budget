@@ -1,124 +1,90 @@
 
+## Diagnosis (based on code + your Safari result)
 
-# Rebuild SheetTable Sticky Column and Horizontal Scroll
+You confirmed:
+- Browser: **Safari**
+- **Sticky header works**
+- Row hover works
+- EditableCell is stable
+- Horizontal scroll moves the **entire table**, meaning the “sticky left” cells are behaving like normal cells (not sticking).
 
-## Problem Summary
+In the current `SheetTable.tsx`, the first-column sticky cells (`<th>` and `<td>`) have `sticky left-0 …` but they also now have **`overflow-hidden` applied directly on the sticky cells** (from the last diff you pasted).
 
-The current implementation has z-index layering issues that cause columns to "bleed through" the sticky first column during horizontal scroll:
+Safari has long-standing, inconsistent behavior where `position: sticky` on table cells (especially `left` sticky) can fail when the sticky element itself (or sometimes its table-related ancestors) has certain properties. One of the most common “silent killers” is **setting `overflow: hidden` on the sticky element**. In Chromium it usually still works; in Safari it often disables sticky positioning entirely or causes it to behave like `position: static`.
 
-| Element | Current Z-Index | Required Z-Index |
-|---------|-----------------|------------------|
-| Top-left header cell | `z-30` | `z-30` (correct) |
-| Other header cells | `z-20` | `z-10` |
-| First column body cells | `z-10` | `z-20` |
+So the most likely root cause (given your exact symptoms and Safari) is:
+- **`overflow-hidden` on the sticky first-column `<th>/<td>` is breaking Safari’s left-sticky behavior.**
 
-The header cells are currently at `z-20`, which is **equal to or above** the first column body cells at `z-10`. This means header cells can appear in front of the first column during scroll.
+The header being sticky still working is consistent with this: Safari often tolerates `top: 0` stickies better than `left: 0` stickies in tables, and the failure can be more sensitive for left-sticky.
 
-Additionally:
-- The scroll container lacks `isolate` for proper stacking context
-- Table uses `min-w-full` which can prevent horizontal overflow
-- First column labels use `break-words` allowing wrapping instead of staying single-line
+## What I will change (minimal, targeted, keeps your bg/hover fixes)
 
-## Solution
+### Goal
+- Restore true left-sticky behavior in Safari
+- Keep: opaque cell backgrounds + `group-hover` hover + correct z-index stacking + single scroll container + editable stability
+- Keep the canonical structure already present:
+  - single scroll wrapper: `overflow-x-auto isolate`
+  - table sizing: `min-w-max w-max`
+  - z-index: `z-30` top-left, `z-20` first col body, `z-10` other headers
 
-### File: `src/components/sheet/SheetTable.tsx`
+### Change Set A — Remove `overflow-hidden` from the sticky `<th>/<td>` cells (Safari fix)
+**File:** `src/components/sheet/SheetTable.tsx`
 
-#### Change 1: Add `isolate` to scroll container (Line 405)
+Remove `overflow-hidden` from:
+- Top-left header cell (`TableHead` “Cost Center / Line Item”)
+- Sticky first column body cells:
+  - Cost center row first cell
+  - Line item row first cell
+  - Grand total first cell
 
-Add `isolate` to create a proper stacking context for z-index layering:
+This restores Safari’s ability to apply `position: sticky; left: 0` on those cells.
 
-```tsx
-// Before
-className="relative min-w-0 w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
+### Change Set B — Preserve truncation without using `overflow-hidden` on sticky cells
+Still in `SheetTable.tsx`, ensure truncation happens on an inner wrapper instead of the `<td>/<th>`:
 
-// After
-className="relative min-w-0 w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
-```
+- Keep `whitespace-nowrap truncate` on the `<span>` as you already have.
+- Add (if needed) `min-w-0` to the immediate flex child that contains the text (you already have `min-w-0` in some places).
+- If truncation is still not reliable, add `overflow-hidden` to the **inner** container (e.g., the `<div className="flex-1 min-w-0">`), not the sticky `<td>` itself.
 
-#### Change 2: Fix table sizing (Line 422)
+This keeps the cell sticky-compatible while still ensuring long names don’t expand the column.
 
-Remove `min-w-full` and keep `table-fixed` since column widths are explicitly defined:
+### Change Set C — Verify no other “sticky killers” exist in the chain
+From code review:
+- Scroll container is correct: `min-w-0 w-full overflow-x-auto … isolate`
+- AppLayout prevents page-level horizontal panning via `overflow-x-clip` but allows nested scrolling; that’s fine.
+- The `Table` primitive does **not** wrap in any overflow container (good).
+- Table uses `border-separate border-spacing-0` (good for sticky boundaries).
 
-```tsx
-// Before
-<Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
+I will **not** refactor scroll containers or z-index unless I find a concrete second issue while implementing A/B.
 
-// After
-<Table className="min-w-max w-max table-fixed border-separate border-spacing-0">
-```
+## How we’ll verify (specifically for your desired behavior)
 
-#### Change 3: Fix header cell z-indexes (Lines 428, 432-434, 443, 447)
+On `/budget` and `/forecast` after the change:
 
-Change non-top-left header cells from `z-20` to `z-10`:
+1) **Horizontal scroll inside the table wrapper**
+- Shrink viewport so overflow exists
+- Scroll horizontally
+- Expected:
+  - First column remains fixed
+  - Vendor/month columns move left/right
+  - As they pass under the first column they should be hidden behind it (with the correct z-index + opaque backgrounds)
 
-- Line 428: `z-20` to `z-10` (Vendor header)
-- Line 434: `z-20` to `z-10` (Month headers)
-- Line 443: `z-20` to `z-10` (FY Total header)
-- Line 447: `z-20` to `z-10` (Action column header)
+2) **Sticky header still works**
+- Scroll vertically inside the table container
+- Header remains pinned
 
-#### Change 4: Fix first column body z-indexes (Lines 473, 521, 1000)
+3) **Hover still works**
+- Row hover visible across all cells via `group-hover:bg-muted` (opaque)
 
-Change first column body cells from `z-10` to `z-20`:
+4) **EditableCell stability**
+- Click a month cell, type 15+ characters
+- Cursor/focus remains stable
 
-- Line 473: `z-10` to `z-20` (Cost center row first cell)
-- Line 521: `z-10` to `z-20` (Line item row first cell)
-- Line 1000: `z-10` to `z-20` (Grand total row first cell)
+## Files to change
+1) `src/components/sheet/SheetTable.tsx`
+- Remove `overflow-hidden` from the sticky first-column `<th>/<td>` cells (Safari compatibility)
+- If needed, move truncation/clipping to inner wrappers instead of the sticky cell element
 
-#### Change 5: First column labels - prevent wrapping (Lines 483, 525)
-
-Replace `whitespace-normal break-words` with `whitespace-nowrap truncate`:
-
-- Line 483: Cost center name span
-- Line 525: Line item name span
-
-This keeps labels single-line with ellipsis for overflow.
-
-## Z-Index Layering After Fix
-
-| Element | Z-Index | Background | Behavior |
-|---------|---------|------------|----------|
-| Top-left header (sticky top + left) | `z-30` | `bg-muted` | Stays above everything |
-| Other header cells (sticky top) | `z-10` | `bg-muted` | Below first column during horizontal scroll |
-| First column body cells (sticky left) | `z-20` | `bg-muted`/`bg-background`/`bg-accent` | Above scrolling columns, below top-left |
-| Non-sticky body cells | none | row-based | Scroll under sticky elements |
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/components/sheet/SheetTable.tsx` | 8 targeted line edits as described above |
-
-## Summary of Line Changes
-
-| Line | Element | Change |
-|------|---------|--------|
-| 405 | Scroll container | Add `isolate` |
-| 422 | Table element | `min-w-full` to `min-w-max` |
-| 428 | Vendor header | `z-20` to `z-10` |
-| 434 | Month headers | `z-20` to `z-10` |
-| 443 | FY Total header | `z-20` to `z-10` |
-| 447 | Action header | `z-20` to `z-10` |
-| 473 | Cost center first cell | `z-10` to `z-20` |
-| 483 | Cost center name | `whitespace-normal break-words` to `whitespace-nowrap truncate` |
-| 521 | Line item first cell | `z-10` to `z-20` |
-| 525 | Line item name | `whitespace-normal break-words` to `whitespace-nowrap truncate` |
-| 1000 | Grand total first cell | `z-10` to `z-20` |
-
-## What This Does NOT Change
-
-- Data fetching, schemas, or business logic
-- Column order, labels, or features
-- EditableCell behavior (already correctly uses local state)
-- Row hover/striping (preserved)
-- Non-sticky cell backgrounds (not adding unnecessary `bg-background`)
-
-## Verification Checklist
-
-1. Navigate to `/budget` and `/forecast`
-2. Shrink browser window to force horizontal overflow
-3. Scroll horizontally - columns must disappear UNDER the first column (no bleed-through)
-4. Scroll vertically - header must stay sticky at top
-5. Hover over rows - no flicker/ghosting under sticky column
-6. Click into an editable cell, type 15+ characters - focus/cursor must remain stable
-7. Test in dark mode - sticky backgrounds must remain opaque
+## Why this should fix it
+Safari is the key detail. The last diff added `overflow-hidden` to sticky cells explicitly. That’s a very common reason for “sticky left doesn’t stick” in Safari tables. Removing it while keeping inner-content truncation is the minimal, most likely fix that preserves all your other constraints.
 
