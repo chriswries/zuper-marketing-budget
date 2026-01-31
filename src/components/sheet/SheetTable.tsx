@@ -402,7 +402,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         ref={scrollRef}
         tabIndex={0}
         aria-label="Budget table"
-        className="relative min-w-0 w-full overflow-x-auto overflow-y-auto rounded-md border bg-background max-h-[calc(100vh-220px)]"
+        className="relative min-w-0 w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable' }}
         onWheel={(e) => {
           const el = scrollRef.current;
@@ -419,19 +419,19 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
           // No preventDefault here - allow native scrolling
         }}
       >
-        <Table className="w-max min-w-full table-fixed border-separate border-spacing-0">
+        <Table className="min-w-max w-max table-fixed border-separate border-spacing-0">
           <TableHeader>
             <TableRow>
               <TableHead className="sheet-first-col sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
-              <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-20 bg-muted border-b">Vendor</TableHead>
+              <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-10 bg-muted border-b">Vendor</TableHead>
               {MONTHS.map((month) => {
                 const isLocked = lockedMonths?.has(month);
                 return (
                   <TableHead
                     key={month}
-                    className="w-[120px] min-w-[120px] text-right sticky top-0 z-20 bg-muted border-b"
+                    className="w-[120px] min-w-[120px] text-right sticky top-0 z-10 bg-muted border-b"
                   >
                     <div className="flex items-center justify-end gap-1">
                       {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
@@ -440,11 +440,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                   </TableHead>
                 );
               })}
-              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold sticky top-0 z-20 bg-muted border-b">
+              <TableHead className="w-[140px] min-w-[140px] text-right font-semibold sticky top-0 z-10 bg-muted border-b">
                 FY Total
               </TableHead>
               {showActionColumn && (
-                <TableHead className="w-[72px] min-w-[72px] sticky top-0 z-20 bg-muted border-b"></TableHead>
+                <TableHead className="w-[72px] min-w-[72px] sticky top-0 z-10 bg-muted border-b"></TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -470,7 +470,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="sheet-first-col sticky left-0 z-10 bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                        <TableCell className="sheet-first-col sticky left-0 z-20 bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                           <div className="flex items-start gap-2 min-w-0">
                             <div className="flex-shrink-0 pt-0.5">
                               {isExpanded ? (
@@ -480,7 +480,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <span className="whitespace-normal break-words">{costCenter.name}</span>
+                              <span className="whitespace-nowrap truncate">{costCenter.name}</span>
                               <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
                                 {costCenter.lineItems.length} items
                               </Badge>
@@ -518,11 +518,11 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group hover:bg-muted/20 ${isHighlighted ? 'ring-2 ring-primary bg-primary/10 transition-all' : ''}`}
                             >
-                              <TableCell className="sheet-first-col sticky left-0 z-10 bg-background border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                              <TableCell className="sheet-first-col sticky left-0 z-20 bg-background border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                                 <div className="flex items-start gap-2 pl-6 min-w-0">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="font-medium whitespace-normal break-words text-foreground">
+                                      <span className="font-medium whitespace-nowrap truncate text-foreground">
                                         {item.name}
                                       </span>
                                       {canEditLineItemName && onEditLineItemName && (
@@ -997,7 +997,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2 bg-accent">
-                  <TableCell className="sheet-first-col sticky left-0 z-10 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
+                  <TableCell className="sheet-first-col sticky left-0 z-20 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                     Grand Total
                   </TableCell>
                   <TableCell className="w-[220px] min-w-[220px]">—</TableCell>
