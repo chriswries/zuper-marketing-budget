@@ -1,61 +1,77 @@
 
-# Plan: Fix First-Column Sticky Behavior in Chrome
+## What’s actually happening (based on your latest details + code review)
 
-## Problem Diagnosis
+You confirmed in Chrome:
+- The **page** gets a horizontal scrollbar.
+- Trackpad horizontal swipe scrolls the **page**, not the table container.
+- Therefore the first column can’t “stick” relative to the expected scroll container, because the scroll is happening on the wrong element.
 
-You confirmed:
-- Browser: **Chrome**
-- Vertical scroll (sticky header row) works correctly
-- Horizontal scroll causes the **entire page to scroll**, not just the table content
-- First column never sticks because the table's scroll container isn't the element being scrolled
+From inspecting `SheetTable.tsx`, the table is correctly placed inside a div with:
+- `overflow-x-auto` (good)
+- `min-w-0 w-full max-w-full` (good)
 
-**Root Cause**: The table uses `min-w-max w-max` sizing, which makes it as wide as its content. While the scroll wrapper has `overflow-x-auto`, the parent layout containers lack proper width constraints, causing the table's width to push the entire page layout wider. When you swipe horizontally on a trackpad, the browser scrolls the **page** (not the table's internal scroll container), so the sticky `left: 0` positioning has no effect.
+So the persistent issue is not inside the `SheetTable` scroll container anymore.
 
-The DOM hierarchy is:
-```
-SidebarProvider (flex, no overflow constraint) 
-  -> SidebarInset (<main>, flex-col, no overflow constraint)
-    -> AppLayout's <main> (overflow-x-clip, overflow-y-auto)
-      -> Budget page content
-        -> SheetTable scroll wrapper (overflow-x-auto, overflow-y-auto)
-          -> Table (min-w-max w-max)
-```
+### Root cause
+The **overall layout is still allowing horizontal overflow at the page level**.
 
-The `overflow-x-clip` on AppLayout's main should prevent page scroll, but `min-w-max` on the table can still push the flex containers wider before the clip takes effect.
+A key red flag in the layout stack:
+- `AppLayout`’s `<main>` has `min-w-0 overflow-x-clip` (good)
+- But `SidebarInset` (from `src/components/ui/sidebar.tsx`) is a `flex-1` container **without `min-w-0`**, meaning in a flex layout it can still be forced wider than the viewport by wide descendants (like our `w-max` table). When that happens, the browser creates a **page-level horizontal overflow**, and trackpad horizontal gestures scroll the page instead of the intended inner div.
 
-## Solution
+In flexbox, this is a classic issue: you often need `min-w-0` on the flex child that should be allowed to shrink; otherwise it can overflow and create page scrollbars even if inner children have overflow scrolling.
 
-Add explicit width containment to the SheetTable scroll wrapper so it cannot grow beyond its parent, forcing all horizontal overflow to stay inside the wrapper (where `overflow-x-auto` creates the internal scrollbar).
+## The fix (minimal, layout-correct, and should make sticky work again)
 
-### Changes to `src/components/sheet/SheetTable.tsx`
+### Change 1 — Make the main content flex child shrinkable
+**File:** `src/components/ui/sidebar.tsx`  
+**Component:** `SidebarInset`
 
-**Line ~405**: Update the scroll container's className to add `max-w-full` which ensures the container never grows beyond its parent's width, regardless of how wide the table content is:
+Add `min-w-0` to the SidebarInset’s root class list:
+- Current: `"relative flex min-h-svh flex-1 flex-col bg-background ..."`
+- Updated: add `min-w-0` (and optionally `max-w-full` for extra containment)
 
-```tsx
-// Current:
-className="relative min-w-0 w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
+This prevents the app’s content area (where the tables render) from expanding the entire page width.
 
-// Change to:
-className="relative min-w-0 w-full max-w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
-```
+### Change 2 — Hard-stop page-level horizontal overflow (scoped to the app wrapper)
+If Change 1 alone doesn’t fully eliminate the page scrollbar (sometimes a fixed-position or border/shadow combo can still create a 1–2px overflow), we’ll add a safety belt:
 
-The `max-w-full` ensures the scroll container is capped at its parent's width, forcing any table overflow to be handled internally via `overflow-x-auto` rather than pushing the layout wider.
+**Option A (preferred):** Add `overflow-x-hidden` to the app wrapper in `SidebarProvider` (same file).
+- The wrapper is currently:
+  - `"group/sidebar-wrapper flex min-h-svh w-full ..."`
+- Add `min-w-0 overflow-x-hidden` there as well.
 
-## Technical Details
+This keeps all horizontal overflow contained inside intended scroll regions (like the SheetTable scroll div), and stops Chrome from ever scrolling the page horizontally.
 
-The combination of:
-- `min-w-0`: Allows the flex item to shrink below its content size
-- `w-full`: Takes available width
-- `max-w-full` (new): Prevents growing beyond parent width
-- `overflow-x-auto`: Creates internal horizontal scroll when content overflows
+**Why not rely on `overflow-x-clip` in `AppLayout`?**
+Because that only applies to the `<main>` content column, not necessarily to the full page / root scrolling element. If the flex container that houses `<main>` is wider than viewport, the browser will still create a horizontal scrollbar at the document level.
 
-This ensures the table's `min-w-max w-max` sizing is fully contained within the scroll wrapper, and horizontal trackpad swipes scroll the wrapper (not the page).
+## Why this will restore the expected behavior
 
-## Verification Steps
+Once the page no longer overflows horizontally:
+- Trackpad horizontal swipes will scroll the **nearest horizontal scroll container under the pointer** (your SheetTable wrapper with `overflow-x-auto`)
+- `position: sticky; left: 0` will then work correctly because the scroll is happening inside the table’s scroll context
+- The first column will remain fixed while other columns scroll under it (with the existing z-index + opaque background setup you already have)
 
-After the fix, on `/budget` and `/forecast`:
+## Verification checklist (Chrome)
 
-1. **Horizontal scroll inside table**: Two-finger trackpad swipe should scroll only the table content, with the first column staying fixed at `left: 0`
-2. **First column sticky**: The "Cost Center / Line Item" column should remain visible while other columns scroll underneath it
-3. **Vertical scroll still works**: Header row should remain sticky when scrolling vertically
-4. **Row hover and EditableCell**: These should continue working as before
+On `/budget` and `/forecast` after the change:
+1. Confirm **no page-level horizontal scrollbar** appears (important).
+2. Put cursor over the SheetTable and two-finger swipe left/right:
+   - Only the table scrolls horizontally
+   - First column stays pinned
+3. Vertical scroll still works:
+   - Header row remains sticky
+4. Confirm no regressions:
+   - Row hover still highlights correctly
+   - EditableCell focus/cursor remains stable while horizontally scrolling
+
+## Files we will edit
+- `src/components/ui/sidebar.tsx`
+  - Update `SidebarInset` classes to include `min-w-0` (and likely `max-w-full`)
+  - If needed, update the SidebarProvider wrapper to include `overflow-x-hidden` (and `min-w-0`)
+
+## Notes / constraints
+- We will not change the SheetTable sticky architecture, z-index, or background rules unless the page-scrollbar issue is fully resolved and sticky still fails (unlikely once horizontal overflow is correctly contained).
+- This change is safe for the rest of the app because it only affects how the main content area participates in flex sizing; it doesn’t remove any necessary scroll regions.
+
