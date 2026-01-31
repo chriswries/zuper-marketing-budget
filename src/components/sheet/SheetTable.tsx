@@ -402,7 +402,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         ref={scrollRef}
         tabIndex={0}
         aria-label="Budget table"
-        className="relative min-w-0 w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
+        className="relative min-w-0 w-full max-w-full overflow-x-auto overflow-y-auto isolate rounded-md border bg-background max-h-[calc(100vh-220px)]"
         style={{ scrollbarGutter: 'stable' }}
         onWheel={(e) => {
           const el = scrollRef.current;
