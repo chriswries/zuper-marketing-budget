@@ -335,7 +335,7 @@ export function EditAllocationsDialog({
 
                           {/* Computed display */}
                           <div className="text-sm text-muted-foreground w-32 text-right">
-                            {formatCurrency(row.computedAmount)} ({row.computedPercent.toFixed(1)}%)
+                            {formatCurrency(row.computedAmount)}
                           </div>
 
                           {/* Delete */}
@@ -363,12 +363,14 @@ export function EditAllocationsDialog({
               <div className="flex items-center justify-between text-sm">
                 <span>Total Allocated:</span>
                 <span className={isBalanced ? 'text-foreground' : 'text-destructive font-medium'}>
-                  {formatCurrency(totalAllocated)}
+                  {globalMode === '%' 
+                    ? `${(targetBudget > 0 ? (totalAllocated / targetBudget) * 100 : 0).toFixed(1)}%`
+                    : formatCurrency(totalAllocated)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span>Target Budget:</span>
-                <span>{formatCurrency(targetBudget)}</span>
+                <span>{globalMode === '%' ? '100%' : formatCurrency(targetBudget)}</span>
               </div>
 
               {!isBalanced && (
@@ -376,9 +378,13 @@ export function EditAllocationsDialog({
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     {difference > 0
-                      ? `Over by ${formatCurrency(difference)}`
-                      : `Under by ${formatCurrency(Math.abs(difference))}`}
-                    . Allocations must equal the target budget (±$1).
+                      ? `Over by ${globalMode === '%' 
+                          ? `${((difference / targetBudget) * 100).toFixed(1)}%` 
+                          : formatCurrency(difference)}`
+                      : `Under by ${globalMode === '%' 
+                          ? `${((Math.abs(difference) / targetBudget) * 100).toFixed(1)}%` 
+                          : formatCurrency(Math.abs(difference))}`}
+                    . Allocations must equal the target budget {globalMode === '%' ? '(±0.1%)' : '(±$1)'}.
                   </AlertDescription>
                 </Alert>
               )}
