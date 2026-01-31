@@ -174,7 +174,7 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   reset: 'Reset to draft',
   final_approved: 'Fully approved',
   notified_next_approver: 'Notification copied',
-  admin_override_cell_edit: 'Admin override: cell edit',
+  admin_override_cell_edit: 'Admin line item edit',
   admin_override_delete_line_item: 'Admin override: delete line item',
   admin_override_cancel_linked_request: 'Admin override: cancel linked request',
   admin_override_force_cancel: 'Admin override: force cancel',
@@ -221,6 +221,11 @@ export function formatAuditEvent(event: ApprovalAuditEvent): string {
     const part = event.meta.part === 'message' ? 'message' : event.meta.part === 'subject' ? 'subject' : 'body';
     const stepLabel = event.stepLevel ? stepLabels[event.stepLevel] : '';
     return `${roleLabel} copied ${channel} ${part} for ${stepLabel} step`;
+  }
+
+  // For admin line item edits, include the note which has the line item name and changes
+  if (event.action === 'admin_override_cell_edit' && event.note) {
+    return `${actionLabel}: ${event.note}`;
   }
 
   return `${roleLabel} ${actionLabel.toLowerCase()}`;
