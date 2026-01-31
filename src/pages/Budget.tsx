@@ -5,7 +5,7 @@ import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNa
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
-import { EditLineItemNameDialog, EditLineItemNameData } from '@/components/sheet/EditLineItemNameDialog';
+import { EditLineItemDialog, EditLineItemData } from '@/components/sheet/EditLineItemDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -199,9 +199,9 @@ export default function Budget() {
   const [rowActionDialogOpen, setRowActionDialogOpen] = useState(false);
   const [pendingRowAction, setPendingRowAction] = useState<RowActionData | null>(null);
 
-  // Edit line item name dialog state (admin only)
-  const [editNameOpen, setEditNameOpen] = useState(false);
-  const [editNameData, setEditNameData] = useState<EditLineItemNameData | null>(null);
+  // Edit line item dialog state (admin only)
+  const [editLineItemOpen, setEditLineItemOpen] = useState(false);
+  const [editLineItemData, setEditLineItemData] = useState<EditLineItemData | null>(null);
 
   const focusCostCenterId = searchParams.get('focusCostCenterId') ?? undefined;
   const focusLineItemId = searchParams.get('focusLineItemId') ?? undefined;
@@ -1067,42 +1067,68 @@ export default function Budget() {
     });
   }, [selectedFiscalYearId, updateFiscalYearBudget]);
 
-  // Handle edit line item name (admin only)
+  // Handle edit line item (admin only)
   const handleEditLineItemName = useCallback((args: EditLineItemNameArgs) => {
-    setEditNameData({
+    setEditLineItemData({
       costCenterId: args.costCenterId,
       costCenterName: args.costCenterName,
       lineItem: args.lineItem,
     });
-    setEditNameOpen(true);
+    setEditLineItemOpen(true);
   }, []);
 
-  // Handle save line item name
-  const handleSaveLineItemName = useCallback((
-    costCenterId: string,
-    lineItemId: string,
-    newName: string
+  // Handle save line item (full edit)
+  const handleSaveLineItem = useCallback((
+    originalCostCenterId: string,
+    updatedLineItem: LineItem,
+    newCostCenterId?: string
   ) => {
     if (!selectedFiscalYear || !selectedFiscalYearId) return;
 
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-      ...fy,
-      updatedAt: new Date().toISOString(),
-      costCenters: fy.costCenters.map((cc) => {
-        if (cc.id !== costCenterId) return cc;
-        return {
-          ...cc,
-          lineItems: cc.lineItems.map((item) =>
-            item.id === lineItemId ? { ...item, name: newName.trim() } : item
-          ),
-        };
-      }),
-    }));
+    updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
+      let newCostCenters = fy.costCenters;
 
-    setEditNameOpen(false);
+      if (newCostCenterId && newCostCenterId !== originalCostCenterId) {
+        // Move line item to a different cost center
+        newCostCenters = newCostCenters.map((cc) => {
+          if (cc.id === originalCostCenterId) {
+            return {
+              ...cc,
+              lineItems: cc.lineItems.filter((item) => item.id !== updatedLineItem.id),
+            };
+          }
+          if (cc.id === newCostCenterId) {
+            return {
+              ...cc,
+              lineItems: [...cc.lineItems, { ...updatedLineItem, costCenterId: newCostCenterId }],
+            };
+          }
+          return cc;
+        });
+      } else {
+        // Update in place
+        newCostCenters = newCostCenters.map((cc) => {
+          if (cc.id !== originalCostCenterId) return cc;
+          return {
+            ...cc,
+            lineItems: cc.lineItems.map((item) =>
+              item.id === updatedLineItem.id ? updatedLineItem : item
+            ),
+          };
+        });
+      }
+
+      return {
+        ...fy,
+        updatedAt: new Date().toISOString(),
+        costCenters: newCostCenters,
+      };
+    });
+
+    setEditLineItemOpen(false);
     toast({
-      title: 'Line item renamed',
-      description: `Updated to "${newName.trim()}"`,
+      title: 'Line item updated',
+      description: `"${updatedLineItem.name}" has been saved.`,
     });
   }, [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]);
 
@@ -1798,11 +1824,13 @@ export default function Budget() {
         onSave={handleSaveTags}
       />
 
-      <EditLineItemNameDialog
-        open={editNameOpen}
-        onOpenChange={setEditNameOpen}
-        data={editNameData}
-        onSave={handleSaveLineItemName}
+      <EditLineItemDialog
+        open={editLineItemOpen}
+        onOpenChange={setEditLineItemOpen}
+        data={editLineItemData}
+        costCenters={selectedFiscalYear.costCenters}
+        lockedMonths={new Set()}
+        onSave={handleSaveLineItem}
         checkDuplicateName={(name, excludeId) => 
           findDuplicateLineItemName({ 
             name, 
@@ -1810,6 +1838,7 @@ export default function Budget() {
             excludeLineItemId: excludeId 
           })
         }
+        valueType="budgetValues"
       />
 
       <EditAllocationsDialog
