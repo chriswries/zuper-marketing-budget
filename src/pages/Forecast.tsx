@@ -455,6 +455,12 @@ export default function Forecast() {
     updatedLineItem: LineItem,
     newCostCenterId?: string
   ) => {
+    // Find original line item for audit comparison
+    const originalCostCenter = costCenters.find((cc) => cc.id === originalCostCenterId);
+    const originalLineItem = originalCostCenter?.lineItems.find((item) => item.id === updatedLineItem.id);
+    const targetCostCenterId = newCostCenterId ?? originalCostCenterId;
+    const targetCostCenter = costCenters.find((cc) => cc.id === targetCostCenterId);
+
     setCostCenters((prev) => {
       if (newCostCenterId && newCostCenterId !== originalCostCenterId) {
         // Move line item to a different cost center
@@ -487,12 +493,90 @@ export default function Forecast() {
       }
     });
 
+    // Audit log for admin edit (only if we have an active FY)
+    if (currentRole === 'admin' && originalLineItem && fyId) {
+      const formatCurrency = (value: number): string =>
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+
+      const changes: string[] = [];
+      if (originalLineItem.name !== updatedLineItem.name) {
+        changes.push(`name: "${originalLineItem.name}" → "${updatedLineItem.name}"`);
+      }
+      if (originalLineItem.vendor?.name !== updatedLineItem.vendor?.name) {
+        changes.push(`vendor: "${originalLineItem.vendor?.name ?? '—'}" → "${updatedLineItem.vendor?.name ?? '—'}"`);
+      }
+      if (newCostCenterId && newCostCenterId !== originalCostCenterId) {
+        changes.push(`cost center: "${originalCostCenter?.name}" → "${targetCostCenter?.name}"`);
+      }
+      const oldTotal = calculateFYTotal(originalLineItem.forecastValues);
+      const newTotal = calculateFYTotal(updatedLineItem.forecastValues);
+      if (oldTotal !== newTotal) {
+        changes.push(`FY total: ${formatCurrency(oldTotal)} → ${formatCurrency(newTotal)}`);
+      }
+      if (originalLineItem.isContracted !== updatedLineItem.isContracted) {
+        changes.push(`contracted: ${originalLineItem.isContracted ? 'Yes' : 'No'} → ${updatedLineItem.isContracted ? 'Yes' : 'No'}`);
+      }
+      if (originalLineItem.isAccrual !== updatedLineItem.isAccrual) {
+        changes.push(`accrual: ${originalLineItem.isAccrual ? 'Yes' : 'No'} → ${updatedLineItem.isAccrual ? 'Yes' : 'No'}`);
+      }
+      if (originalLineItem.isSoftwareSubscription !== updatedLineItem.isSoftwareSubscription) {
+        changes.push(`software subscription: ${originalLineItem.isSoftwareSubscription ? 'Yes' : 'No'} → ${updatedLineItem.isSoftwareSubscription ? 'Yes' : 'No'}`);
+      }
+
+      if (changes.length > 0) {
+        appendApprovalAudit('budget', fyId, {
+          action: 'admin_override_cell_edit',
+          actorRole: 'admin',
+          note: `Edited line item "${updatedLineItem.name}": ${changes.join('; ')}`,
+          meta: {
+            lineItemId: updatedLineItem.id,
+            costCenterId: targetCostCenterId,
+            sheet: 'forecast',
+          },
+        });
+      }
+    }
+
+    // Sync pending requests linked to this line item
+    const linkedRequestIds = [
+      updatedLineItem.approvalRequestId,
+      updatedLineItem.adjustmentRequestId,
+    ].filter(Boolean) as string[];
+
+    for (const requestId of linkedRequestIds) {
+      updateRequest(requestId, (request) => {
+        // Only update pending requests
+        if (request.status !== 'pending') return request;
+
+        const vendorName = updatedLineItem.vendor?.name ?? '—';
+        const fyTotal = calculateFYTotal(updatedLineItem.forecastValues);
+        const monthsWithSpend = MONTHS.filter((m) => updatedLineItem.forecastValues[m] > 0);
+        const startMonth: Month = monthsWithSpend[0] ?? request.startMonth;
+        const endMonth: Month = monthsWithSpend[monthsWithSpend.length - 1] ?? request.endMonth;
+
+        return {
+          ...request,
+          costCenterId: targetCostCenterId,
+          costCenterName: targetCostCenter?.name ?? request.costCenterName,
+          vendorName,
+          lineItemName: updatedLineItem.name,
+          isContracted: updatedLineItem.isContracted,
+          // For new_line_item requests, update amount to current FY total
+          // For adjustment requests, update revisedAmount
+          ...(request.originKind === 'new_line_item' ? { amount: Math.round(fyTotal) } : {}),
+          ...(request.originKind === 'adjustment' ? { revisedAmount: Math.round(fyTotal) } : {}),
+          startMonth,
+          endMonth,
+        };
+      });
+    }
+
     setEditLineItemOpen(false);
     toast({
       title: 'Line item updated',
       description: `"${updatedLineItem.name}" has been saved.`,
     });
-  }, []);
+  }, [costCenters, currentRole, fyId, updateRequest]);
 
   // Row action handler - opens dialog for justification
   const handleRowAction = useCallback(({ costCenterId, lineItem, actionType, targetRequestId }: RowActionArgs) => {
