@@ -60,7 +60,7 @@ export function EditableCell({ value, formatted, onSave, className }: EditableCe
 
   if (isEditing) {
     return (
-      <TableCell className={cn("text-right p-0", className)}>
+      <TableCell className={cn("text-right p-0 bg-background", className)}>
         <Input
           ref={inputRef}
           type="text"
@@ -78,7 +78,7 @@ export function EditableCell({ value, formatted, onSave, className }: EditableCe
   return (
     <TableCell
       className={cn(
-        "text-right tabular-nums cursor-pointer hover:bg-primary/10 transition-colors",
+        "text-right tabular-nums cursor-pointer bg-background group-hover:bg-muted hover:bg-muted transition-colors",
         className
       )}
       onClick={handleClick}
