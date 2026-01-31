@@ -150,7 +150,7 @@ export function AddLineItemDialog({
 
   // Validation
   const isValid = useMemo(() => {
-    if (!costCenterId || !name.trim()) return false;
+    if (!costCenterId || !name.trim() || !vendorName.trim()) return false;
     
     // Block if duplicate name
     if (duplicateCheck.duplicate) return false;
@@ -264,7 +264,7 @@ export function AddLineItemDialog({
 
           {/* Vendor Name */}
           <div className="space-y-2">
-            <Label htmlFor="vendor">Vendor name</Label>
+            <Label htmlFor="vendor">Vendor name *</Label>
             <Input
               id="vendor"
               value={vendorName}
