@@ -422,7 +422,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
         <Table className="min-w-max w-max table-fixed border-separate border-spacing-0">
           <TableHeader>
             <TableRow>
-              <TableHead className="sheet-first-col sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] overflow-hidden">
+              <TableHead className="sheet-first-col sticky top-0 left-0 z-30 bg-muted border-b border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                 Cost Center / Line Item
               </TableHead>
               <TableHead className="w-[220px] min-w-[220px] sticky top-0 z-10 bg-muted border-b">Vendor</TableHead>
@@ -470,7 +470,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                         className="group font-medium cursor-pointer"
                         onClick={() => toggleCostCenter(costCenter.id)}
                       >
-                        <TableCell className="sheet-first-col sticky left-0 z-20 bg-muted group-hover:bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] overflow-hidden">
+                        <TableCell className="sheet-first-col sticky left-0 z-20 bg-muted group-hover:bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                           <div className="flex items-start gap-2 min-w-0">
                             <div className="flex-shrink-0 pt-0.5">
                               {isExpanded ? (
@@ -518,7 +518,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               id={`line-item-${item.id}`}
                               className={`group ${isHighlighted ? 'ring-2 ring-primary transition-all' : ''}`}
                             >
-                              <TableCell className="sheet-first-col sticky left-0 z-20 bg-background group-hover:bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] overflow-hidden">
+                              <TableCell className="sheet-first-col sticky left-0 z-20 bg-background group-hover:bg-muted border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                                 <div className="flex items-start gap-2 pl-6 min-w-0">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
@@ -997,7 +997,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
 
                 {/* Grand Total Row */}
                 <TableRow className="group font-semibold border-t-2">
-                  <TableCell className="sheet-first-col sticky left-0 z-20 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] overflow-hidden">
+                  <TableCell className="sheet-first-col sticky left-0 z-20 bg-accent border-r border-border shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                     Grand Total
                   </TableCell>
                   <TableCell className="relative z-0 w-[220px] min-w-[220px] bg-accent">—</TableCell>
