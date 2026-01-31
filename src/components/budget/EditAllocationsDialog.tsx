@@ -266,7 +266,7 @@ export function EditAllocationsDialog({
                 </Button>
               </div>
 
-              <ScrollArea className="max-h-[300px] border rounded-md">
+              <div className="max-h-[300px] overflow-y-auto border rounded-md">
                 <div className="p-4 space-y-3">
                   {rows.length === 0 ? (
                     <p className="text-muted-foreground text-sm text-center py-4">
@@ -351,7 +351,7 @@ export function EditAllocationsDialog({
                     ))
                   )}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Validation */}
