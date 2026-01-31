@@ -1,77 +1,73 @@
 
+# Fix Horizontal Scrolling with Locked First Column in Budget Table
 
-# Fix Vertical Scrolling in Edit Budget Settings Dialog (Take 2)
+## Problem
 
-## Root Cause Analysis
+The Budget sheet table should allow horizontal scrolling through month columns while keeping the first column (Cost Center / Line Item) fixed in place. Currently, the table doesn't scroll horizontally because:
 
-Looking at the screenshot, the dialog shows 4 cost centers but there are 10 total (each at 10% = $230,000). The ScrollArea is not scrolling because:
+1. **Parent overflow conflict**: The `AppLayout` component has `overflow-x-hidden` on the main content area (line 20), which clips horizontal content before the table's scroll container can handle it
+2. The table's scroll container has `overflow-x-auto` but can't scroll when the parent clips
 
-1. **Missing overflow-y on Viewport**: The Radix UI `ScrollAreaPrimitive.Viewport` needs `overflow-y: auto` or `overflow-y: scroll` to enable scrolling
-2. **Height inheritance issue**: The Viewport needs to inherit the max-height constraint properly
+## Current Implementation (Already Correct)
 
-The previous fix added `[&>div]:!block` which addresses display issues, but didn't add the actual overflow scrolling behavior.
+The `SheetTable.tsx` already has the correct sticky column setup:
+- First column header: `sticky left-0 z-30` 
+- First column cells: `sticky left-0 z-10`
+- Shadow effect for visual separation: `shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]`
+- CSS responsive width: `sheet-first-col` class with `clamp(280px, 35vw, 640px)`
 
 ## Solution
 
-### File: `src/components/ui/scroll-area.tsx`
+Allow the table container to overflow horizontally within its own bounds while preventing page-level horizontal panning.
 
-Add `overflow-y-scroll` to the Viewport element. This is the proper fix that ensures scrolling works in all ScrollArea usages.
+### File: `src/components/layout/AppLayout.tsx`
 
-**Current (line 11):**
+**Change:** Replace `overflow-x-hidden` with `overflow-x-clip` on the main element.
+
+The difference:
+- `overflow-x-hidden`: Clips content and prevents any overflow, including from child scroll containers
+- `overflow-x-clip`: Clips content at the element's padding box but allows descendant elements with their own overflow handling to scroll
+
 ```tsx
-<ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] [&>div]:!block">
+// Before (line 20)
+<main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+
+// After
+<main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip p-4 md:p-6">
 ```
 
-**Change to:**
-```tsx
-<ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] overflow-y-scroll [&>div]:!block">
-```
+## How It Works After Fix
 
-### Why This Works
-
-- `overflow-y-scroll`: Forces the viewport to be scrollable when content exceeds height
-- The Radix ScrollArea will then detect this and show its styled scrollbar
-- This is consistent with Radix UI's expected behavior for ScrollArea
-
-## Alternative Approach (if above doesn't work)
-
-If the Radix-level fix doesn't work due to how the primitive handles overflow, we can bypass ScrollArea entirely in this specific dialog and use native scrolling:
-
-### File: `src/components/budget/EditAllocationsDialog.tsx`
-
-Replace ScrollArea with a native scrollable div:
-
-**Current (lines 269-270):**
-```tsx
-<ScrollArea className="max-h-[300px] border rounded-md">
-  <div className="p-4 space-y-3">
-```
-
-**Change to:**
-```tsx
-<div className="max-h-[300px] overflow-y-auto border rounded-md">
-  <div className="p-4 space-y-3">
-```
-
-And update the closing tag accordingly.
-
-## Recommended Approach
-
-Try **both fixes**:
-1. First update `scroll-area.tsx` with `overflow-y-scroll` (benefits all ScrollArea usages)
-2. If that still fails, fall back to native scrolling in the dialog itself
+1. User navigates to `/budget`
+2. Table renders with all 12 month columns + vendor + FY total
+3. When horizontal space is limited, user can:
+   - Use trackpad two-finger horizontal swipe
+   - Hold Shift + scroll wheel (already implemented)
+   - Use the horizontal scrollbar
+4. First column stays fixed on the left
+5. Other columns scroll behind the first column's right edge
+6. Shadow on first column provides visual separation
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| `src/components/ui/scroll-area.tsx` | Add `overflow-y-scroll` to Viewport |
-| `src/components/budget/EditAllocationsDialog.tsx` | Fallback: replace ScrollArea with native `overflow-y-auto` div if needed |
+| `src/components/layout/AppLayout.tsx` | Change `overflow-x-hidden` to `overflow-x-clip` |
+
+## Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Narrow viewport | Horizontal scroll activates, first column stays fixed |
+| Wide viewport | No scroll needed, all columns visible |
+| Mobile devices | Touch horizontal scroll works with fixed first column |
+| Many line items | Both vertical and horizontal scroll work independently |
 
 ## Acceptance Criteria
 
-1. Cost centers list scrolls when more than ~4-5 items are visible
-2. Scrollbar appears on the right side
-3. User can scroll to see and edit all 10 cost centers
-4. Other ScrollArea usages in the app continue to work
-
+1. Table horizontally scrolls when viewport is narrower than table width
+2. First column (Cost Center / Line Item) stays fixed on left edge
+3. Other columns disappear behind the first column as user scrolls right
+4. Shadow on first column provides clear visual separation
+5. Page-level horizontal scroll is still prevented (no accidental panning)
+6. Vertical scrolling continues to work correctly
