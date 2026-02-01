@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, MonthlyValues } from '@/types/budget';
 
-type ScheduleType = 'one-time' | 'recurring' | 'spread';
+type ScheduleType = 'one-time' | 'recurring' | 'variable' | 'spread';
 
 export interface DuplicateNameCheckResult {
   duplicate: boolean;
@@ -71,6 +71,7 @@ export function AddLineItemDialog({
   const [spreadStartMonth, setSpreadStartMonth] = useState<Month | ''>('');
   const [spreadEndMonth, setSpreadEndMonth] = useState<Month | ''>('');
   const [spreadTotalAmount, setSpreadTotalAmount] = useState('');
+  const [variableValues, setVariableValues] = useState<MonthlyValues>(createEmptyMonthlyValues());
 
   // Get unlocked months
   const unlockedMonths = useMemo(() => {
@@ -110,6 +111,13 @@ export function AddLineItemDialog({
           }
         }
       }
+    } else if (scheduleType === 'variable') {
+      // Copy variable values, but only for unlocked months
+      MONTHS.forEach((month) => {
+        if (!lockedMonths.has(month)) {
+          values[month] = Math.round(variableValues[month] || 0);
+        }
+      });
     } else if (scheduleType === 'spread') {
       const startIdx = MONTHS.indexOf(spreadStartMonth as Month);
       const endIdx = MONTHS.indexOf(spreadEndMonth as Month);
@@ -163,6 +171,9 @@ export function AddLineItemDialog({
         recurringEndMonth !== '' &&
         parseFloat(recurringMonthlyAmount) > 0
       );
+    } else if (scheduleType === 'variable') {
+      // Variable is valid if at least one unlocked month has a value
+      return MONTHS.some((m) => !lockedMonths.has(m) && variableValues[m] > 0);
     } else if (scheduleType === 'spread') {
       return (
         spreadStartMonth !== '' &&
@@ -184,6 +195,8 @@ export function AddLineItemDialog({
     spreadStartMonth,
     spreadEndMonth,
     spreadTotalAmount,
+    variableValues,
+    lockedMonths,
   ]);
 
   const resetForm = () => {
@@ -202,6 +215,7 @@ export function AddLineItemDialog({
     setSpreadStartMonth('');
     setSpreadEndMonth('');
     setSpreadTotalAmount('');
+    setVariableValues(createEmptyMonthlyValues());
   };
 
   const handleSubmit = () => {
@@ -349,6 +363,12 @@ export function AddLineItemDialog({
                 </Label>
               </div>
               <div className="flex items-center gap-2">
+                <RadioGroupItem value="variable" id="variable" />
+                <Label htmlFor="variable" className="cursor-pointer font-normal">
+                  Variable monthly
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
                 <RadioGroupItem value="spread" id="spread" />
                 <Label htmlFor="spread" className="cursor-pointer font-normal">
                   Spread total evenly
@@ -444,6 +464,42 @@ export function AddLineItemDialog({
                   onChange={(e) => setRecurringMonthlyAmount(e.target.value)}
                   placeholder="5000"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Schedule Fields - Variable */}
+          {scheduleType === 'variable' && (
+            <div className="space-y-3 pl-4 border-l-2 border-muted">
+              <p className="text-sm text-muted-foreground">
+                Enter different amounts for each month. Locked months cannot be edited.
+              </p>
+              <div className="space-y-2">
+                {MONTHS.map((m) => {
+                  const isLocked = lockedMonths.has(m);
+                  return (
+                    <div key={m} className="flex items-center gap-3">
+                      <Label htmlFor={`variable-${m}`} className="w-12 text-sm">
+                        {MONTH_LABELS[m]} {isLocked && '🔒'}
+                      </Label>
+                      <Input
+                        id={`variable-${m}`}
+                        type="number"
+                        min="0"
+                        className="flex-1"
+                        placeholder="0"
+                        value={variableValues[m] || ''}
+                        onChange={(e) =>
+                          setVariableValues((prev) => ({
+                            ...prev,
+                            [m]: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
