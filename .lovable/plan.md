@@ -2,118 +2,293 @@
 
 ## Summary
 
-Update the Edit Budget Settings dialog to:
-1. Simplify the per-row computed display to show only the dollar amount (remove percentage)
-2. Make the footer totals display percentages when the global mode is set to `%`
+Add a "Variable monthly" schedule type option to both the Add Line Item and Edit Line Item dialogs. This option will be positioned between "Recurring monthly" and "Spread total evenly", and when selected, will display a stacked list of all 12 months (Feb-Jan) with individual text entry fields for each.
 
 ## Changes
 
-### File: `src/components/budget/EditAllocationsDialog.tsx`
+### File: `src/components/sheet/AddLineItemDialog.tsx`
 
-#### Change 1: Simplify per-row computed display (Line 338)
+#### Change 1: Update ScheduleType to include 'variable' (Line 23)
 
 **Current:**
 ```tsx
-<div className="text-sm text-muted-foreground w-32 text-right">
-  {formatCurrency(row.computedAmount)} ({row.computedPercent.toFixed(1)}%)
-</div>
+type ScheduleType = 'one-time' | 'recurring' | 'spread';
 ```
 
 **Updated:**
 ```tsx
-<div className="text-sm text-muted-foreground w-32 text-right">
-  {formatCurrency(row.computedAmount)}
+type ScheduleType = 'one-time' | 'recurring' | 'variable' | 'spread';
+```
+
+#### Change 2: Add state for variable monthly values (after line 73)
+
+Add new state to track per-month values for variable mode:
+
+```tsx
+const [variableValues, setVariableValues] = useState<MonthlyValues>(createEmptyMonthlyValues());
+```
+
+#### Change 3: Update calculateForecastValues to handle 'variable' type (Lines 90-141)
+
+Add a new branch after the 'recurring' case to handle 'variable':
+
+```tsx
+} else if (scheduleType === 'variable') {
+  // Copy variable values, but only for unlocked months
+  MONTHS.forEach((month) => {
+    if (!lockedMonths.has(month)) {
+      values[month] = Math.round(variableValues[month] || 0);
+    }
+  });
+}
+```
+
+#### Change 4: Update validation for 'variable' type (Lines 151-187)
+
+Add validation for variable type - valid if at least one month has a value > 0:
+
+```tsx
+} else if (scheduleType === 'variable') {
+  // Variable is valid if at least one unlocked month has a value
+  return MONTHS.some((m) => !lockedMonths.has(m) && variableValues[m] > 0);
+}
+```
+
+Also add `variableValues` to the dependency array.
+
+#### Change 5: Reset variable values in resetForm (Lines 189-205)
+
+Add reset for variable values:
+
+```tsx
+setVariableValues(createEmptyMonthlyValues());
+```
+
+#### Change 6: Add "Variable monthly" radio option (Lines 351-356)
+
+Insert new radio option between "Recurring monthly" and "Spread total evenly":
+
+```tsx
+<div className="flex items-center gap-2">
+  <RadioGroupItem value="variable" id="variable" />
+  <Label htmlFor="variable" className="cursor-pointer font-normal">
+    Variable monthly
+  </Label>
 </div>
 ```
 
-This removes the percentage display from each cost center row, showing only the dollar amount (e.g., "$138,000" instead of "$138,000 (6.0%)").
+#### Change 7: Add Variable monthly input section (after line 449, before Spread)
 
-#### Change 2: Make footer totals respect global mode (Lines 363-372)
+Add new UI section for variable monthly inputs:
+
+```tsx
+{/* Schedule Fields - Variable */}
+{scheduleType === 'variable' && (
+  <div className="space-y-3 pl-4 border-l-2 border-muted">
+    <p className="text-sm text-muted-foreground">
+      Enter different amounts for each month. Locked months cannot be edited.
+    </p>
+    <div className="space-y-2">
+      {MONTHS.map((m) => {
+        const isLocked = lockedMonths.has(m);
+        return (
+          <div key={m} className="flex items-center gap-3">
+            <Label htmlFor={`variable-${m}`} className="w-12 text-sm">
+              {MONTH_LABELS[m]} {isLocked && '🔒'}
+            </Label>
+            <Input
+              id={`variable-${m}`}
+              type="number"
+              min="0"
+              className="flex-1"
+              placeholder="0"
+              value={variableValues[m] || ''}
+              onChange={(e) =>
+                setVariableValues((prev) => ({
+                  ...prev,
+                  [m]: parseFloat(e.target.value) || 0,
+                }))
+              }
+              disabled={isLocked}
+            />
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
+```
+
+---
+
+### File: `src/components/sheet/EditLineItemDialog.tsx`
+
+#### Change 1: Update ScheduleType (Line 23)
 
 **Current:**
 ```tsx
-<div className="flex items-center justify-between text-sm">
-  <span>Total Allocated:</span>
-  <span className={isBalanced ? 'text-foreground' : 'text-destructive font-medium'}>
-    {formatCurrency(totalAllocated)}
-  </span>
-</div>
-<div className="flex items-center justify-between text-sm">
-  <span>Target Budget:</span>
-  <span>{formatCurrency(targetBudget)}</span>
-</div>
+type ScheduleType = 'one-time' | 'recurring' | 'spread' | 'custom';
 ```
 
 **Updated:**
 ```tsx
-<div className="flex items-center justify-between text-sm">
-  <span>Total Allocated:</span>
-  <span className={isBalanced ? 'text-foreground' : 'text-destructive font-medium'}>
-    {globalMode === '%' 
-      ? `${(targetBudget > 0 ? (totalAllocated / targetBudget) * 100 : 0).toFixed(1)}%`
-      : formatCurrency(totalAllocated)}
-  </span>
-</div>
-<div className="flex items-center justify-between text-sm">
-  <span>Target Budget:</span>
-  <span>{globalMode === '%' ? '100%' : formatCurrency(targetBudget)}</span>
+type ScheduleType = 'one-time' | 'recurring' | 'variable' | 'spread' | 'custom';
+```
+
+#### Change 2: Add state for variable values (after line 146)
+
+```tsx
+const [variableValues, setVariableValues] = useState<MonthlyValues>(createEmptyMonthlyValues());
+```
+
+#### Change 3: Update detectScheduleType to detect variable patterns (Lines 57-114)
+
+Update the detection logic to identify variable patterns (non-consecutive months with varying amounts):
+
+```tsx
+// After checking for recurring, before returning custom:
+// If non-consecutive or varying amounts, it could be variable
+return { type: 'variable' };
+```
+
+The function should be updated to return 'variable' instead of 'custom' when the pattern doesn't match one-time, recurring, or spread.
+
+#### Change 4: Update useEffect to handle variable type (Lines 163-195)
+
+When 'variable' is detected, populate variableValues state:
+
+```tsx
+} else if (detected.type === 'variable') {
+  setVariableValues({ ...currentValues });
+}
+```
+
+#### Change 5: Update calculateValues to handle 'variable' (Lines 197-252)
+
+Add handling for variable type:
+
+```tsx
+} else if (scheduleType === 'variable') {
+  MONTHS.forEach((month) => {
+    if (!lockedMonths.has(month)) {
+      values[month] = Math.round(variableValues[month] || 0);
+    }
+  });
+}
+```
+
+#### Change 6: Update validation for 'variable' (Lines 268-308)
+
+Add validation:
+
+```tsx
+} else if (scheduleType === 'variable') {
+  return true; // Variable is always valid (can have all zeros when editing)
+}
+```
+
+Add `variableValues` to the dependency array.
+
+#### Change 7: Reorder radio options (Lines 437-461)
+
+Change the order and rename to have:
+1. One-time
+2. Recurring monthly
+3. Variable monthly (NEW - between recurring and spread)
+4. Spread total evenly
+5. Custom (edit per-month)
+
+```tsx
+<div className="flex items-center gap-2">
+  <RadioGroupItem value="variable" id="variable" />
+  <Label htmlFor="variable" className="cursor-pointer font-normal">
+    Variable monthly
+  </Label>
 </div>
 ```
 
-When `globalMode === '%'`:
-- **Total Allocated** shows the percentage of target budget allocated (e.g., "100.0%")
-- **Target Budget** shows "100%" (since target is always 100% of itself)
+#### Change 8: Add Variable monthly input section (after Recurring, before Spread)
 
-When `globalMode === '$'`:
-- Both values continue to show dollar amounts as before
+Insert the same stacked month input list as in AddLineItemDialog:
 
-#### Change 3: Update the over/under alert to match mode (Lines 374-384)
-
-The alert message showing "Over by $X" or "Under by $X" should also respect the global mode:
-
-**Current:**
 ```tsx
-{difference > 0
-  ? `Over by ${formatCurrency(difference)}`
-  : `Under by ${formatCurrency(Math.abs(difference))}`}
-. Allocations must equal the target budget (±$1).
-```
-
-**Updated:**
-```tsx
-{difference > 0
-  ? `Over by ${globalMode === '%' 
-      ? `${((difference / targetBudget) * 100).toFixed(1)}%` 
-      : formatCurrency(difference)}`
-  : `Under by ${globalMode === '%' 
-      ? `${((Math.abs(difference) / targetBudget) * 100).toFixed(1)}%` 
-      : formatCurrency(Math.abs(difference))}`}
-. Allocations must equal the target budget {globalMode === '%' ? '(±0.1%)' : '(±$1)'}.
+{/* Schedule Fields - Variable */}
+{scheduleType === 'variable' && (
+  <div className="space-y-3 pl-4 border-l-2 border-muted">
+    <p className="text-sm text-muted-foreground">
+      Enter different amounts for each month. Locked months cannot be edited.
+    </p>
+    <div className="space-y-2">
+      {MONTHS.map((m) => {
+        const isLocked = lockedMonths.has(m);
+        return (
+          <div key={m} className="flex items-center gap-3">
+            <Label htmlFor={`variable-${m}`} className="w-12 text-sm">
+              {MONTH_LABELS[m]} {isLocked && '🔒'}
+            </Label>
+            <Input
+              id={`variable-${m}`}
+              type="number"
+              min="0"
+              className="flex-1"
+              placeholder="0"
+              value={variableValues[m] || ''}
+              onChange={(e) =>
+                setVariableValues((prev) => ({
+                  ...prev,
+                  [m]: parseFloat(e.target.value) || 0,
+                }))
+              }
+              disabled={isLocked}
+            />
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}
 ```
 
 ## Visual Result
 
-**In $ mode:**
-```
-Cost Centers                        [$|%] [+ Add]
-┌──────────────────────────────────────────────────┐
-│ [↑↓] [Marketing        ] [$250000 ]    $250,000 │
-│ [↑↓] [Sales            ] [$350000 ]    $350,000 │
-└──────────────────────────────────────────────────┘
+The Schedule Type section in both dialogs will show:
 
-Total Allocated:                         $600,000
-Target Budget:                           $600,000
+```
+Schedule type *
+○ One-time
+○ Recurring monthly  
+○ Variable monthly      ← NEW OPTION
+○ Spread total evenly
+○ Custom (edit per-month)  ← Only in EditLineItemDialog
 ```
 
-**In % mode:**
-```
-Cost Centers                        [$|%] [+ Add]
-┌──────────────────────────────────────────────────┐
-│ [↑↓] [Marketing        ] [% 41.67 ]    $250,000 │
-│ [↑↓] [Sales            ] [% 58.33 ]    $350,000 │
-└──────────────────────────────────────────────────┘
+When "Variable monthly" is selected, the UI will show:
 
-Total Allocated:                            100.0%
-Target Budget:                               100%
 ```
+┌─────────────────────────────────────────┐
+│ Enter different amounts for each month. │
+│ Locked months cannot be edited.         │
+│                                         │
+│ Feb [__________________]                │
+│ Mar [__________________]                │
+│ Apr [__________________]                │
+│ May [__________________]                │
+│ Jun [__________________]                │
+│ Jul [__________________]                │
+│ Aug [__________________]                │
+│ Sep [__________________]                │
+│ Oct [__________________]                │
+│ Nov [__________________]                │
+│ Dec [__________________]                │
+│ Jan [__________________]                │
+└─────────────────────────────────────────┘
+```
+
+## Technical Notes
+
+- The "Variable monthly" option allows users to enter different amounts for each month in a clean stacked vertical list format
+- Locked months display a 🔒 icon and have their input fields disabled
+- The existing "Custom (edit per-month)" option in EditLineItemDialog will remain as a fallback but uses a 3-column grid layout; the new "Variable monthly" uses a single-column stacked layout for easier data entry
+- For AddLineItemDialog, validation requires at least one month to have an amount > 0
+- For EditLineItemDialog, variable is always valid (allows all zeros when editing existing items)
 
