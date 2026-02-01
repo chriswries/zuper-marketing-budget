@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/tooltip';
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
+import { BudgetAllocationSummary } from '@/components/budget/BudgetAllocationSummary';
 import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
 import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
@@ -1867,6 +1868,12 @@ export default function Budget() {
           </Tooltip>
         ) : null}
       </div>
+
+      {/* Budget Allocation Summary */}
+      <BudgetAllocationSummary
+        costCenters={selectedFiscalYear.costCenters}
+        targetBudget={selectedFiscalYear.targetBudget}
+      />
 
       <SheetTable
         costCenters={selectedFiscalYear.costCenters}
