@@ -100,13 +100,20 @@ function detectScheduleType(values: MonthlyValues, lockedMonths: Set<Month>): {
   }
   
   if (isConsecutive) {
-    // Could be spread - total divided among months
-    return {
-      type: 'spread',
-      spreadStartMonth: nonZeroMonths[0],
-      spreadEndMonth: nonZeroMonths[nonZeroMonths.length - 1],
-      spreadTotalAmount: amounts.reduce((a, b) => a + b, 0),
-    };
+    // Check if amounts are roughly evenly spread (spread pattern)
+    // For spread, amounts should be approximately equal (within rounding difference of 1)
+    const total = amounts.reduce((a, b) => a + b, 0);
+    const avgPerMonth = total / amounts.length;
+    const isEvenlySpread = amounts.every(a => Math.abs(a - avgPerMonth) <= 1);
+    
+    if (isEvenlySpread) {
+      return {
+        type: 'spread',
+        spreadStartMonth: nonZeroMonths[0],
+        spreadEndMonth: nonZeroMonths[nonZeroMonths.length - 1],
+        spreadTotalAmount: total,
+      };
+    }
   }
   
   // Non-consecutive or varying amounts - this is variable
