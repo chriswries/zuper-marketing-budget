@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { CostCenter, LineItem, Month, MONTHS, MONTH_LABELS, MonthlyValues, calculateFYTotal } from '@/types/budget';
 
-type ScheduleType = 'one-time' | 'recurring' | 'spread' | 'custom';
+type ScheduleType = 'one-time' | 'recurring' | 'variable' | 'spread' | 'custom';
 
 export interface DuplicateNameCheckResult {
   duplicate: boolean;
@@ -109,8 +109,8 @@ function detectScheduleType(values: MonthlyValues, lockedMonths: Set<Month>): {
     };
   }
   
-  // Otherwise it's custom
-  return { type: 'custom' };
+  // Non-consecutive or varying amounts - this is variable
+  return { type: 'variable' };
 }
 
 export function EditLineItemDialog({
@@ -144,6 +144,8 @@ export function EditLineItemDialog({
   
   // Custom values (for custom mode)
   const [customValues, setCustomValues] = useState<MonthlyValues>(createEmptyMonthlyValues());
+  // Variable values (for variable mode)
+  const [variableValues, setVariableValues] = useState<MonthlyValues>(createEmptyMonthlyValues());
 
   // Get unlocked months
   const unlockedMonths = useMemo(() => {
@@ -190,6 +192,8 @@ export function EditLineItemDialog({
         setSpreadStartMonth(detected.spreadStartMonth ?? '');
         setSpreadEndMonth(detected.spreadEndMonth ?? '');
         setSpreadTotalAmount(detected.spreadTotalAmount?.toString() ?? '');
+      } else if (detected.type === 'variable') {
+        setVariableValues({ ...currentValues });
       }
     }
   }, [open, data, valueType, lockedMonths]);
@@ -221,6 +225,12 @@ export function EditLineItemDialog({
           }
         }
       }
+    } else if (scheduleType === 'variable') {
+      MONTHS.forEach((month) => {
+        if (!lockedMonths.has(month)) {
+          values[month] = Math.round(variableValues[month] || 0);
+        }
+      });
     } else if (scheduleType === 'spread') {
       const startIdx = MONTHS.indexOf(spreadStartMonth as Month);
       const endIdx = MONTHS.indexOf(spreadEndMonth as Month);
@@ -263,7 +273,7 @@ export function EditLineItemDialog({
   const previewTotal = useMemo(() => {
     const values = calculateValues();
     return calculateFYTotal(values);
-  }, [scheduleType, oneTimeMonth, oneTimeAmount, recurringStartMonth, recurringEndMonth, recurringMonthlyAmount, spreadStartMonth, spreadEndMonth, spreadTotalAmount, customValues]);
+  }, [scheduleType, oneTimeMonth, oneTimeAmount, recurringStartMonth, recurringEndMonth, recurringMonthlyAmount, spreadStartMonth, spreadEndMonth, spreadTotalAmount, customValues, variableValues]);
 
   // Validation
   const isValid = useMemo(() => {
@@ -274,6 +284,9 @@ export function EditLineItemDialog({
 
     if (scheduleType === 'custom') {
       // Custom is always valid (can have zero values)
+      return true;
+    } else if (scheduleType === 'variable') {
+      // Variable is always valid (can have all zeros when editing)
       return true;
     } else if (scheduleType === 'one-time') {
       return oneTimeMonth !== '' && parseFloat(oneTimeAmount) > 0;
@@ -305,6 +318,7 @@ export function EditLineItemDialog({
     spreadStartMonth,
     spreadEndMonth,
     spreadTotalAmount,
+    variableValues,
   ]);
 
   const handleSubmit = () => {
@@ -447,6 +461,12 @@ export function EditLineItemDialog({
                 </Label>
               </div>
               <div className="flex items-center gap-2">
+                <RadioGroupItem value="variable" id="variable" />
+                <Label htmlFor="variable" className="cursor-pointer font-normal">
+                  Variable monthly
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
                 <RadioGroupItem value="spread" id="spread" />
                 <Label htmlFor="spread" className="cursor-pointer font-normal">
                   Spread total evenly
@@ -548,6 +568,42 @@ export function EditLineItemDialog({
                   onChange={(e) => setRecurringMonthlyAmount(e.target.value)}
                   placeholder="5000"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Schedule Fields - Variable */}
+          {scheduleType === 'variable' && (
+            <div className="space-y-3 pl-4 border-l-2 border-muted">
+              <p className="text-sm text-muted-foreground">
+                Enter different amounts for each month. Locked months cannot be edited.
+              </p>
+              <div className="space-y-2">
+                {MONTHS.map((m) => {
+                  const isLocked = lockedMonths.has(m);
+                  return (
+                    <div key={m} className="flex items-center gap-3">
+                      <Label htmlFor={`variable-${m}`} className="w-12 text-sm">
+                        {MONTH_LABELS[m]} {isLocked && '🔒'}
+                      </Label>
+                      <Input
+                        id={`variable-${m}`}
+                        type="number"
+                        min="0"
+                        className="flex-1"
+                        placeholder="0"
+                        value={variableValues[m] || ''}
+                        onChange={(e) =>
+                          setVariableValues((prev) => ({
+                            ...prev,
+                            [m]: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        disabled={isLocked}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
