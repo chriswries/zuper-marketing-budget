@@ -1,56 +1,58 @@
 
 
-## Fix: Clear Orphaned "Approval Pending" Status from FY2026 Line Items
+## Fix: Spend Requests Failing to Save Due to Missing `requesterId`
 
 ### Problem
-Every line item in the FY2026 budget displays "approval pending" because each has `approvalStatus: "pending"` and an `approvalRequestId` stored in its data. However, the `spend_requests` table is completely empty -- no matching approval requests exist. This creates a broken state where:
-- Line items show pending badges but no one can approve them
-- Switching to Manager/CMO/Finance roles shows no actionable requests
+When a manager deletes a line item in /forecast, the "Deletion pending" tag appears but no approval request shows on /requests. The database logs reveal:
+
+```
+new row for relation "spend_requests" violates check constraint "check_spend_request_has_requester"
+```
+
+A CHECK constraint on the `spend_requests` table requires the JSONB `data` column to contain a `requesterId` key, but this field is never populated anywhere in the codebase. This means **every spend request INSERT has been silently failing** -- not just deletions, but also new line item requests, adjustment requests, and cancellation requests.
+
+The optimistic UI update makes it look like it worked, but the database rejects the row, the error is caught silently, and the optimistic state is reverted on page reload.
 
 ### Root Cause
-The line items were likely created with approval metadata (`approvalStatus`, `approvalRequestId`) but the corresponding spend request records were never persisted to the database (or were deleted/lost).
+A migration (`20260110004329`) added the constraint `CHECK (data ? 'requesterId')` to enforce that every spend request tracks who created it. However, the `SpendRequest` TypeScript type never included a `requesterId` field, so no code ever sets it.
 
 ### Solution
-Write a data cleanup operation that strips the orphaned approval fields (`approvalStatus` and `approvalRequestId`) from every line item in the FY2026 fiscal year JSONB data. This is a one-time data fix.
+Add `requesterId` to the `SpendRequest` type and populate it with `auth.uid()` (the current user's ID) whenever a request is created. This fixes all request creation flows.
 
-### Steps
+### Changes
 
-1. **Run a SQL UPDATE** against the `fiscal_years` table to remove `approvalStatus` and `approvalRequestId` from every line item inside the `data->'costCenters'` JSONB structure for FY2026.
+#### 1. `src/types/requests.ts`
+Add `requesterId` as an optional field to the `SpendRequest` interface:
+```typescript
+requesterId?: string;
+```
 
-   The update will iterate through each cost center and each line item, removing the two orphaned keys while preserving all other line item data.
+#### 2. `src/contexts/AuthContext.tsx` (read only)
+Need to check how to access the current user ID. The `useAuth()` hook likely provides `user.id`.
 
-2. **No code changes needed** -- the UI already correctly reads these fields and will stop showing "approval pending" once the data is cleaned.
+#### 3. `src/pages/Forecast.tsx`
+Update all `addRequest()` calls (there are 3 locations: new line item creation, adjustment request creation, and row action submit) to include `requesterId` from the authenticated user's ID. Since Forecast.tsx already imports from AuthContext indirectly via other contexts, we need to add `useAuth` or pass the user ID through.
+
+Specifically:
+- **`handleCreateLineItem`** (line ~321): Add `requesterId: userId` to the new request object
+- **Row action submit / handleRowActionSubmit`** (line ~783): Add `requesterId: userId` to the request object
+- **Adjustment justification handler** (need to find): Add `requesterId: userId`
+
+#### 4. `src/components/requests/CreateRequestDialog.tsx`
+If this component also creates requests, add `requesterId` there too.
+
+#### 5. Data Fix: Clean Up Orphaned Forecast Data
+The IDC line item in the FY2026 forecast currently has `deletionStatus: "pending"` and `deletionRequestId` pointing to a non-existent request. Run a SQL update to clear these orphaned flags from the `fy_forecasts` table, similar to the previous budget cleanup.
 
 ### Technical Details
 
-The SQL will use `jsonb_set` with a subquery that rebuilds the `costCenters` array, stripping `approvalStatus` and `approvalRequestId` from each line item object. Specifically:
+- The `requesterId` will be set to `supabase.auth.getUser()` result or from the AuthContext's `user.id`
+- The field flows through `requestToRow()` automatically since it strips only `id`, `status`, `originFiscalYearId`, and `deletedAt` -- everything else (including `requesterId`) goes into the `data` JSONB column
+- The CHECK constraint will then be satisfied and INSERTs will succeed
+- The RLS UPDATE policy also references `data->>'requesterId'` for access control, so this fix also enables proper per-user update permissions
 
-```sql
-UPDATE fiscal_years
-SET data = jsonb_set(
-  data,
-  '{costCenters}',
-  (
-    SELECT jsonb_agg(
-      jsonb_set(
-        cc,
-        '{lineItems}',
-        (
-          SELECT jsonb_agg(li - 'approvalStatus' - 'approvalRequestId')
-          FROM jsonb_array_elements(cc->'lineItems') li
-        )
-      )
-    )
-    FROM jsonb_array_elements(data->'costCenters') cc
-  )
-)
-WHERE id = 'aa8ac05a-f1f6-4518-9614-40094e284217';
-```
-
-This removes only the two orphaned keys from each line item, leaving all other data (name, vendor, budgetValues, etc.) intact.
-
-### Risk
-- Low risk: only modifies two metadata fields on line items
-- The fiscal year status remains "planning" so no locked data is affected
-- No code changes required
-
+### Verification
+After the fix:
+1. As a simulated manager, delete a line item in /forecast
+2. Confirm the deletion request appears on /requests
+3. Confirm the request can be approved/rejected by CMO and Finance roles
