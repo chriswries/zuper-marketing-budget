@@ -1,58 +1,79 @@
 
 
-## Fix: Spend Requests Failing to Save Due to Missing `requesterId`
+## Fix: Delete Line Item Approval Not Removing Item from Forecast
 
 ### Problem
-When a manager deletes a line item in /forecast, the "Deletion pending" tag appears but no approval request shows on /requests. The database logs reveal:
-
-```
-new row for relation "spend_requests" violates check constraint "check_spend_request_has_requester"
-```
-
-A CHECK constraint on the `spend_requests` table requires the JSONB `data` column to contain a `requesterId` key, but this field is never populated anywhere in the codebase. This means **every spend request INSERT has been silently failing** -- not just deletions, but also new line item requests, adjustment requests, and cancellation requests.
-
-The optimistic UI update makes it look like it worked, but the database rejects the row, the error is caught silently, and the optimistic state is reverted on page reload.
+After Finance approves a deletion request, the line item remains in `/forecast` with a "Deletion pending" tag instead of being removed.
 
 ### Root Cause
-A migration (`20260110004329`) added the constraint `CHECK (data ? 'requesterId')` to enforce that every spend request tracks who created it. However, the `SpendRequest` TypeScript type never included a `requesterId` field, so no code ever sets it.
+The `forecastRowActionResolver.ts` uses `loadForecastForFY()` which is a **synchronous** function that only returns data from an in-memory cache. When the resolver runs (triggered by a status change detected in `RequestsContext`), the forecast cache is often empty -- especially if the user navigated away from `/forecast` to `/requests` to perform the approval. When `loadForecastForFY()` returns `null`, the resolver silently fails with `"Forecast data not found"` and the line item is never removed.
+
+The same issue affects `saveForecastForFY()` -- it updates the cache and writes to the database, but this is fine *if* we can load the data first.
 
 ### Solution
-Add `requesterId` to the `SpendRequest` type and populate it with `auth.uid()` (the current user's ID) whenever a request is created. This fixes all request creation flows.
+Convert the resolver functions to be **async** so they use `loadForecastForFYAsync()` (which reads from the database) instead of the synchronous cache-only `loadForecastForFY()`. This ensures the resolver always has access to the forecast data regardless of what page the user is on.
 
 ### Changes
 
-#### 1. `src/types/requests.ts`
-Add `requesterId` as an optional field to the `SpendRequest` interface:
-```typescript
-requesterId?: string;
-```
+#### 1. `src/lib/forecastRowActionResolver.ts`
+- Change `loadForecastForRequest()` to be async, using `loadForecastForFYAsync()` instead of `loadForecastForFY()`
+- Make all resolver functions async (`resolveCancelRequestApproved`, `resolveCancelRequestRejected`, `resolveDeleteLineItemApproved`, `resolveDeleteLineItemRejected`, `resolveForecastRowActionRequest`)
+- Update return types to `Promise<ResolutionResult>` and `Promise<boolean>`
 
-#### 2. `src/contexts/AuthContext.tsx` (read only)
-Need to check how to access the current user ID. The `useAuth()` hook likely provides `user.id`.
-
-#### 3. `src/pages/Forecast.tsx`
-Update all `addRequest()` calls (there are 3 locations: new line item creation, adjustment request creation, and row action submit) to include `requesterId` from the authenticated user's ID. Since Forecast.tsx already imports from AuthContext indirectly via other contexts, we need to add `useAuth` or pass the user ID through.
-
-Specifically:
-- **`handleCreateLineItem`** (line ~321): Add `requesterId: userId` to the new request object
-- **Row action submit / handleRowActionSubmit`** (line ~783): Add `requesterId: userId` to the request object
-- **Adjustment justification handler** (need to find): Add `requesterId: userId`
-
-#### 4. `src/components/requests/CreateRequestDialog.tsx`
-If this component also creates requests, add `requesterId` there too.
-
-#### 5. Data Fix: Clean Up Orphaned Forecast Data
-The IDC line item in the FY2026 forecast currently has `deletionStatus: "pending"` and `deletionRequestId` pointing to a non-existent request. Run a SQL update to clear these orphaned flags from the `fy_forecasts` table, similar to the previous budget cleanup.
+#### 2. `src/contexts/RequestsContext.tsx`
+- Update the status transition `useEffect` to properly `await` the now-async `resolveForecastRowActionRequest()`
+- Wrap the resolution loop in an async function since `useEffect` callbacks can't be async directly
+- After successful resolution of a `delete_line_item` approval, invalidate the forecast cache so the `/forecast` page picks up the change on next render
 
 ### Technical Details
 
-- The `requesterId` will be set to `supabase.auth.getUser()` result or from the AuthContext's `user.id`
-- The field flows through `requestToRow()` automatically since it strips only `id`, `status`, `originFiscalYearId`, and `deletedAt` -- everything else (including `requesterId`) goes into the `data` JSONB column
-- The CHECK constraint will then be satisfied and INSERTs will succeed
-- The RLS UPDATE policy also references `data->>'requesterId'` for access control, so this fix also enables proper per-user update permissions
+The key change in `forecastRowActionResolver.ts`:
 
-### Verification
-After the fix:
-1. As a simulated manager, delete a line item in /forecast
-2. Confirm the deletion request appears on /requests
-3. Confirm the request can be approved/rejected by CMO and Finance roles
+```typescript
+// BEFORE (synchronous, cache-only -- fails when cache is empty)
+function loadForecastForRequest(request: SpendRequest): CostCenter[] | null {
+  if (request.originFiscalYearId) {
+    return loadForecastForFY(request.originFiscalYearId);
+  }
+  return null;
+}
+
+// AFTER (async, reads from database)
+async function loadForecastForRequest(request: SpendRequest): Promise<CostCenter[] | null> {
+  if (request.originFiscalYearId) {
+    return loadForecastForFYAsync(request.originFiscalYearId);
+  }
+  return null;
+}
+```
+
+In `RequestsContext.tsx`, the status transition effect becomes:
+
+```typescript
+useEffect(() => {
+  const resolveTransitions = async () => {
+    for (const request of requests) {
+      const prevStatus = prevStatusesRef.current[request.id];
+      if (prevStatus && prevStatus !== request.status) {
+        await resolveForecastRowActionRequest(request, prevStatus, updateRequest);
+      }
+    }
+  };
+  resolveTransitions();
+
+  // Update previous statuses
+  const newStatuses: Record<string, RequestStatus> = {};
+  for (const request of requests) {
+    newStatuses[request.id] = request.status;
+  }
+  prevStatusesRef.current = newStatuses;
+}, [requests]);
+```
+
+### Data Fix
+The currently stuck "IDC" line item in the FY2026 forecast needs its orphaned `deletionStatus` and `deletionRequestId` cleared via a SQL update on the `fy_forecasts` table (same pattern as previous cleanups). Alternatively, once the code fix is deployed, re-approving or re-triggering the flow would also work.
+
+### Risk
+- Low: only changes the data loading mechanism from sync-cache to async-database
+- All existing resolver logic (splice, revert, clear flags) remains unchanged
+- The forecast page already handles cache invalidation via realtime subscriptions
