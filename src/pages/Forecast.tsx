@@ -39,7 +39,7 @@ import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps, createCMOApprovalSteps, OriginKind } from '@/types/requests';
-import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { loadForecastForFY, loadForecastForFYAsync, saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
 import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
@@ -171,17 +171,24 @@ export default function Forecast() {
   // Reload cost centers when FY changes
   useEffect(() => {
     if (isActiveFY && fyId) {
-      const fyForecast = loadForecastForFY(fyId);
-      if (fyForecast) {
-        setCostCenters(fyForecast);
-      } else if (selectedFiscalYear) {
-        // Initialize from budget if no forecast exists
-        const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-        saveForecastForFY(fyId, newForecast);
-        setCostCenters(newForecast);
+      // Try cache first for instant display
+      const cached = loadForecastForFY(fyId);
+      if (cached) {
+        setCostCenters(cached);
+        return;
       }
+      // Cache miss — load from database
+      loadForecastForFYAsync(fyId).then((forecast) => {
+        if (forecast) {
+          setCostCenters(forecast);
+        } else if (selectedFiscalYear) {
+          // Only initialize from budget if truly no forecast exists in DB
+          const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
+          saveForecastForFY(fyId, newForecast);
+          setCostCenters(newForecast);
+        }
+      });
     } else {
-      // No active FY - clear cost centers
       setCostCenters([]);
     }
   }, [isActiveFY, fyId, selectedFiscalYear]);
