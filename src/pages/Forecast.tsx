@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
@@ -107,21 +107,12 @@ export default function Forecast() {
     cleanupLegacyForecastStorage();
   }, []);
 
-  // Initialize cost centers - empty array until active FY loads
-  const [costCenters, setCostCenters] = useState<CostCenter[]>(() => {
-    if (isActiveFY && fyId) {
-      const fyForecast = loadForecastForFY(fyId);
-      if (fyForecast) return fyForecast;
-      // Initialize from budget if no forecast exists yet
-      if (selectedFiscalYear) {
-        const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-        saveForecastForFY(fyId, newForecast);
-        return newForecast;
-      }
-    }
-    // No active FY - return empty array
-    return [];
-  });
+  // Track whether the initial authoritative load is complete.
+  // Prevents the persist effect from writing stale cache data back to the DB.
+  const initialLoadDoneRef = useRef(false);
+
+  // Initialize cost centers - empty array until active FY loads via effect
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
   const [lockedMonths, setLockedMonths] = useState<Set<Month>>(() => new Set());
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
@@ -171,10 +162,13 @@ export default function Forecast() {
   // Reload cost centers when FY changes
   useEffect(() => {
     if (isActiveFY && fyId) {
+      initialLoadDoneRef.current = false; // Reset on FY change
+
       // Try cache first for instant display
       const cached = loadForecastForFY(fyId);
       if (cached) {
         setCostCenters(cached);
+        initialLoadDoneRef.current = true;
         return;
       }
       // Cache miss — load from database
@@ -187,15 +181,18 @@ export default function Forecast() {
           saveForecastForFY(fyId, newForecast);
           setCostCenters(newForecast);
         }
+        initialLoadDoneRef.current = true;
       });
     } else {
       setCostCenters([]);
+      initialLoadDoneRef.current = false;
     }
   }, [isActiveFY, fyId, selectedFiscalYear]);
 
   // Persist costCenters to storage only when we have an active FY
+  // Guarded by initialLoadDoneRef to prevent stale cache from overwriting DB
   useEffect(() => {
-    if (isActiveFY && fyId && costCenters.length > 0) {
+    if (isActiveFY && fyId && costCenters.length > 0 && initialLoadDoneRef.current) {
       saveForecastForFY(fyId, costCenters);
     }
   }, [costCenters, isActiveFY, fyId]);
