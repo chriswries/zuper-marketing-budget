@@ -59,6 +59,7 @@ function rowToRequest(row: { id: string; status: string; origin_fiscal_year_id: 
     status: row.status as RequestStatus,
     createdAt: data.createdAt as string,
     approvalSteps: data.approvalSteps as ApprovalStep[],
+    requesterId: data.requesterId as string | undefined,
     originSheet: data.originSheet as SpendRequest['originSheet'],
     originFiscalYearId: row.origin_fiscal_year_id,
     originCostCenterId: data.originCostCenterId as string | undefined,

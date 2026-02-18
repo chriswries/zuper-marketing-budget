@@ -36,6 +36,7 @@ import {
 import { Lock, History, Plus, ShieldAlert } from 'lucide-react';
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { createDefaultApprovalSteps, createCMOApprovalSteps, OriginKind } from '@/types/requests';
 import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
@@ -84,6 +85,8 @@ export default function Forecast() {
   const { selectedFiscalYear, selectedFiscalYearId } = useFiscalYearBudget();
   const { settings: adminSettings } = useAdminSettings();
   const { currentRole } = useCurrentUserRole();
+  const { user } = useAuth();
+  const userId = user?.id;
   
   // Finance role is read-only for sheet editing
   const isFinance = currentRole === 'finance';
@@ -338,6 +341,7 @@ export default function Forecast() {
       originLineItemId: lineItem.id,
       originKind: 'new_line_item' as const,
       lineItemName: lineItem.name,
+      requesterId: userId,
     };
     addRequest(newRequest);
 
@@ -801,6 +805,7 @@ export default function Forecast() {
         lineItemName: lineItem.name,
         targetRequestId: type === 'cancel_request' ? targetRequestId : undefined,
         targetRequestSnapshot,
+        requesterId: userId,
       });
 
       // Mark line item with pending status
@@ -981,6 +986,7 @@ export default function Forecast() {
       // Adjustment amounts for display
       currentAmount: Math.round(oldTotal),
       revisedAmount: Math.round(newTotal),
+      requesterId: userId,
     };
     addRequest(newRequest);
 

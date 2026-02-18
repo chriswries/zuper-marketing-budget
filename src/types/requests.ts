@@ -48,6 +48,8 @@ export interface SpendRequest {
   // For adjustment requests: original and revised FY totals (threshold-triggered increases)
   currentAmount?: number;
   revisedAmount?: number;
+  // ID of the user who created this request (required by DB constraint)
+  requesterId?: string;
 }
 
 export function createDefaultApprovalSteps(): ApprovalStep[] {
