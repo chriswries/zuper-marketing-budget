@@ -31,6 +31,7 @@ interface CreateRequestDialogProps {
   onOpenChange: (open: boolean) => void;
   costCenters: CostCenterOption[];
   onCreateRequest: (request: SpendRequest) => void;
+  requesterId?: string;
 }
 
 export function CreateRequestDialog({
@@ -38,6 +39,7 @@ export function CreateRequestDialog({
   onOpenChange,
   costCenters,
   onCreateRequest,
+  requesterId,
 }: CreateRequestDialogProps) {
   const [costCenterId, setCostCenterId] = useState('');
   const [vendorName, setVendorName] = useState('');
@@ -74,6 +76,7 @@ export function CreateRequestDialog({
       status: 'pending',
       createdAt: new Date().toISOString(),
       approvalSteps: createDefaultApprovalSteps(),
+      requesterId,
     };
 
     onCreateRequest(request);
