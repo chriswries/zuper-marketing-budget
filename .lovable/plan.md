@@ -1,79 +1,92 @@
 
 
-## Fix: Delete Line Item Approval Not Removing Item from Forecast
+## Fix: Forecast Page Overwrites Resolver's Deletion
 
 ### Problem
-After Finance approves a deletion request, the line item remains in `/forecast` with a "Deletion pending" tag instead of being removed.
+After Finance approves a deletion request, the resolver correctly removes the line item from the database, but the Forecast page immediately overwrites it back because:
+
+1. The resolver (in `RequestsContext`) removes the line item from `fy_forecasts` in the database
+2. The Forecast page's sync `useEffect` (line 196) runs when `requests` changes, but it only handles `approvalRequestId` and `adjustmentRequestId` -- it never checks `deletionRequestId`
+3. The persist `useEffect` (line 190) then writes the unchanged local `costCenters` state (still containing the deleted item) back to the database, overwriting the resolver's work
 
 ### Root Cause
-The `forecastRowActionResolver.ts` uses `loadForecastForFY()` which is a **synchronous** function that only returns data from an in-memory cache. When the resolver runs (triggered by a status change detected in `RequestsContext`), the forecast cache is often empty -- especially if the user navigated away from `/forecast` to `/requests` to perform the approval. When `loadForecastForFY()` returns `null`, the resolver silently fails with `"Forecast data not found"` and the line item is never removed.
-
-The same issue affects `saveForecastForFY()` -- it updates the cache and writes to the database, but this is fine *if* we can load the data first.
+The sync effect in `Forecast.tsx` (lines 196-306) is missing logic to handle the `deletionRequestId` case. When a deletion request reaches "approved" status, the sync effect should remove items whose linked deletion request is fully approved.
 
 ### Solution
-Convert the resolver functions to be **async** so they use `loadForecastForFYAsync()` (which reads from the database) instead of the synchronous cache-only `loadForecastForFY()`. This ensures the resolver always has access to the forecast data regardless of what page the user is on.
+Add deletion handling to the sync `useEffect` in `Forecast.tsx`. This is the most reliable fix because:
+- The sync effect already handles the other two cases (new item approval, adjustment approval)
+- It runs when `requests` changes, which happens when the approval status updates
+- It directly modifies the local `costCenters` state, which then persists correctly
+
+This also makes the `forecastRowActionResolver.ts` deletion logic redundant for the Forecast page (the resolver is still useful as a fallback for when the user is NOT on the Forecast page).
 
 ### Changes
 
-#### 1. `src/lib/forecastRowActionResolver.ts`
-- Change `loadForecastForRequest()` to be async, using `loadForecastForFYAsync()` instead of `loadForecastForFY()`
-- Make all resolver functions async (`resolveCancelRequestApproved`, `resolveCancelRequestRejected`, `resolveDeleteLineItemApproved`, `resolveDeleteLineItemRejected`, `resolveForecastRowActionRequest`)
-- Update return types to `Promise<ResolutionResult>` and `Promise<boolean>`
+#### 1. `src/pages/Forecast.tsx` -- Add deletion handling to sync effect (around line 283)
 
-#### 2. `src/contexts/RequestsContext.tsx`
-- Update the status transition `useEffect` to properly `await` the now-async `resolveForecastRowActionRequest()`
-- Wrap the resolution loop in an async function since `useEffect` callbacks can't be async directly
-- After successful resolution of a `delete_line_item` approval, invalidate the forecast cache so the `/forecast` page picks up the change on next render
+Inside the existing loop that iterates line items in the sync `useEffect`, add a check for `deletionRequestId`:
 
-### Technical Details
-
-The key change in `forecastRowActionResolver.ts`:
-
-```typescript
-// BEFORE (synchronous, cache-only -- fails when cache is empty)
-function loadForecastForRequest(request: SpendRequest): CostCenter[] | null {
-  if (request.originFiscalYearId) {
-    return loadForecastForFY(request.originFiscalYearId);
-  }
-  return null;
-}
-
-// AFTER (async, reads from database)
-async function loadForecastForRequest(request: SpendRequest): Promise<CostCenter[] | null> {
-  if (request.originFiscalYearId) {
-    return loadForecastForFYAsync(request.originFiscalYearId);
-  }
-  return null;
-}
 ```
+// Handle DELETION approval (deletionRequestId)
+if (item.deletionRequestId) {
+  const linkedRequest = requests.find((r) => r.id === item.deletionRequestId);
+  if (linkedRequest) {
+    const isApproved =
+      linkedRequest.status === 'approved' ||
+      (linkedRequest.approvalSteps?.length > 0 &&
+       linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
 
-In `RequestsContext.tsx`, the status transition effect becomes:
-
-```typescript
-useEffect(() => {
-  const resolveTransitions = async () => {
-    for (const request of requests) {
-      const prevStatus = prevStatusesRef.current[request.id];
-      if (prevStatus && prevStatus !== request.status) {
-        await resolveForecastRowActionRequest(request, prevStatus, updateRequest);
-      }
+    if (isApproved) {
+      // Deletion approved - remove line item
+      changed = true;
+      continue; // Skip adding to updatedItems
     }
-  };
-  resolveTransitions();
 
-  // Update previous statuses
-  const newStatuses: Record<string, RequestStatus> = {};
-  for (const request of requests) {
-    newStatuses[request.id] = request.status;
+    const isRejected =
+      linkedRequest.status === 'rejected' ||
+      linkedRequest.status === 'cancelled' ||
+      linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+
+    if (isRejected) {
+      // Deletion rejected - clear deletion flags, keep item
+      changed = true;
+      updatedItems.push({
+        ...item,
+        deletionStatus: undefined,
+        deletionRequestId: undefined,
+      });
+      continue;
+    }
   }
-  prevStatusesRef.current = newStatuses;
-}, [requests]);
+}
 ```
 
-### Data Fix
-The currently stuck "IDC" line item in the FY2026 forecast needs its orphaned `deletionStatus` and `deletionRequestId` cleared via a SQL update on the `fy_forecasts` table (same pattern as previous cleanups). Alternatively, once the code fix is deployed, re-approving or re-triggering the flow would also work.
+This mirrors the existing pattern used for `approvalRequestId` and `adjustmentRequestId`.
+
+#### 2. Data Cleanup: Clear orphaned IDC data
+
+Run a SQL update to remove the IDC line item from the `fy_forecasts` table since its deletion was already approved (request `abeec58d-55ff-4270-a9f2-15e46af514cd` has status "approved"):
+
+```sql
+UPDATE fy_forecasts
+SET data = (
+  SELECT jsonb_agg(
+    CASE
+      WHEN cc->>'id' = '7b31d57c-aff4-4ad9-84af-f5a36e546741'
+      THEN jsonb_set(cc, '{lineItems}', (
+        SELECT jsonb_agg(li)
+        FROM jsonb_array_elements(cc->'lineItems') li
+        WHERE li->>'id' != '7a8fd945-3ed3-4da0-a7e2-36e086e161fd'
+      ))
+      ELSE cc
+    END
+  )
+  FROM jsonb_array_elements(data) cc
+)
+WHERE fiscal_year_id = 'aa8ac05a-f1f6-4518-9614-40094e284217';
+```
 
 ### Risk
-- Low: only changes the data loading mechanism from sync-cache to async-database
-- All existing resolver logic (splice, revert, clear flags) remains unchanged
-- The forecast page already handles cache invalidation via realtime subscriptions
+- Low: adds one more condition to an existing pattern in the sync effect
+- The resolver in `forecastRowActionResolver.ts` remains as a fallback for when the Forecast page is not open
+- Data cleanup only removes one already-approved-for-deletion line item
