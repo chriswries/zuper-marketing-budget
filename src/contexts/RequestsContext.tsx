@@ -148,13 +148,16 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
   // Check for status transitions that need resolution
   useEffect(() => {
-    for (const request of requests) {
-      const prevStatus = prevStatusesRef.current[request.id];
-      if (prevStatus && prevStatus !== request.status) {
-        // Status changed - try to resolve row action requests
-        resolveForecastRowActionRequest(request, prevStatus, updateRequest);
+    const resolveTransitions = async () => {
+      for (const request of requests) {
+        const prevStatus = prevStatusesRef.current[request.id];
+        if (prevStatus && prevStatus !== request.status) {
+          // Status changed - try to resolve row action requests
+          await resolveForecastRowActionRequest(request, prevStatus, updateRequest);
+        }
       }
-    }
+    };
+    resolveTransitions();
 
     // Update previous statuses
     const newStatuses: Record<string, RequestStatus> = {};

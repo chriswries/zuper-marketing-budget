@@ -6,16 +6,16 @@
 
 import { SpendRequest, RequestStatus } from '@/types/requests';
 import { CostCenter, LineItem } from '@/types/budget';
-import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { loadForecastForFYAsync, saveForecastForFY } from '@/lib/forecastStore';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 
 /**
  * Load forecast data for the given request's origin.
  * Returns null if no fiscal year ID is set (legacy requests are no longer supported).
  */
-function loadForecastForRequest(request: SpendRequest): CostCenter[] | null {
+async function loadForecastForRequest(request: SpendRequest): Promise<CostCenter[] | null> {
   if (request.originFiscalYearId) {
-    return loadForecastForFY(request.originFiscalYearId);
+    return loadForecastForFYAsync(request.originFiscalYearId);
   }
   // Legacy mode is no longer supported - return null
   return null;
@@ -25,9 +25,9 @@ function loadForecastForRequest(request: SpendRequest): CostCenter[] | null {
  * Save forecast data for the given request's origin.
  * Does nothing if no fiscal year ID is set (legacy requests are no longer supported).
  */
-function saveForecastForRequest(request: SpendRequest, costCenters: CostCenter[]): void {
+async function saveForecastForRequest(request: SpendRequest, costCenters: CostCenter[]): Promise<void> {
   if (request.originFiscalYearId) {
-    saveForecastForFY(request.originFiscalYearId, costCenters);
+    await saveForecastForFY(request.originFiscalYearId, costCenters);
   }
   // Legacy mode is no longer supported - do nothing
 }
@@ -67,10 +67,10 @@ export interface ResolutionResult {
  * - Marks target request as cancelled
  * - Removes new pending line items OR reverts pending adjustments
  */
-export function resolveCancelRequestApproved(
+export async function resolveCancelRequestApproved(
   cancelRequest: SpendRequest,
   updateTargetRequest: (id: string, updater: (r: SpendRequest) => SpendRequest) => void
-): ResolutionResult {
+): Promise<ResolutionResult> {
   const { targetRequestId, originCostCenterId, originLineItemId } = cancelRequest;
 
   // 1. Cancel the target request if specified
@@ -98,7 +98,7 @@ export function resolveCancelRequestApproved(
     return { resolved: true, action: 'cleared_flags' };
   }
 
-  const costCenters = loadForecastForRequest(cancelRequest);
+  const costCenters = await loadForecastForRequest(cancelRequest);
   if (!costCenters) {
     return { resolved: false, error: 'Forecast data not found' };
   }
@@ -115,7 +115,7 @@ export function resolveCancelRequestApproved(
   if (item.approvalStatus === 'pending') {
     // NEW line item awaiting approval -> remove it
     costCenters[ccIndex].lineItems.splice(itemIndex, 1);
-    saveForecastForRequest(cancelRequest, costCenters);
+    await saveForecastForRequest(cancelRequest, costCenters);
     return { resolved: true, action: 'removed' };
   }
 
@@ -132,7 +132,7 @@ export function resolveCancelRequestApproved(
       cancellationRequestId: undefined,
     };
     costCenters[ccIndex].lineItems[itemIndex] = updatedItem;
-    saveForecastForRequest(cancelRequest, costCenters);
+    await saveForecastForRequest(cancelRequest, costCenters);
     return { resolved: true, action: 'reverted' };
   }
 
@@ -144,7 +144,7 @@ export function resolveCancelRequestApproved(
       cancellationRequestId: undefined,
     };
     costCenters[ccIndex].lineItems[itemIndex] = updatedItem;
-    saveForecastForRequest(cancelRequest, costCenters);
+    await saveForecastForRequest(cancelRequest, costCenters);
   }
 
   return { resolved: true, action: 'cleared_flags' };
@@ -155,10 +155,10 @@ export function resolveCancelRequestApproved(
  * - Clear cancellation flags on line item
  * - Restore the target request from snapshot if available
  */
-export function resolveCancelRequestRejected(
+export async function resolveCancelRequestRejected(
   cancelRequest: SpendRequest,
   updateTargetRequest: (id: string, updater: (r: SpendRequest) => SpendRequest) => void
-): ResolutionResult {
+): Promise<ResolutionResult> {
   const { originCostCenterId, originLineItemId, targetRequestId, targetRequestSnapshot } = cancelRequest;
 
   // Restore the target request if we have snapshot
@@ -192,7 +192,7 @@ export function resolveCancelRequestRejected(
     return { resolved: true };
   }
 
-  const costCenters = loadForecastForRequest(cancelRequest);
+  const costCenters = await loadForecastForRequest(cancelRequest);
   if (!costCenters) {
     return { resolved: false, error: 'Forecast data not found' };
   }
@@ -212,7 +212,7 @@ export function resolveCancelRequestRejected(
       cancellationRequestId: undefined,
     };
     costCenters[ccIndex].lineItems[itemIndex] = updatedItem;
-    saveForecastForRequest(cancelRequest, costCenters);
+    await saveForecastForRequest(cancelRequest, costCenters);
   }
 
   return { resolved: true };
@@ -222,14 +222,14 @@ export function resolveCancelRequestRejected(
  * Resolve a delete_line_item request when APPROVED.
  * - Remove the line item from forecast
  */
-export function resolveDeleteLineItemApproved(deleteRequest: SpendRequest): ResolutionResult {
+export async function resolveDeleteLineItemApproved(deleteRequest: SpendRequest): Promise<ResolutionResult> {
   const { originCostCenterId, originLineItemId } = deleteRequest;
 
   if (!originCostCenterId || !originLineItemId) {
     return { resolved: true };
   }
 
-  const costCenters = loadForecastForRequest(deleteRequest);
+  const costCenters = await loadForecastForRequest(deleteRequest);
   if (!costCenters) {
     return { resolved: false, error: 'Forecast data not found' };
   }
@@ -244,7 +244,7 @@ export function resolveDeleteLineItemApproved(deleteRequest: SpendRequest): Reso
 
   // Remove the line item
   costCenters[ccIndex].lineItems.splice(itemIndex, 1);
-  saveForecastForRequest(deleteRequest, costCenters);
+  await saveForecastForRequest(deleteRequest, costCenters);
 
   return { resolved: true, action: 'removed' };
 }
@@ -253,14 +253,14 @@ export function resolveDeleteLineItemApproved(deleteRequest: SpendRequest): Reso
  * Resolve a delete_line_item request when REJECTED.
  * - Clear deletion flags, line item remains
  */
-export function resolveDeleteLineItemRejected(deleteRequest: SpendRequest): ResolutionResult {
+export async function resolveDeleteLineItemRejected(deleteRequest: SpendRequest): Promise<ResolutionResult> {
   const { originCostCenterId, originLineItemId } = deleteRequest;
 
   if (!originCostCenterId || !originLineItemId) {
     return { resolved: true };
   }
 
-  const costCenters = loadForecastForRequest(deleteRequest);
+  const costCenters = await loadForecastForRequest(deleteRequest);
   if (!costCenters) {
     return { resolved: false, error: 'Forecast data not found' };
   }
@@ -280,7 +280,7 @@ export function resolveDeleteLineItemRejected(deleteRequest: SpendRequest): Reso
       deletionRequestId: undefined,
     };
     costCenters[ccIndex].lineItems[itemIndex] = updatedItem;
-    saveForecastForRequest(deleteRequest, costCenters);
+    await saveForecastForRequest(deleteRequest, costCenters);
   }
 
   return { resolved: true };
@@ -290,11 +290,11 @@ export function resolveDeleteLineItemRejected(deleteRequest: SpendRequest): Reso
  * Main resolver - call this when a request's status changes.
  * Returns true if it handled resolution for this request type.
  */
-export function resolveForecastRowActionRequest(
+export async function resolveForecastRowActionRequest(
   request: SpendRequest,
   previousStatus: RequestStatus,
   updateRequest: (id: string, updater: (r: SpendRequest) => SpendRequest) => void
-): boolean {
+): Promise<boolean> {
   // Only handle these specific kinds
   if (request.originKind !== 'cancel_request' && request.originKind !== 'delete_line_item') {
     return false;
@@ -310,22 +310,22 @@ export function resolveForecastRowActionRequest(
 
   if (request.originKind === 'cancel_request') {
     if (isApproved) {
-      resolveCancelRequestApproved(request, updateRequest);
+      await resolveCancelRequestApproved(request, updateRequest);
       return true;
     }
     if (isRejected) {
-      resolveCancelRequestRejected(request, updateRequest);
+      await resolveCancelRequestRejected(request, updateRequest);
       return true;
     }
   }
 
   if (request.originKind === 'delete_line_item') {
     if (isApproved) {
-      resolveDeleteLineItemApproved(request);
+      await resolveDeleteLineItemApproved(request);
       return true;
     }
     if (isRejected) {
-      resolveDeleteLineItemRejected(request);
+      await resolveDeleteLineItemRejected(request);
       return true;
     }
   }
