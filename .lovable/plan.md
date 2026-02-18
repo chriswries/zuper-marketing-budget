@@ -1,51 +1,82 @@
 
 
-## Fix: Forecast Initial Load Overwrites Deletions by Recreating from Budget
+## Fix: Prevent Persist Effect from Overwriting DB with Stale Cache Data
 
-### Problem
-The deletion resolver works correctly and removes the line item from the database. But when the user navigates back to `/forecast`, the component's initial load effect (line 172-187) uses `loadForecastForFY(fyId)` — a synchronous, cache-only function. Since the cache was invalidated by the realtime subscription, it returns `null`. The code then incorrectly assumes no forecast exists and recreates one from the budget data, which still contains the deleted line item.
+### Problem (the real root cause this time)
 
-### Root Cause
-Line 174: `const fyForecast = loadForecastForFY(fyId)` is synchronous and cache-only. If the cache is empty, it returns `null` and the code falls into the "initialize from budget" branch (line 177-181), overwriting the actual forecast in the database.
+There are two interacting bugs:
+
+1. **Persist effect race condition**: The persist effect (line 196-201) fires on every `costCenters` state change, including when loading from stale cache. This means: cache loads IDC -> sets costCenters -> persist effect writes IDC back to DB -> DB cleanup is overwritten.
+
+2. **Lost deletion flags**: The IDC line item no longer has `deletionRequestId` or `deletionStatus` set on it (they were stripped in previous cleanup cycles). So the sync effect (line 249) can never match it against a request and remove it.
 
 ### Solution
-Change the initial load effect to use the async `loadForecastForFYAsync(fyId)` instead. This reads from the database when the cache is empty, ensuring the component always gets the actual persisted forecast data.
+
+**Add an `initialLoadDone` ref** that prevents the persist effect from firing until the async database load has completed. This ensures the persist effect only saves intentional user edits, not stale cache data.
 
 ### Changes
 
-**`src/pages/Forecast.tsx` (lines 171-187)** -- Make the FY load effect async:
+**`src/pages/Forecast.tsx`**
 
+1. Add a ref to track whether initial load is complete:
 ```typescript
-// Reload cost centers when FY changes
+const initialLoadDoneRef = useRef(false);
+```
+
+2. Update the initial load effect to set the flag AFTER data is loaded:
+```typescript
 useEffect(() => {
   if (isActiveFY && fyId) {
-    // Try cache first for instant display
+    initialLoadDoneRef.current = false; // Reset on FY change
+    
     const cached = loadForecastForFY(fyId);
     if (cached) {
       setCostCenters(cached);
+      initialLoadDoneRef.current = true;
       return;
     }
-    // Cache miss — load from database
+    
     loadForecastForFYAsync(fyId).then((forecast) => {
       if (forecast) {
         setCostCenters(forecast);
       } else if (selectedFiscalYear) {
-        // Only initialize from budget if truly no forecast exists in DB
         const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
         saveForecastForFY(fyId, newForecast);
         setCostCenters(newForecast);
       }
+      initialLoadDoneRef.current = true;
     });
   } else {
     setCostCenters([]);
+    initialLoadDoneRef.current = false;
   }
 }, [isActiveFY, fyId, selectedFiscalYear]);
 ```
 
-Also add `loadForecastForFYAsync` to the imports from `forecastStore`.
+3. Guard the persist effect with the flag:
+```typescript
+useEffect(() => {
+  if (isActiveFY && fyId && costCenters.length > 0 && initialLoadDoneRef.current) {
+    saveForecastForFY(fyId, costCenters);
+  }
+}, [costCenters, isActiveFY, fyId]);
+```
 
-**Data Cleanup**: Remove the IDC line item from the database since its deletion was already approved (4 times).
+4. Also set the flag after the sync effect updates state (since it calls `setCostCenters` which triggers the persist effect -- that's fine because the sync effect runs AFTER load):
+```typescript
+// No change needed here -- the sync effect runs after the load effect,
+// and initialLoadDoneRef is already true by then.
+```
 
-### Why the sync effect fix alone was insufficient
-The sync effect (line 196) correctly handles `deletionRequestId` and removes the item from local state. But by the time it runs, the initial load effect has already recreated the forecast from budget (without any `deletionRequestId` set), so there's nothing for the sync effect to match against.
+**Data cleanup (SQL)**: Remove IDC from the database one final time. This time it will stick because the persist effect is guarded.
 
+### Why previous fixes failed
+
+| Attempt | What it did | Why it failed |
+|---------|------------|---------------|
+| Made resolver async | Resolver now correctly deletes from DB | Persist effect writes stale local state back |
+| Added deletionRequestId sync logic | Sync effect checks for deletion flags | IDC has no deletion flags (stripped earlier) |
+| Made initial load async | Avoids recreating from budget | Cache still has IDC; persist effect writes it back |
+| SQL cleanups (4x) | Removed IDC from DB directly | Persist effect immediately overwrites from in-memory state |
+
+This fix addresses the actual root cause: the persist effect must not fire until the component has loaded authoritative data from the database.
