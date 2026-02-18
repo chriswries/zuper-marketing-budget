@@ -239,6 +239,37 @@ export default function Forecast() {
           }
         }
 
+        // Handle DELETION approval (deletionRequestId)
+        if (item.deletionRequestId) {
+          const linkedRequest = requests.find((r) => r.id === item.deletionRequestId);
+          if (linkedRequest) {
+            const isApproved =
+              linkedRequest.status === 'approved' ||
+              (linkedRequest.approvalSteps?.length > 0 &&
+               linkedRequest.approvalSteps.every((step) => step.status === 'approved'));
+
+            if (isApproved) {
+              changed = true;
+              continue; // Skip adding to updatedItems — line item is deleted
+            }
+
+            const isRejected =
+              linkedRequest.status === 'rejected' ||
+              linkedRequest.status === 'cancelled' ||
+              linkedRequest.approvalSteps?.some((step) => step.status === 'rejected');
+
+            if (isRejected) {
+              changed = true;
+              updatedItems.push({
+                ...item,
+                deletionStatus: undefined,
+                deletionRequestId: undefined,
+              });
+              continue;
+            }
+          }
+        }
+
         // Handle ADJUSTMENT approval (adjustmentRequestId)
         if (item.adjustmentRequestId) {
           const linkedRequest = requests.find((r) => r.id === item.adjustmentRequestId);
