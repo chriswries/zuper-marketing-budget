@@ -1,13 +1,69 @@
-import { CostCenter, MonthlyValues, createZeroMonthlyValues } from '@/types/budget';
+import { CostCenter, MonthlyValues, MONTHS, createZeroMonthlyValues } from '@/types/budget';
 import { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
+import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 /**
- * Creates a new set of forecast cost centers from an approved budget.
- * - Each line item's forecastValues is initialized as a copy of budgetValues
- * - actualValues are zeroed out
- * - approval fields are cleared (these are now baseline approved)
+ * Creates forecast from an approved budget by inserting forecast monthly_values
+ * rows that copy the budget values. Returns the CostCenter[] shape for local state.
+ *
+ * Line items and cost centers are shared between budget and forecast (same rows).
+ * Only the monthly_values differ by value_type.
  */
-export function createForecastCostCentersFromBudget(fy: FiscalYearBudget): CostCenter[] {
+export async function createForecastCostCentersFromBudget(fy: FiscalYearBudget): Promise<CostCenter[]> {
+  const fyId = fy.id;
+
+  // Build forecast monthly_values rows by copying budget values
+  const forecastRows: { line_item_id: string; fiscal_year_id: string; value_type: string; month: string; amount: number }[] = [];
+
+  for (const cc of fy.costCenters) {
+    for (const item of cc.lineItems) {
+      for (const m of MONTHS) {
+        forecastRows.push({
+          line_item_id: item.id,
+          fiscal_year_id: fyId,
+          value_type: 'forecast',
+          month: m,
+          amount: item.budgetValues[m] ?? 0,
+        });
+      }
+    }
+  }
+
+  // Batch insert forecast monthly_values
+  if (forecastRows.length > 0) {
+    const batchSize = 500;
+    for (let i = 0; i < forecastRows.length; i += batchSize) {
+      const batch = forecastRows.slice(i, i + batchSize);
+      const { error } = await supabase
+        .from('monthly_values')
+        .upsert(batch, { onConflict: 'line_item_id,value_type,month' });
+      if (error) {
+        logger.error('Failed to insert forecast monthly values from budget:', error);
+      }
+    }
+  }
+
+  // Also write to fy_forecasts JSONB as backup during transition
+  const resultCCs = buildForecastCostCenters(fy);
+  try {
+    await supabase
+      .from('fy_forecasts')
+      .upsert({
+        fiscal_year_id: fyId,
+        data: resultCCs as any,
+      });
+  } catch (err) {
+    logger.error('Failed to write fy_forecasts backup:', err);
+  }
+
+  return resultCCs;
+}
+
+/**
+ * Build CostCenter[] shape for local state (forecast = copy of budget, actuals zeroed)
+ */
+function buildForecastCostCenters(fy: FiscalYearBudget): CostCenter[] {
   return fy.costCenters.map((cc) => ({
     id: cc.id,
     name: cc.name,
@@ -27,13 +83,9 @@ export function createForecastCostCentersFromBudget(fy: FiscalYearBudget): CostC
       contractEndDate: item.contractEndDate,
       autoRenew: item.autoRenew,
       cancellationNoticeDays: item.cancellationNoticeDays,
-      // Copy budget as the baseline
       budgetValues: { ...item.budgetValues },
-      // Forecast starts as a copy of budget
       forecastValues: { ...item.budgetValues },
-      // Actuals start at zero
       actualValues: createZeroMonthlyValues(),
-      // Clear approval fields - these are now baseline approved
       approvalStatus: undefined,
       approvalRequestId: undefined,
     })),
