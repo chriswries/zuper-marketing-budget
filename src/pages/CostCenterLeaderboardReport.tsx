@@ -12,13 +12,7 @@ import { MONTHS, CostCenter, MonthlyValues } from '@/types/budget';
 import { ArrowLeft, Receipt, ArrowUpDown, Loader2 } from 'lucide-react';
 import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelpers';
 import { cn } from '@/lib/utils';
-
-type SortDirection = 'high_low' | 'low_high';
-
-function formatCurrency(value: number): string {
-  const sign = value >= 0 ? '' : '-';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
+import { formatCurrency } from '@/lib/format';
 
 function formatVariance(value: number): string {
   const sign = value > 0 ? '+' : '';
