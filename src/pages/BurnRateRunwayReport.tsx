@@ -17,7 +17,8 @@ import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, calculateFYTotal, CostCenter } from '@/types/budget';
-import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2 } from 'lucide-react';
+import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2, FileDown } from 'lucide-react';
+import { exportReportToPdf } from '@/lib/exportPdf';
 import { getMonthIndex, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
 import { formatCurrency } from '@/lib/format';
 
