@@ -11,7 +11,7 @@
  * Transaction import is handled in ActualsImport.tsx (Track B Prompt B1).
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -64,8 +65,10 @@ import {
 } from '@/lib/actualsMatchingStore';
 import { recomputeAndSaveActualsRollup } from '@/lib/actualsRollupStore';
 import type { ActualsTransaction } from '@/types/actuals';
-import { Link, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
-
+import { MONTHS } from '@/types/budget';
+import { supabase } from '@/integrations/supabase/client';
+import { Link, CheckCircle, XCircle, AlertTriangle, Info, Plus, Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 type FilterTab = 'all' | 'unmatched' | 'matched';
 
 export default function ActualsMatching() {
@@ -89,6 +92,8 @@ export default function ActualsMatching() {
   const [selectedCostCenterId, setSelectedCostCenterId] = useState<string>('');
   const [selectedLineItemId, setSelectedLineItemId] = useState<string>('');
   const [createMerchantRule, setCreateMerchantRule] = useState(false);
+  const [newLineItemName, setNewLineItemName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   // Unmatch dialog state
   const [unmatchDialogOpen, setUnmatchDialogOpen] = useState(false);
@@ -228,6 +233,7 @@ export default function ActualsMatching() {
     }
     
     setCreateMerchantRule(false);
+    setNewLineItemName(txn.merchantName || '');
     setMatchDialogOpen(true);
   };
 
@@ -308,6 +314,101 @@ export default function ActualsMatching() {
       description: `Matched "${selectedTxn.merchantName}" to line item.`,
     });
   };
+
+  // Handle create new line item and match
+  const handleCreateAndMatch = useCallback(async () => {
+    if (!selectedTxn || !selectedFiscalYearId || !selectedFiscalYear || !selectedCostCenterId) return;
+    if (!newLineItemName.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const lineItemId = crypto.randomUUID();
+      const costCenterName = costCenters.find(cc => cc.id === selectedCostCenterId)?.name ?? '';
+
+      // 1. Insert line item
+      const { error: liErr } = await supabase.from('line_items').insert({
+        id: lineItemId,
+        cost_center_id: selectedCostCenterId,
+        fiscal_year_id: selectedFiscalYearId,
+        name: newLineItemName.trim(),
+        vendor_name: selectedTxn.merchantName || null,
+        is_contracted: false,
+        is_accrual: false,
+        is_software_subscription: false,
+      });
+      if (liErr) throw new Error(`Failed to create line item: ${liErr.message}`);
+
+      // 2. Insert 24 monthly_values rows (12 budget + 12 forecast, all zero)
+      const monthlyRows = MONTHS.flatMap(month => [
+        { line_item_id: lineItemId, fiscal_year_id: selectedFiscalYearId, month, value_type: 'budget', amount: 0 },
+        { line_item_id: lineItemId, fiscal_year_id: selectedFiscalYearId, month, value_type: 'forecast', amount: 0 },
+      ]);
+      const { error: mvErr } = await supabase.from('monthly_values').insert(monthlyRows);
+      if (mvErr) throw new Error(`Failed to create monthly values: ${mvErr.message}`);
+
+      // 3. Match the transaction
+      const merchantKey = normalizeMerchantKey(selectedTxn.merchantName);
+      const match: TransactionMatch = {
+        txnId: selectedTxn.id,
+        costCenterId: selectedCostCenterId,
+        lineItemId,
+        matchSource: 'manual',
+        matchedAt: new Date().toISOString(),
+        matchedByRole: currentRole,
+        merchantKey,
+      };
+      await addTransactionMatch(selectedFiscalYearId, match);
+
+      // 4. Optionally create merchant rule
+      if (createMerchantRule) {
+        const rule: MerchantRule = {
+          merchantKey,
+          costCenterId: selectedCostCenterId,
+          lineItemId,
+          createdAt: new Date().toISOString(),
+          createdByRole: currentRole,
+        };
+        await addMerchantRule(selectedFiscalYearId, rule);
+
+        const appliedCount = await applyMerchantRules(
+          selectedFiscalYearId,
+          transactions.filter(t => t.id !== selectedTxn.id),
+          currentRole
+        );
+        if (appliedCount > 0) {
+          toast({
+            title: 'Merchant rule created',
+            description: `Rule applied to ${appliedCount} additional transaction(s).`,
+          });
+        }
+      }
+
+      // 5. Recompute rollup
+      recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
+
+      // 6. Reload matching + FY data
+      const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
+      setMatchesByTxnId(matchingData.matchesByTxnId);
+      setRulesByMerchantKey(matchingData.rulesByMerchantKey);
+
+      setMatchDialogOpen(false);
+      setSelectedTxn(null);
+
+      toast({
+        title: 'Line item created & matched',
+        description: `Created "${newLineItemName.trim()}" in ${costCenterName} and matched transaction.`,
+      });
+    } catch (err) {
+      console.error('Create and match failed:', err);
+      toast({
+        title: 'Failed to create line item',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  }, [selectedTxn, selectedFiscalYearId, selectedFiscalYear, selectedCostCenterId, newLineItemName, createMerchantRule, currentRole, costCenters, transactions, toast]);
 
   // Open unmatch dialog
   const handleOpenUnmatchDialog = (txn: ActualsTransaction) => {
@@ -679,6 +780,28 @@ export default function ActualsMatching() {
               </Select>
             </div>
 
+            {/* Create new line item section */}
+            {selectedCostCenterId && !selectedLineItemId && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    <Label className="font-medium">
+                      {availableLineItems.length === 0
+                        ? 'No line items in this cost center. Create one to match:'
+                        : 'Or create a new line item:'}
+                    </Label>
+                  </div>
+                  <Input
+                    value={newLineItemName}
+                    onChange={(e) => setNewLineItemName(e.target.value)}
+                    placeholder="Line item name"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="flex items-center space-x-2 pt-2">
               <Checkbox
                 id="create-rule"
@@ -691,16 +814,32 @@ export default function ActualsMatching() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setMatchDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleConfirmMatch}
-              disabled={!selectedCostCenterId || !selectedLineItemId}
-            >
-              Confirm Match
-            </Button>
+            {selectedCostCenterId && !selectedLineItemId && newLineItemName.trim() ? (
+              <Button onClick={handleCreateAndMatch} disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create &amp; Match
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirmMatch}
+                disabled={!selectedCostCenterId || !selectedLineItemId}
+              >
+                Confirm Match
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
