@@ -116,27 +116,64 @@ Deno.serve(async (req) => {
 
     const userId = newUser.user.id
 
-    // Update profile (trigger creates it, we update with additional info)
-    // Wait a moment for trigger to create profile
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Poll for profile created by handle_new_user trigger, then update it
+    const MAX_RETRIES = 10
+    const RETRY_DELAY = 200
+    let profileFound = false
 
-    const { error: updateError } = await adminClient
-      .from('profiles')
-      .update({
-        first_name: firstName || null,
-        last_name: lastName || null,
-        role: role,
-        must_change_password: true,
-        is_active: true,
-        invited_at: new Date().toISOString(),
-        invited_by: caller.id,
-      })
-      .eq('id', userId)
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const { data: existingProfile } = await adminClient
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle()
 
-    if (updateError) {
-      console.error('Update profile error:', updateError)
-      // User was created but profile update failed - log but still return success
-      console.warn('Profile update failed, but user was created')
+      if (existingProfile) {
+        console.log(`Profile found on attempt ${attempt}`)
+        const { error: updateError } = await adminClient
+          .from('profiles')
+          .update({
+            first_name: firstName || null,
+            last_name: lastName || null,
+            role: role,
+            must_change_password: true,
+            is_active: true,
+            invited_at: new Date().toISOString(),
+            invited_by: caller.id,
+          })
+          .eq('id', userId)
+
+        if (updateError) {
+          console.error('Update profile error:', updateError)
+        }
+        profileFound = true
+        break
+      }
+
+      console.log(`Profile not found, retry ${attempt}/${MAX_RETRIES}`)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+    }
+
+    // Fallback: create profile directly if trigger never ran
+    if (!profileFound) {
+      console.warn('Trigger did not create profile, inserting directly')
+      const { error: insertError } = await adminClient
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: email,
+          first_name: firstName || null,
+          last_name: lastName || null,
+          role: role,
+          must_change_password: true,
+          is_active: true,
+          invited_at: new Date().toISOString(),
+          invited_by: caller.id,
+        })
+
+      if (insertError) {
+        console.error('Fallback profile insert error:', insertError)
+      }
     }
 
     console.log(`User ${email} created successfully by admin ${caller.email}`)
