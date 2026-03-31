@@ -1,4 +1,4 @@
-import { MonthlyValues, MONTHS } from '@/types/budget';
+import { MonthlyValues, MONTHS, calculateFYTotal } from '@/types/budget';
 
 export interface ApprovalThresholdSettings {
   increaseApprovalAbsoluteUsd: number;
@@ -9,13 +9,6 @@ const DEFAULT_SETTINGS: ApprovalThresholdSettings = {
   increaseApprovalAbsoluteUsd: 5000,
   increaseApprovalPercent: 5,
 };
-
-/**
- * Calculate FY total from monthly values
- */
-export function calculateFYTotal(values: MonthlyValues): number {
-  return MONTHS.reduce((sum, month) => sum + (values[month] || 0), 0);
-}
 
 /**
  * Get the approval threshold for a given old total

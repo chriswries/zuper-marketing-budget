@@ -525,7 +525,7 @@ export default function Forecast() {
 
     // Audit log for admin edit (only if we have an active FY)
     if (currentRole === 'admin' && originalLineItem && fyId) {
-      const formatCurrency = (value: number): string =>
+      const formatCurrencyLocal = (value: number): string =>
         new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 
       const changes: string[] = [];
