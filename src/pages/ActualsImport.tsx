@@ -184,6 +184,7 @@ export default function ActualsImport() {
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
   const [importRefreshKey, setImportRefreshKey] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
   // Reset wizard state when FY changes
   useEffect(() => {
     setFile(null);
@@ -362,6 +363,9 @@ export default function ActualsImport() {
 
   // Handle import confirmation
   const handleConfirmImport = useCallback(async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    try {
     // Guard: FY must be selected
     if (!selectedFYId) {
       toast({
@@ -410,7 +414,6 @@ export default function ActualsImport() {
       importFilename: file?.name ?? null,
     }));
 
-    try {
       if (replaceExisting) {
         await replaceActuals(selectedFYId, transactions);
       } else {
@@ -446,7 +449,7 @@ export default function ActualsImport() {
             : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
         });
 
-      invalidateActualsCache(selectedFYId);
+        invalidateActualsCache(selectedFYId);
         invalidateMatchingCache(selectedFYId);
         setImportRefreshKey(k => k + 1);
         navigate('/admin');
@@ -480,8 +483,10 @@ export default function ActualsImport() {
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       });
+    } finally {
+      setIsImporting(false);
     }
-  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast, file, currentRole]);
+  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast, file, currentRole, isImporting]);
 
   // Render based on step
   const renderStep = () => {
@@ -1018,9 +1023,9 @@ export default function ActualsImport() {
               <Button variant="outline" onClick={() => setStep('preview')}>
                 Back to Preview
               </Button>
-              <Button onClick={handleConfirmImport} disabled={!canConfirm}>
+              <Button onClick={handleConfirmImport} disabled={!canConfirm || isImporting}>
                 <Upload className="h-4 w-4 mr-2" />
-                Confirm Import
+                {isImporting ? 'Importing…' : 'Confirm Import'}
               </Button>
             </div>
           </div>

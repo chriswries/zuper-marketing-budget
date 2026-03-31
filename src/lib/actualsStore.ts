@@ -132,7 +132,7 @@ export async function appendActuals(fiscalYearId: string, txns: ActualsTransacti
     const rows = txns.map(transactionToRow);
     const { error } = await supabase
       .from('actuals_transactions')
-      .insert(rows);
+      .upsert(rows, { onConflict: 'fiscal_year_id,txn_id' });
 
     if (error) {
       logger.error('Failed to append actuals:', error);
