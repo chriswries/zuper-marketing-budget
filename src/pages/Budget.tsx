@@ -509,23 +509,14 @@ export default function Budget() {
     loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole]);
 
-  // Load audit log when FY changes
+  // Load audit events when FY changes
   useEffect(() => {
     if (selectedFiscalYearId) {
-      setAuditLog(loadBudgetAuditLog(selectedFiscalYearId));
       loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
     } else {
-      setAuditLog([]);
       setApprovalAuditEvents([]);
     }
   }, [selectedFiscalYearId]);
-
-  // Save audit log whenever it changes
-  useEffect(() => {
-    if (selectedFiscalYearId && auditLog.length > 0) {
-      saveBudgetAuditLog(selectedFiscalYearId, auditLog);
-    }
-  }, [selectedFiscalYearId, auditLog]);
 
   // Sync line item approval/adjustment status with request status
   useEffect(() => {
