@@ -229,7 +229,6 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
           status: request.status,
           origin_fiscal_year_id: request.originFiscalYearId ?? null,
           deleted_at: request.deletedAt ?? null,
-          data: buildJsonbData(request),
           ...buildRelationalColumns(request),
         });
 
