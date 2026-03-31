@@ -61,7 +61,6 @@ const App = () => (
                 <RequestsProvider>
                   <ErrorBoundary>
                   <Toaster />
-                  <Sonner />
                   <Routes>
                     {/* Public routes */}
                     <Route path="/login" element={<Login />} />
