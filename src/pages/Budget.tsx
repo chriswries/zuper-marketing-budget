@@ -81,27 +81,6 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 
-const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
-
-function loadBudgetAuditLog(fyId: string): AuditEntry[] {
-  try {
-    const stored = localStorage.getItem(`${BUDGET_AUDIT_KEY_PREFIX}${fyId}`);
-    if (stored) {
-      return JSON.parse(stored) as AuditEntry[];
-    }
-  } catch {
-    // Ignore
-  }
-  return [];
-}
-
-function saveBudgetAuditLog(fyId: string, entries: AuditEntry[]): void {
-  try {
-    localStorage.setItem(`${BUDGET_AUDIT_KEY_PREFIX}${fyId}`, JSON.stringify(entries));
-  } catch {
-    // Ignore
-  }
-}
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
