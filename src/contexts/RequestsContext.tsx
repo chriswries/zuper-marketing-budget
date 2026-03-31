@@ -4,6 +4,7 @@ import { SpendRequest, ApprovalStep, createDefaultApprovalSteps, RequestStatus }
 import { resolveForecastRowActionRequest } from '@/lib/forecastRowActionResolver';
 import type { Json } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 interface RequestsContextType {
   requests: SpendRequest[];
@@ -109,14 +110,14 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Failed to fetch requests:', error);
+        logger.error('Failed to fetch requests:', error);
         return;
       }
 
       const mapped = (data || []).map(rowToRequest);
       setRequestsState(mapped);
     } catch (err) {
-      console.error('Error fetching requests:', err);
+      logger.error('Error fetching requests:', err);
     } finally {
       setLoading(false);
     }
@@ -182,7 +183,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
       .insert(row);
 
     if (error) {
-      console.error('Failed to add request:', error);
+      logger.error('Failed to add request:', error);
       setRequestsState((prev) => prev.filter((r) => r.id !== request.id));
       toast({ variant: 'destructive', title: 'Failed to create request', description: 'Your changes could not be saved. Please try again.' });
     }
@@ -221,7 +222,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
         .eq('id', id);
 
       if (error) {
-        console.error('Failed to update request:', error);
+        logger.error('Failed to update request:', error);
         toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
         fetchRequests();
       }
@@ -256,7 +257,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
         }
       })
     ).catch((err) => {
-      console.error('Failed to persist bulk request updates:', err);
+      logger.error('Failed to persist bulk request updates:', err);
       toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
       fetchRequests();
     });
