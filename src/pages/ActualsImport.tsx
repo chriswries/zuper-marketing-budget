@@ -149,6 +149,7 @@ export default function ActualsImport() {
     setCsvRows([]);
     setMapping({ txnDate: '', merchantName: '', amount: '' });
     setSource('unknown');
+    setAmountSignMode('expenses_positive');
     setReplaceExisting(false);
     setSkipInvalidRows(true);
     setStep('upload');
