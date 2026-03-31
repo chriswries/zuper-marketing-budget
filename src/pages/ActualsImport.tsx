@@ -484,8 +484,13 @@ export default function ActualsImport() {
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       });
+    } finally {
+      setIsImporting(false);
     }
-  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast, file, currentRole]);
+    } finally {
+      setIsImporting(false);
+    }
+  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast, file, currentRole, isImporting]);
 
   // Render based on step
   const renderStep = () => {
