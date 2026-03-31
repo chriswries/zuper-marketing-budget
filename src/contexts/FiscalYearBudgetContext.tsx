@@ -343,7 +343,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
     if (error) {
       console.error('Failed to delete fiscal year:', error);
-      // Refetch to restore
+      toast({ variant: 'destructive', title: 'Failed to delete fiscal year', description: 'Data has been refreshed from the server.' });
       fetchFiscalYears();
     }
   }, [selectedFiscalYearId, fetchFiscalYears]);

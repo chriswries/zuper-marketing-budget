@@ -264,7 +264,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
       return next;
     });
-  }, []);
+  }, [fetchRequests]);
 
   return (
     <RequestsContext.Provider value={{ requests, addRequest, getRequest, updateRequest, setRequests, loading, refetch: fetchRequests }}>
