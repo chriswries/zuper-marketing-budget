@@ -363,6 +363,9 @@ export default function ActualsImport() {
 
   // Handle import confirmation
   const handleConfirmImport = useCallback(async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    try {
     // Guard: FY must be selected
     if (!selectedFYId) {
       toast({
