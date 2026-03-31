@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Table,
@@ -46,7 +46,7 @@ import {
   Month,
   calculateFYTotal,
 } from '@/types/budget';
-import { EditableCell } from './EditableCell';
+import { EditableCell, EditableCellHandle, NavigateDirection } from './EditableCell';
 
 type ValueType = 'budgetValues' | 'forecastValues' | 'actualValues';
 
@@ -140,6 +140,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Ref map for keyboard navigation between editable cells: key = "lineItemId:monthIndex"
+  const cellRefs = useRef<Map<string, EditableCellHandle>>(new Map());
 
   // Focus/scroll/highlight logic
   useEffect(() => {
@@ -275,6 +277,77 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   }, [filteredCostCenters, valueType]);
 
   const grandFYTotal = calculateFYTotal(grandTotal);
+
+  // Build a flat list of visible, expanded line item IDs for keyboard navigation
+  const visibleLineItemIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const cc of filteredCostCenters) {
+      if (expandedIds.has(cc.id)) {
+        for (const item of cc.lineItems) {
+          ids.push(item.id);
+        }
+      }
+    }
+    return ids;
+  }, [filteredCostCenters, expandedIds]);
+
+  // Navigation callback for editable cells
+  const buildOnNavigate = useCallback(
+    (lineItemId: string, monthIndex: number): ((direction: NavigateDirection) => void) => {
+      return (direction: NavigateDirection) => {
+        const rowIdx = visibleLineItemIds.indexOf(lineItemId);
+        if (rowIdx === -1) return;
+
+        let targetRow = rowIdx;
+        let targetMonth = monthIndex;
+
+        switch (direction) {
+          case 'right':
+            if (monthIndex < 11) {
+              targetMonth = monthIndex + 1;
+            } else if (rowIdx < visibleLineItemIds.length - 1) {
+              targetRow = rowIdx + 1;
+              targetMonth = 0;
+            } else {
+              return; // at last cell
+            }
+            break;
+          case 'left':
+            if (monthIndex > 0) {
+              targetMonth = monthIndex - 1;
+            } else if (rowIdx > 0) {
+              targetRow = rowIdx - 1;
+              targetMonth = 11;
+            } else {
+              return; // at first cell
+            }
+            break;
+          case 'down':
+            if (rowIdx < visibleLineItemIds.length - 1) {
+              targetRow = rowIdx + 1;
+            } else {
+              return; // at last row
+            }
+            break;
+          case 'up':
+            if (rowIdx > 0) {
+              targetRow = rowIdx - 1;
+            } else {
+              return; // at first row
+            }
+            break;
+        }
+
+        const targetId = visibleLineItemIds[targetRow];
+        const key = `${targetId}:${targetMonth}`;
+        const handle = cellRefs.current.get(key);
+        if (handle) {
+          handle.startEditing();
+        }
+      };
+    },
+    [visibleLineItemIds]
+  );
 
   const toggleCostCenter = (id: string) => {
     setExpandedIds((prev) => {
@@ -657,7 +730,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="relative z-0 w-[220px] min-w-[220px] text-muted-foreground text-sm bg-background group-hover:bg-muted">
                                 {item.vendor?.name ?? '—'}
                               </TableCell>
-                              {MONTHS.map((month) => {
+                              {MONTHS.map((month, monthIdx) => {
                                 const cellValue = item[valueType][month];
                                 // Only apply locked months logic for forecastValues (not budgetValues)
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
@@ -670,9 +743,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const effectiveMonthLocked = isAdminOverride ? false : isMonthLocked;
                                 
                                 if (isEditable && !effectiveMonthLocked && !isItemLocked && !isPendingLocked) {
+                                  const cellKey = `${item.id}:${monthIdx}`;
                                   return (
                                     <EditableCell
                                       key={month}
+                                      ref={(handle) => {
+                                        if (handle) {
+                                          cellRefs.current.set(cellKey, handle);
+                                        } else {
+                                          cellRefs.current.delete(cellKey);
+                                        }
+                                      }}
                                       value={cellValue}
                                       formatted={formatCurrency(cellValue)}
                                       className="w-[120px] min-w-[120px]"
@@ -685,6 +766,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                           newValue,
                                         });
                                       }}
+                                      onNavigate={buildOnNavigate(item.id, monthIdx)}
                                     />
                                   );
                                 }
