@@ -673,27 +673,27 @@ export default function VarianceReport() {
       <div ref={tableRef}>
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="relative overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
+            <Table className="border-separate border-spacing-0">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[300px]">Line Item</TableHead>
+                  <TableHead className="w-[300px] sticky top-0 left-0 z-30 bg-muted border-b border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">Line Item</TableHead>
                   {!showMonthly && (
                     <>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead className="text-center">Contracted</TableHead>
-                      <TableHead className="text-right">Budget FY</TableHead>
-                      <TableHead className="text-right">Forecast FY</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-muted border-b">Vendor</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-muted border-b text-center">Contracted</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-muted border-b text-right">Budget FY</TableHead>
+                      <TableHead className="sticky top-0 z-10 bg-muted border-b text-right">Forecast FY</TableHead>
                     </>
                   )}
                   {showMonthly && MONTHS.map(month => (
-                    <TableHead key={month} className="text-right text-xs px-2">
+                    <TableHead key={month} className="sticky top-0 z-10 bg-muted border-b text-right text-xs px-2">
                       {MONTH_LABELS[month]}
                     </TableHead>
                   ))}
-                  <TableHead className="text-right">Variance</TableHead>
-                  <TableHead className="text-right">Var %</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted border-b text-right">Variance</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted border-b text-right">Var %</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-muted border-b text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -752,7 +752,7 @@ function CostCenterSection({
         className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
         onClick={onToggle}
       >
-        <TableCell className="py-3">
+        <TableCell className="py-3 sticky left-0 z-20 bg-muted/50 border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
           <div className="flex items-center gap-2">
             {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
@@ -813,7 +813,7 @@ interface LineItemRowProps {
 function LineItemRow({ item, showMonthly, onViewInBudget, onViewInForecast }: LineItemRowProps) {
   return (
     <TableRow className="text-sm">
-      <TableCell className="pl-10">
+      <TableCell className="pl-10 sticky left-0 z-20 bg-background border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-2">
           <span>{item.name}</span>
           {item.status === 'budget_only' && (
