@@ -916,6 +916,26 @@ export default function ActualsMatching() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Auto-Create Dialog */}
+      {selectedFiscalYearId && selectedFiscalYear && (
+        <BulkAutoCreateDialog
+          open={bulkDialogOpen}
+          onOpenChange={setBulkDialogOpen}
+          unmatchedTransactions={unmatchedTransactions}
+          costCenters={costCenters}
+          existingRuleKeys={existingRuleKeys}
+          fiscalYearId={selectedFiscalYearId}
+          currentRole={currentRole}
+          onComplete={async () => {
+            // Recompute rollup and reload data
+            recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
+            const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
+            setMatchesByTxnId(matchingData.matchesByTxnId);
+            setRulesByMerchantKey(matchingData.rulesByMerchantKey);
+          }}
+        />
+      )}
     </div>
   );
 }
