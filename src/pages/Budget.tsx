@@ -34,6 +34,7 @@ import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
+import { useBudgetApproval } from '@/hooks/useBudgetApproval';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
 import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
