@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SpendRequest, ApprovalStep, createDefaultApprovalSteps, RequestStatus } from '@/types/requests';
 import { resolveForecastRowActionRequest } from '@/lib/forecastRowActionResolver';
 import type { Json } from '@/integrations/supabase/types';
+import { toast } from '@/hooks/use-toast';
 
 interface RequestsContextType {
   requests: SpendRequest[];
