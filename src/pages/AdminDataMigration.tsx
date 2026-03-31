@@ -398,8 +398,7 @@ export default function AdminDataMigration() {
             id: req.id,
             status: req.status,
             origin_fiscal_year_id: req.originFiscalYearId ?? null,
-            data: req as unknown as Json,
-          });
+          } as any);
           if (!error) {
             insertedRequests++;
           }
