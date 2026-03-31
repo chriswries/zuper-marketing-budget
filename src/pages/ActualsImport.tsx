@@ -84,6 +84,13 @@ function parseDate(value: string): string | null {
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
   
+  // MM-DD-YYYY or M-D-YYYY (dashes, common in Ramp exports)
+  const dashMMDDMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dashMMDDMatch) {
+    const [, month, day, year] = dashMMDDMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
   return null;
 }
 
