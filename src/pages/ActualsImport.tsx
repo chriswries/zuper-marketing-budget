@@ -1014,6 +1014,13 @@ export default function ActualsImport() {
       )}
 
       {renderStep()}
+
+      {/* Import History */}
+      {canImport && selectedFYId && (
+        <div className="mt-8">
+          <ImportHistoryPanel fiscalYearId={selectedFYId} refreshKey={importRefreshKey} />
+        </div>
+      )}
     </div>
   );
 }
