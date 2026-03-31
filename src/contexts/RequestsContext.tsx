@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SpendRequest, ApprovalStep, createDefaultApprovalSteps, RequestStatus } from '@/types/requests';
 import { resolveForecastRowActionRequest } from '@/lib/forecastRowActionResolver';
 import type { Json } from '@/integrations/supabase/types';
+import { toast } from '@/hooks/use-toast';
 
 interface RequestsContextType {
   requests: SpendRequest[];
@@ -179,8 +180,8 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Failed to add request:', error);
-      // Remove from state on error
       setRequestsState((prev) => prev.filter((r) => r.id !== request.id));
+      toast({ variant: 'destructive', title: 'Failed to create request', description: 'Your changes could not be saved. Please try again.' });
     }
   }, []);
 
@@ -218,10 +219,11 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Failed to update request:', error);
-        // Could refetch to revert on error
+        toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+        fetchRequests();
       }
     }
-  }, []);
+  }, [fetchRequests]);
 
   // Bulk set requests (for compatibility with existing code)
   const setRequests = useCallback((updater: (prev: SpendRequest[]) => SpendRequest[]) => {
@@ -253,12 +255,16 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
               console.error('Failed to persist request:', error);
             }
           })
-        );
+        ).catch((err) => {
+          console.error('Failed to persist bulk request updates:', err);
+          toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+          fetchRequests();
+        });
       }
 
       return next;
     });
-  }, []);
+  }, [fetchRequests]);
 
   return (
     <RequestsContext.Provider value={{ requests, addRequest, getRequest, updateRequest, setRequests, loading, refetch: fetchRequests }}>

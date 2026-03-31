@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback,
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_TIME_ZONE } from '@/lib/dateTime';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 export interface AdminSettings {
   increaseApprovalAbsoluteUsd: number;
@@ -116,6 +117,24 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [profile?.role]);
 
+  // Reload settings from DB (used for rollback on error)
+  const reloadSettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        rowIdRef.current = data.id;
+        setSettings(mapRowToSettings(data));
+      }
+    } catch (err) {
+      console.error('Error reloading admin settings:', err);
+    }
+  }, []);
+
   // Update settings in DB
   const updateSettings = useCallback(async (updates: Partial<AdminSettings>) => {
     // Optimistically update local state
@@ -132,7 +151,8 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Failed to update admin settings:', error);
-        // Could revert optimistic update here if needed
+        toast({ variant: 'destructive', title: 'Failed to save settings', description: 'Settings have been refreshed from the server.' });
+        reloadSettings();
       }
     } else {
       // Try to upsert (in case row was created by another user)
@@ -144,11 +164,13 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Failed to upsert admin settings:', error);
+        toast({ variant: 'destructive', title: 'Failed to save settings', description: 'Settings have been refreshed from the server.' });
+        reloadSettings();
       } else if (data) {
         rowIdRef.current = data.id;
       }
     }
-  }, []);
+  }, [reloadSettings]);
 
   return (
     <AdminSettingsContext.Provider value={{ settings, updateSettings, loading }}>

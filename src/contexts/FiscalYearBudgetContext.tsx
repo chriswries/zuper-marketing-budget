@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CostCenter } from '@/types/budget';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
@@ -283,6 +284,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       console.error('Failed to create fiscal year:', error);
       // Remove from state on error
       setFiscalYears((prev) => prev.filter((fy) => fy.id !== draft.id));
+      toast({ variant: 'destructive', title: 'Failed to create fiscal year', description: 'Your changes could not be saved. Please try again.' });
       return false;
     }
     return true;
@@ -319,10 +321,11 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
       if (error) {
         console.error('Failed to update fiscal year:', error);
-        // Could refetch to revert
+        toast({ variant: 'destructive', title: 'Failed to save changes', description: 'Data has been refreshed from the server.' });
+        fetchFiscalYears();
       }
     }
-  }, []);
+  }, [fetchFiscalYears]);
 
   const deleteFiscalYearBudget = useCallback(async (id: string) => {
     // Optimistically remove from state
@@ -340,7 +343,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
     if (error) {
       console.error('Failed to delete fiscal year:', error);
-      // Refetch to restore
+      toast({ variant: 'destructive', title: 'Failed to delete fiscal year', description: 'Data has been refreshed from the server.' });
       fetchFiscalYears();
     }
   }, [selectedFiscalYearId, fetchFiscalYears]);
