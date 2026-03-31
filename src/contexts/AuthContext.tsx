@@ -231,6 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
+    // During Fast Refresh in development, provider/consumer module boundaries can be briefly out of sync.
+    // Return a safe loading fallback instead of crashing the whole app.
+    if (import.meta.env.DEV) {
+      return AUTH_CONTEXT_FALLBACK;
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

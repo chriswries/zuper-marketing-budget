@@ -69,6 +69,18 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
 
   // Load settings from DB on mount
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    // No authenticated user (e.g. login page): keep defaults and skip DB read.
+    if (!session?.user) {
+      setSettings(DEFAULT_SETTINGS);
+      rowIdRef.current = null;
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
 
     async function loadSettings() {
@@ -116,7 +128,7 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [profile?.role]);
+  }, [profile?.role, authLoading, session?.user?.id]);
 
   // Reload settings from DB (used for rollback on error)
   const reloadSettings = useCallback(async () => {
