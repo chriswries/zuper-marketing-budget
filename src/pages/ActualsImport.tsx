@@ -47,6 +47,7 @@ import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
 import { parseCsv } from '@/lib/csvParse';
 import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@/lib/actualsStore';
+import { supabase } from '@/integrations/supabase/client';
 import type { 
   ActualsTransaction, 
   ActualsSource, 
