@@ -8,6 +8,14 @@ import { supabase } from '@/integrations/supabase/client';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
 import type { Json } from '@/integrations/supabase/types';
 
+// Cache TTL: 10 minutes
+const CACHE_TTL = 10 * 60 * 1000;
+
+interface CacheEntry<T> {
+  data: T;
+  loadedAt: number;
+}
+
 export interface TransactionMatch {
   txnId: string;
   costCenterId: string;
@@ -37,7 +45,11 @@ const DEFAULT_MATCHING_DATA: ActualsMatchingData = {
 };
 
 // In-memory cache
-let matchingCache: Record<string, ActualsMatchingData> = {};
+let matchingCache: Record<string, CacheEntry<ActualsMatchingData>> = {};
+
+function isCacheExpired(entry: CacheEntry<unknown>): boolean {
+  return Date.now() - entry.loadedAt > CACHE_TTL;
+}
 
 export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<ActualsMatchingData> {
   try {
@@ -53,7 +65,7 @@ export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<Ac
     }
 
     if (!data) {
-      matchingCache[fiscalYearId] = DEFAULT_MATCHING_DATA;
+      matchingCache[fiscalYearId] = { data: DEFAULT_MATCHING_DATA, loadedAt: Date.now() };
       return DEFAULT_MATCHING_DATA;
     }
 
@@ -61,7 +73,7 @@ export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<Ac
       matchesByTxnId: (data.matches_by_txn_id as unknown as Record<string, TransactionMatch>) ?? {},
       rulesByMerchantKey: (data.rules_by_merchant_key as unknown as Record<string, MerchantRule>) ?? {},
     };
-    matchingCache[fiscalYearId] = result;
+    matchingCache[fiscalYearId] = { data: result, loadedAt: Date.now() };
     return result;
   } catch (err) {
     logger.error('Error loading actuals matching:', err);
@@ -71,8 +83,12 @@ export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<Ac
 
 // Synchronous version for backward compatibility
 export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
-  if (fiscalYearId in matchingCache) {
-    return matchingCache[fiscalYearId];
+  const entry = matchingCache[fiscalYearId];
+  if (entry) {
+    if (isCacheExpired(entry)) {
+      loadActualsMatchingAsync(fiscalYearId).catch(logger.error);
+    }
+    return entry.data;
   }
   
   // Trigger async load
@@ -83,7 +99,7 @@ export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
 
 export async function saveActualsMatching(fiscalYearId: string, data: ActualsMatchingData): Promise<void> {
   // Update cache
-  matchingCache[fiscalYearId] = data;
+  matchingCache[fiscalYearId] = { data, loadedAt: Date.now() };
 
   try {
     const { error } = await supabase
@@ -247,6 +263,15 @@ export function clearMatchingCache(): void {
 // Clear specific FY from cache
 export function invalidateMatchingCache(fyId: string): void {
   delete matchingCache[fyId];
+}
+
+// Clear all cached FYs except the given one
+export function clearMatchingCacheExcept(fyId: string): void {
+  const kept = matchingCache[fyId];
+  matchingCache = {};
+  if (kept) {
+    matchingCache[fyId] = kept;
+  }
 }
 
 /**

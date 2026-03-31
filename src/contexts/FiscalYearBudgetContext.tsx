@@ -310,9 +310,15 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     };
   }, [fetchFiscalYears]);
 
-  // Persist selectedFiscalYearId to localStorage
+  // Persist selectedFiscalYearId to localStorage and clear non-selected FY caches
   useEffect(() => {
     saveSelectedToStorage(selectedFiscalYearId);
+    if (selectedFiscalYearId) {
+      // Lazy-import to avoid circular deps
+      import('@/lib/forecastStore').then(({ clearForecastCacheExcept }) => clearForecastCacheExcept(selectedFiscalYearId));
+      import('@/lib/actualsStore').then(({ clearActualsCacheExcept }) => clearActualsCacheExcept(selectedFiscalYearId));
+      import('@/lib/actualsMatchingStore').then(({ clearMatchingCacheExcept }) => clearMatchingCacheExcept(selectedFiscalYearId));
+    }
   }, [selectedFiscalYearId]);
 
   const listFiscalYears = useCallback(() => {
