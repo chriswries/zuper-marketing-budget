@@ -780,6 +780,28 @@ export default function ActualsMatching() {
               </Select>
             </div>
 
+            {/* Create new line item section */}
+            {selectedCostCenterId && !selectedLineItemId && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    <Label className="font-medium">
+                      {availableLineItems.length === 0
+                        ? 'No line items in this cost center. Create one to match:'
+                        : 'Or create a new line item:'}
+                    </Label>
+                  </div>
+                  <Input
+                    value={newLineItemName}
+                    onChange={(e) => setNewLineItemName(e.target.value)}
+                    placeholder="Line item name"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="flex items-center space-x-2 pt-2">
               <Checkbox
                 id="create-rule"
@@ -792,16 +814,32 @@ export default function ActualsMatching() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setMatchDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleConfirmMatch}
-              disabled={!selectedCostCenterId || !selectedLineItemId}
-            >
-              Confirm Match
-            </Button>
+            {selectedCostCenterId && !selectedLineItemId && newLineItemName.trim() ? (
+              <Button onClick={handleCreateAndMatch} disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create &amp; Match
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirmMatch}
+                disabled={!selectedCostCenterId || !selectedLineItemId}
+              >
+                Confirm Match
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
