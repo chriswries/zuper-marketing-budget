@@ -30,7 +30,6 @@ import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
-import { AuditEntry } from '@/types/audit';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
@@ -82,27 +81,6 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 
-const BUDGET_AUDIT_KEY_PREFIX = 'budget_audit_v1_';
-
-function loadBudgetAuditLog(fyId: string): AuditEntry[] {
-  try {
-    const stored = localStorage.getItem(`${BUDGET_AUDIT_KEY_PREFIX}${fyId}`);
-    if (stored) {
-      return JSON.parse(stored) as AuditEntry[];
-    }
-  } catch {
-    // Ignore
-  }
-  return [];
-}
-
-function saveBudgetAuditLog(fyId: string, entries: AuditEntry[]): void {
-  try {
-    localStorage.setItem(`${BUDGET_AUDIT_KEY_PREFIX}${fyId}`, JSON.stringify(entries));
-  } catch {
-    // Ignore
-  }
-}
 
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -168,7 +146,6 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
-  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
 
   // Justification dialog state
@@ -532,23 +509,14 @@ export default function Budget() {
     loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
   }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole]);
 
-  // Load audit log when FY changes
+  // Load audit events when FY changes
   useEffect(() => {
     if (selectedFiscalYearId) {
-      setAuditLog(loadBudgetAuditLog(selectedFiscalYearId));
       loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
     } else {
-      setAuditLog([]);
       setApprovalAuditEvents([]);
     }
   }, [selectedFiscalYearId]);
-
-  // Save audit log whenever it changes
-  useEffect(() => {
-    if (selectedFiscalYearId && auditLog.length > 0) {
-      saveBudgetAuditLog(selectedFiscalYearId, auditLog);
-    }
-  }, [selectedFiscalYearId, auditLog]);
 
   // Sync line item approval/adjustment status with request status
   useEffect(() => {
@@ -736,25 +704,17 @@ export default function Budget() {
           }),
         }));
 
-        // Add audit entry
+        // Add audit entry to Supabase
         if (oldValue !== newValue) {
           const costCenterName = costCenter?.name ?? '';
-          const entry: AuditEntry = {
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            userName: 'Marketing Admin',
-            sheet: 'budget',
-            fiscalYearId: selectedFiscalYearId,
-            costCenterId,
-            costCenterName,
-            lineItemId,
-            lineItemName,
-            month,
-            oldValue,
-            newValue,
-          };
-
-          setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+          appendApprovalAudit('budget', selectedFiscalYearId, {
+            action: 'budget_cell_edit',
+            actorRole: currentRole,
+            note: `${costCenterName} › ${lineItemName} — ${MONTH_LABELS[month]}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`,
+            meta: { costCenterId, lineItemId, month, oldValue, newValue },
+          }).then(() => {
+            loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
+          });
         }
       }
     },
@@ -841,24 +801,16 @@ export default function Budget() {
       }),
     }));
 
-    // Add audit entry
+    // Add audit entry to Supabase
     if (oldValue !== newValue) {
-      const entry: AuditEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        userName: 'Marketing Admin',
-        sheet: 'budget',
-        fiscalYearId: selectedFiscalYearId,
-        costCenterId,
-        costCenterName,
-        lineItemId,
-        lineItemName,
-        month,
-        oldValue,
-        newValue,
-      };
-
-      setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+      appendApprovalAudit('budget', selectedFiscalYearId, {
+        action: 'budget_cell_edit',
+        actorRole: currentRole,
+        note: `${costCenterName} › ${lineItemName} — ${MONTH_LABELS[month]}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`,
+        meta: { costCenterId, lineItemId, month, oldValue, newValue },
+      }).then(() => {
+        loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
+      });
     }
 
     toast({
@@ -1295,22 +1247,9 @@ export default function Budget() {
         },
       });
 
-      // Also add to local audit log
-      const entry: AuditEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        userName: 'Marketing Admin (Override)',
-        sheet: 'budget',
-        fiscalYearId: selectedFiscalYearId,
-        costCenterId,
-        costCenterName,
-        lineItemId,
-        lineItemName,
-        month,
-        oldValue: oldValue ?? 0,
-        newValue: newValue ?? 0,
-      };
-      setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+      // Audit entry already written by appendApprovalAudit above (admin_override_cell_edit)
+      // Refresh audit events
+      loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
 
       toast({
         title: 'Override applied',
@@ -1565,9 +1504,9 @@ export default function Budget() {
               <Button variant="outline" size="sm" className="gap-2">
                 <History className="h-4 w-4" />
                 Change history
-                {auditLog.length > 0 && (
+                {approvalAuditEvents.length > 0 && (
                   <span className="bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                    {auditLog.length}
+                    {approvalAuditEvents.length}
                   </span>
                 )}
               </Button>
@@ -1577,38 +1516,33 @@ export default function Budget() {
                 <SheetTitle>Change history</SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-[calc(100vh-6rem)] mt-4">
-                {auditLog.length === 0 ? (
+                {approvalAuditEvents.length === 0 ? (
                   <p className="text-muted-foreground text-sm py-8 text-center">
                     No changes yet
                   </p>
                 ) : (
                   <div className="space-y-3 pr-4">
-                    {auditLog.map((entry) => (
+                    {approvalAuditEvents.map((event) => (
                       <div
-                        key={entry.id}
+                        key={event.id}
                         className="border rounded-lg p-3 space-y-1 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground text-xs">
-                            {formatAuditTimestamp(entry.timestamp, adminSettings.timeZone)}
+                            {formatAuditTimestamp(event.timestamp, adminSettings.timeZone)}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {entry.userName}
+                            {event.actorRole ? event.actorRole.charAt(0).toUpperCase() + event.actorRole.slice(1) : ''}
                           </span>
                         </div>
                         <div className="font-medium">
-                          {entry.costCenterName} › {entry.lineItemName}
+                          {formatAuditEvent(event)}
                         </div>
-                        <div className="text-muted-foreground">
-                          {MONTH_LABELS[entry.month]}:{' '}
-                          <span className="text-destructive line-through">
-                            {formatCurrency(entry.oldValue)}
-                          </span>{' '}
-                          →{' '}
-                          <span className="text-primary font-medium">
-                            {formatCurrency(entry.newValue)}
-                          </span>
-                        </div>
+                        {event.note && event.action !== 'budget_cell_edit' && event.action !== 'admin_override_cell_edit' && (
+                          <div className="text-muted-foreground text-xs">
+                            {event.note}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

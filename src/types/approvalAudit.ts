@@ -19,6 +19,7 @@ export type ApprovalAuditAction =
   | 'fy_restored'
   | 'fy_hard_deleted'
   | 'fy_bundle_imported'
+  | 'budget_cell_edit'
   // Vendor registry actions
   | 'vendor_created'
   | 'vendor_updated'
