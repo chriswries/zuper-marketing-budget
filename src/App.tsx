@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RequestsProvider } from "@/contexts/RequestsContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FiscalYearBudgetProvider } from "@/contexts/FiscalYearBudgetContext";
 import { AdminSettingsProvider } from "@/contexts/AdminSettingsContext";
 import { CurrentUserRoleProvider } from "@/contexts/CurrentUserRoleContext";
@@ -48,6 +49,7 @@ const App = () => (
             <CurrentUserRoleProvider>
               <FiscalYearBudgetProvider>
                 <RequestsProvider>
+                  <ErrorBoundary>
                   <Toaster />
                   <Sonner />
                   <Routes>
@@ -141,6 +143,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Route>
                   </Routes>
+                  </ErrorBoundary>
                 </RequestsProvider>
               </FiscalYearBudgetProvider>
             </CurrentUserRoleProvider>
