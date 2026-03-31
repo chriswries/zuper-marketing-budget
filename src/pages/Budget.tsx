@@ -1247,22 +1247,9 @@ export default function Budget() {
         },
       });
 
-      // Also add to local audit log
-      const entry: AuditEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        userName: 'Marketing Admin (Override)',
-        sheet: 'budget',
-        fiscalYearId: selectedFiscalYearId,
-        costCenterId,
-        costCenterName,
-        lineItemId,
-        lineItemName,
-        month,
-        oldValue: oldValue ?? 0,
-        newValue: newValue ?? 0,
-      };
-      setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+      // Audit entry already written by appendApprovalAudit above (admin_override_cell_edit)
+      // Refresh audit events
+      loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
 
       toast({
         title: 'Override applied',
