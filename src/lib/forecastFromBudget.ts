@@ -1,4 +1,4 @@
-import { CostCenter, MonthlyValues, MONTHS, createZeroMonthlyValues } from '@/types/budget';
+import { CostCenter, MONTHS, createZeroMonthlyValues } from '@/types/budget';
 import { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
