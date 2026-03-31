@@ -241,9 +241,9 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
         <CardDescription>Past CSV imports for this fiscal year.</CardDescription>
       </CardHeader>
       <CardContent>
-        {loading && batches.length === 0 ? (
+        {loading && batches.length === 0 && !legacyStats ? (
           <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
-        ) : batches.length === 0 ? (
+        ) : batches.length === 0 && !legacyStats ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
             No imports yet for this fiscal year.
           </p>
