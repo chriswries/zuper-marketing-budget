@@ -430,6 +430,21 @@ export default function ActualsImport() {
           await appendActuals(selectedFYId, newTransactions);
         }
 
+        // Post-insert verification
+        const { count: verifiedCount } = await supabase
+          .from('actuals_transactions')
+          .select('*', { count: 'exact', head: true })
+          .eq('fiscal_year_id', selectedFYId);
+        console.log('Post-insert verification count:', verifiedCount);
+        if (verifiedCount === 0 || verifiedCount === null) {
+          toast({
+            title: 'Import may have failed',
+            description: 'Transactions were sent but none found in the database. Please check and retry.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
         // Insert batch record
         const importedCount = replaceExisting ? transactions.length : (transactions.length - (transactions.length - (newTransactions?.length ?? transactions.length)));
         const importedTotal = (replaceExisting ? transactions : newTransactions).reduce((s, t) => s + t.amount, 0);
