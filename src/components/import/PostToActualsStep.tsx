@@ -108,6 +108,7 @@ export function PostToActualsStep({
 }: PostToActualsStepProps) {
   const navigate = useNavigate();
   const { settings: adminSettings } = useAdminSettings();
+  const { currentRole } = useCurrentUserRole();
   const [isPosted, setIsPosted] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
