@@ -513,11 +513,16 @@ export default function ForecastActualsVarianceReport() {
         variant="outline" 
         size="sm" 
         onClick={() => navigate('/reports')} 
-        className="gap-2"
+        className="gap-2 no-print"
       >
         <ArrowLeft className="h-4 w-4" />
         Back
       </Button>
+
+      <div className="print-only mb-4">
+        <h1 className="text-2xl font-bold">Forecast vs Actuals Variance — {selectedFiscalYear.name}</h1>
+        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+      </div>
       
       <div className="flex items-center justify-between">
         <div>
@@ -602,7 +607,7 @@ export default function ForecastActualsVarianceReport() {
       </div>
       
       {/* Filters */}
-      <Card>
+      <Card className="no-print">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             {/* Scope Toggle */}
