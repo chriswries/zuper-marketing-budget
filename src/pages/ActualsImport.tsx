@@ -740,6 +740,16 @@ export default function ActualsImport() {
               </Card>
             </div>
 
+            {creditRows.length > 0 && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  {creditRows.length} credit/refund row(s) excluded (amount ≤ 0 after sign normalization).
+                </AlertDescription>
+              </Alert>
+            )}
+            </div>
+
             {/* Preview Table */}
             <Card>
               <CardHeader>
