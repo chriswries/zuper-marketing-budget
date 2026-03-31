@@ -19,13 +19,9 @@ import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, calculateFYTotal, CostCenter } from '@/types/budget';
 import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2 } from 'lucide-react';
 import { getMonthIndex, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
+import { formatCurrency } from '@/lib/format';
 
 type BurnMode = 'actuals_constant' | 'forecast_adjusted';
-
-function formatCurrency(value: number): string {
-  const sign = value >= 0 ? '' : '-';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
 
 function formatMonths(value: number): string {
   if (value === Infinity || isNaN(value)) return '∞';

@@ -1,3 +1,5 @@
+import { formatCurrencyWithCents as formatUSD } from '@/lib/format';
+export { formatUSD };
 import type { Month } from '@/types/budget';
 import type { 
   ColumnMapping, 
@@ -196,12 +198,3 @@ export function normalizeTransactions(
   return { transactions, errors };
 }
 
-/**
- * Format amount as USD currency
- */
-export function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
-}

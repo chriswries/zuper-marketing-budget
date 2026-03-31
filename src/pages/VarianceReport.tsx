@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { formatCurrency } from '@/lib/format';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,10 +80,6 @@ function getMonthlyTotalsForCostCenter(
   return totals;
 }
 
-function formatCurrency(value: number): string {
-  const sign = value >= 0 ? '' : '-';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
 
 function formatVariance(value: number): string {
   const sign = value > 0 ? '+' : '';
