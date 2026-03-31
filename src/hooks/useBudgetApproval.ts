@@ -133,11 +133,11 @@ export function useBudgetApproval({
       const now = new Date().toISOString();
 
       if (allApproved) {
-        const forecastCostCenters = createForecastCostCentersFromBudget({
+        // Fire and forget - async forecast creation
+        createForecastCostCentersFromBudget({
           ...fy,
           approval: { ...fy.approval, steps },
-        });
-        saveForecastForFY(fy.id, forecastCostCenters);
+        }).catch((err) => logger.error('Failed to create forecast from budget:', err));
       }
 
       return {
