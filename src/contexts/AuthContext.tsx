@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, type Context } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -37,7 +37,20 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext: Context<AuthContextValue | undefined> = createContext<AuthContextValue | undefined>(undefined);
+
+const AUTH_CONTEXT_FALLBACK: AuthContextValue = {
+  session: null,
+  user: null,
+  profile: null,
+  role: null,
+  loading: true,
+  profileLoading: true,
+  signIn: async () => ({ error: new Error('Auth is not ready yet.') }),
+  signUp: async () => ({ error: new Error('Auth is not ready yet.') }),
+  signOut: async () => {},
+  refreshProfile: async () => {},
+};
 
 // Retry helper for profile fetch (handles trigger race on signup)
 async function fetchProfileWithRetry(userId: string, maxRetries = 5, delayMs = 200): Promise<Profile | null> {
@@ -218,6 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
+    // During Fast Refresh in development, provider/consumer module boundaries can be briefly out of sync.
+    // Return a safe loading fallback instead of crashing the whole app.
+    if (import.meta.env.DEV) {
+      return AUTH_CONTEXT_FALLBACK;
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
