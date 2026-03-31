@@ -56,9 +56,12 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
   const { settings: adminSettings } = useAdminSettings();
 
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [legacyStats, setLegacyStats] = useState<{ count: number; total: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [undoingLegacy, setUndoingLegacy] = useState(false);
   const [confirmBatch, setConfirmBatch] = useState<ImportBatch | null>(null);
+  const [confirmLegacy, setConfirmLegacy] = useState(false);
 
   const canUndo = currentRole === "admin" || currentRole === "finance";
 
@@ -66,6 +69,7 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
     if (!fiscalYearId) return;
     setLoading(true);
     try {
+      // Load batches
       const { data, error } = await supabase
         .from("import_batches")
         .select("*")
@@ -76,6 +80,20 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
         console.error("Failed to load import batches:", error);
       } else {
         setBatches((data as ImportBatch[]) ?? []);
+      }
+
+      // Load legacy (NULL import_batch_id) stats
+      const { data: legacyRows, error: legacyErr } = await supabase
+        .from("actuals_transactions")
+        .select("amount")
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (!legacyErr && legacyRows && legacyRows.length > 0) {
+        const total = legacyRows.reduce((s, r) => s + (r.amount ?? 0), 0);
+        setLegacyStats({ count: legacyRows.length, total });
+      } else {
+        setLegacyStats(null);
       }
     } finally {
       setLoading(false);
@@ -155,6 +173,65 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
     }
   };
 
+  const handleUndoLegacy = async () => {
+    setConfirmLegacy(false);
+    setUndoingLegacy(true);
+
+    try {
+      // 1. Get txn_ids for legacy transactions
+      const { data: txnRows, error: txnErr } = await supabase
+        .from("actuals_transactions")
+        .select("txn_id")
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (txnErr) throw new Error(`Failed to query legacy transactions: ${txnErr.message}`);
+
+      const txnIds = (txnRows ?? []).map((r) => r.txn_id);
+
+      // 2. Delete matches
+      if (txnIds.length > 0) {
+        const { error: matchErr } = await supabase
+          .from("actuals_matches")
+          .delete()
+          .eq("fiscal_year_id", fiscalYearId)
+          .in("txn_id", txnIds);
+
+        if (matchErr) throw new Error(`Failed to delete matches: ${matchErr.message}`);
+      }
+
+      // 3. Delete the transactions
+      const { error: delErr } = await supabase
+        .from("actuals_transactions")
+        .delete()
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (delErr) throw new Error(`Failed to delete legacy transactions: ${delErr.message}`);
+
+      // 4. Invalidate caches
+      invalidateActualsCache(fiscalYearId);
+      invalidateMatchingCache(fiscalYearId);
+
+      // 5. Refresh
+      await loadBatches();
+
+      toast({
+        title: "Legacy imports undone",
+        description: `${txnIds.length} pre-tracking transactions removed.`,
+      });
+    } catch (err) {
+      console.error("Legacy undo failed:", err);
+      toast({
+        title: "Undo failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setUndoingLegacy(false);
+    }
+  };
+
   if (!fiscalYearId) return null;
 
   return (
@@ -164,9 +241,9 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
         <CardDescription>Past CSV imports for this fiscal year.</CardDescription>
       </CardHeader>
       <CardContent>
-        {loading && batches.length === 0 ? (
+        {loading && batches.length === 0 && !legacyStats ? (
           <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
-        ) : batches.length === 0 ? (
+        ) : batches.length === 0 && !legacyStats ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
             No imports yet for this fiscal year.
           </p>
@@ -241,6 +318,47 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* Legacy row */}
+                  {legacyStats && (
+                    <TableRow className="bg-muted/30">
+                      <TableCell className="text-sm text-muted-foreground italic">—</TableCell>
+                      <TableCell className="text-sm italic text-muted-foreground">
+                        Pre-tracking imports
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">mixed</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {legacyStats.count.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatUSD(legacyStats.total)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">Legacy</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canUndo && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmLegacy(true)}
+                            disabled={undoingLegacy}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {undoingLegacy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Undo2 className="h-4 w-4 mr-1" />
+                                Undo All
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -270,6 +388,30 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete Transactions
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Legacy Undo Confirmation Dialog */}
+      <AlertDialog open={confirmLegacy} onOpenChange={setConfirmLegacy}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo all legacy imports?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete {legacyStats?.count ?? 0} pre-tracking transactions
+              totaling {legacyStats ? formatUSD(legacyStats.total) : "$0"}.
+              Matches for these transactions will also be removed.
+              This cannot be undone. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUndoLegacy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Legacy Transactions
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
