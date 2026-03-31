@@ -486,7 +486,7 @@ export default function AdminDataMigration() {
       await supabase.from('actuals_matches').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('merchant_rules').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('actuals_transactions').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('fy_forecasts').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
+      
       await supabase.from('fiscal_years').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
       // 2. Insert all legacy data
