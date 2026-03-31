@@ -132,7 +132,26 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
-  const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
+
+  const {
+    handleSubmitForApproval,
+    handleApproveNextStep,
+    handleReject,
+    handleResetToDraft,
+    nextPendingBudgetStep,
+    canApproveBudgetStep,
+    approvalAuditEvents,
+    setApprovalAuditEvents,
+    submissionBlockers,
+    canSubmit,
+    allocationsBalanced,
+    hasPendingLineItems,
+  } = useBudgetApproval({
+    selectedFiscalYearId,
+    selectedFiscalYear,
+    updateFiscalYearBudget,
+    currentRole,
+  });
 
   // Justification dialog state
   const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
