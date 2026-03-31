@@ -59,36 +59,75 @@ import type {
 import { ImportHistoryPanel } from '@/components/import/ImportHistoryPanel';
 type Step = 'upload' | 'mapping' | 'preview' | 'confirm';
 
+// Month name lookup for written date formats
+const MONTH_NAME_MAP: Record<string, string> = {
+  jan: '01', january: '01', feb: '02', february: '02', mar: '03', march: '03',
+  apr: '04', april: '04', may: '05', jun: '06', june: '06',
+  jul: '07', july: '07', aug: '08', august: '08', sep: '09', september: '09',
+  oct: '10', october: '10', nov: '11', november: '11', dec: '12', december: '12',
+};
+
+function validateAndFormat(month: number, day: number, year: number): string | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function expandYear(yy: number): number {
+  return yy <= 49 ? 2000 + yy : 1900 + yy;
+}
+
 // Helper to parse dates flexibly — returns YYYY-MM-DD string to avoid timezone shifts
 function parseDate(value: string): string | null {
   if (!value) return null;
-  
   const trimmed = value.trim();
-  
-  // ISO format (e.g. 2027-01-31T17:00:00Z) — extract date portion before T
+  if (!trimmed) return null;
+
+  // 1. ISO with time (2026-02-13T17:00:00Z or .000Z)
   if (trimmed.includes('T')) {
     const datePart = trimmed.split('T')[0];
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(datePart)) {
+      const [y, m, d] = datePart.split('-').map(Number);
+      return validateAndFormat(m, d, y);
+    }
   }
-  
-  // YYYY-MM-DD
-  const dashMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dashMatch) {
-    return trimmed; // already in correct format
+
+  // 2. YYYY-MM-DD (ISO date)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    return validateAndFormat(Number(isoMatch[2]), Number(isoMatch[3]), Number(isoMatch[1]));
   }
-  
-  // MM/DD/YYYY or M/D/YYYY
-  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    const [, month, day, year] = slashMatch;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+  // 3. MM/DD/YYYY or M/D/YYYY (4-digit year, slashes)
+  const slash4Match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash4Match) {
+    return validateAndFormat(Number(slash4Match[1]), Number(slash4Match[2]), Number(slash4Match[3]));
   }
-  
-  // MM-DD-YYYY or M-D-YYYY (dashes, common in Ramp exports)
-  const dashMMDDMatch = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (dashMMDDMatch) {
-    const [, month, day, year] = dashMMDDMatch;
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+
+  // 4. MM-DD-YYYY or M-D-YYYY (4-digit year, dashes)
+  const dash4Match = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dash4Match) {
+    return validateAndFormat(Number(dash4Match[1]), Number(dash4Match[2]), Number(dash4Match[3]));
+  }
+
+  // 5. MM/DD/YY or M/D/YY (2-digit year, slashes)
+  const slash2Match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+  if (slash2Match) {
+    return validateAndFormat(Number(slash2Match[1]), Number(slash2Match[2]), expandYear(Number(slash2Match[3])));
+  }
+
+  // 6. MM-DD-YY or M-D-YY (2-digit year, dashes)
+  const dash2Match = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{2})$/);
+  if (dash2Match) {
+    return validateAndFormat(Number(dash2Match[1]), Number(dash2Match[2]), expandYear(Number(dash2Match[3])));
+  }
+
+  // 7. Month D, YYYY or Month DD, YYYY (e.g. "Feb 8, 2026" or "February 13, 2026")
+  const writtenMatch = trimmed.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (writtenMatch) {
+    const monthNum = MONTH_NAME_MAP[writtenMatch[1].toLowerCase()];
+    if (monthNum) {
+      return validateAndFormat(Number(monthNum), Number(writtenMatch[2]), Number(writtenMatch[3]));
+    }
   }
 
   return null;
