@@ -67,8 +67,9 @@ import { recomputeAndSaveActualsRollup } from '@/lib/actualsRollupStore';
 import type { ActualsTransaction } from '@/types/actuals';
 import { MONTHS } from '@/types/budget';
 import { supabase } from '@/integrations/supabase/client';
-import { Link, CheckCircle, XCircle, AlertTriangle, Info, Plus, Loader2 } from 'lucide-react';
+import { Link, CheckCircle, XCircle, AlertTriangle, Info, Plus, Loader2, Zap } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { BulkAutoCreateDialog } from '@/components/matching/BulkAutoCreateDialog';
 type FilterTab = 'all' | 'unmatched' | 'matched';
 
 export default function ActualsMatching() {
@@ -94,6 +95,9 @@ export default function ActualsMatching() {
   const [createMerchantRule, setCreateMerchantRule] = useState(false);
   const [newLineItemName, setNewLineItemName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  // Bulk auto-create dialog
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
 
   // Unmatch dialog state
   const [unmatchDialogOpen, setUnmatchDialogOpen] = useState(false);
@@ -186,6 +190,16 @@ export default function ActualsMatching() {
 
   // Cost centers and line items from selected FY
   const costCenters = selectedFiscalYear?.costCenters ?? [];
+
+  // Unmatched transactions and existing rule keys for bulk dialog
+  const unmatchedTransactions = useMemo(
+    () => transactions.filter((t) => !matchesByTxnId[t.id]),
+    [transactions, matchesByTxnId]
+  );
+  const existingRuleKeys = useMemo(
+    () => new Set(Object.keys(rulesByMerchantKey)),
+    [rulesByMerchantKey]
+  );
 
   // Line items filtered by selected cost center
   const availableLineItems = useMemo(() => {
@@ -608,6 +622,26 @@ export default function ActualsMatching() {
               </Card>
             </div>
 
+            {/* Bulk Actions */}
+            {canEdit && stats.unmatchedCount > 0 && costCenters.length > 0 && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Bulk Actions</p>
+                      <p className="text-sm text-muted-foreground">
+                        {stats.unmatchedCount} unmatched transaction(s) — auto-create line items and match them all at once.
+                      </p>
+                    </div>
+                    <Button onClick={() => setBulkDialogOpen(true)}>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Auto-Create &amp; Match All
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Transactions Table */}
             <Card>
               <CardHeader>
@@ -882,6 +916,26 @@ export default function ActualsMatching() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Auto-Create Dialog */}
+      {selectedFiscalYearId && selectedFiscalYear && (
+        <BulkAutoCreateDialog
+          open={bulkDialogOpen}
+          onOpenChange={setBulkDialogOpen}
+          unmatchedTransactions={unmatchedTransactions}
+          costCenters={costCenters}
+          existingRuleKeys={existingRuleKeys}
+          fiscalYearId={selectedFiscalYearId}
+          currentRole={currentRole}
+          onComplete={async () => {
+            // Recompute rollup and reload data
+            recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
+            const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
+            setMatchesByTxnId(matchingData.matchesByTxnId);
+            setRulesByMerchantKey(matchingData.rulesByMerchantKey);
+          }}
+        />
+      )}
     </div>
   );
 }
