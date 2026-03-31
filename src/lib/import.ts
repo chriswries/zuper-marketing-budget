@@ -1,3 +1,5 @@
+import { formatCurrencyWithCents as formatUSD } from '@/lib/format';
+export { formatUSD };
 import type { Month } from '@/types/budget';
 import type { 
   ColumnMapping, 
