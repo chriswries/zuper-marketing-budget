@@ -168,7 +168,6 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
-  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
 
   // Justification dialog state
