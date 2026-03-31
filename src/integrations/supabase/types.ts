@@ -299,7 +299,6 @@ export type Database = {
           archived_by_user_id: string | null
           archived_justification: string | null
           created_at: string
-          data: Json
           end_date: string | null
           id: string
           name: string
@@ -320,7 +319,6 @@ export type Database = {
           archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
-          data: Json
           end_date?: string | null
           id: string
           name: string
@@ -341,7 +339,6 @@ export type Database = {
           archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
-          data?: Json
           end_date?: string | null
           id?: string
           name?: string
@@ -353,35 +350,6 @@ export type Database = {
           year?: number | null
         }
         Relationships: []
-      }
-      fy_forecasts: {
-        Row: {
-          created_at: string
-          data: Json
-          fiscal_year_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          data: Json
-          fiscal_year_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          data?: Json
-          fiscal_year_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fy_forecasts_fiscal_year_id_fkey"
-            columns: ["fiscal_year_id"]
-            isOneToOne: true
-            referencedRelation: "fiscal_years"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       line_items: {
         Row: {
