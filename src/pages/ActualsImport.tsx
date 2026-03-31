@@ -259,9 +259,9 @@ export default function ActualsImport() {
       let parsedAmount = parseAmount(amountValue);
       if (parsedAmount === null) {
         errors.push(`Invalid amount: "${amountValue}"`);
-      } else {
-        // Always normalize to positive spend
-        parsedAmount = Math.abs(parsedAmount);
+      } else if (amountSignMode === 'expenses_negative') {
+        // Flip sign: negatives become positive expenses
+        parsedAmount = -parsedAmount;
       }
       
       // Optional fields
