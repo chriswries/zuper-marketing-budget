@@ -1504,9 +1504,9 @@ export default function Budget() {
               <Button variant="outline" size="sm" className="gap-2">
                 <History className="h-4 w-4" />
                 Change history
-                {auditLog.length > 0 && (
+                {approvalAuditEvents.length > 0 && (
                   <span className="bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                    {auditLog.length}
+                    {approvalAuditEvents.length}
                   </span>
                 )}
               </Button>
@@ -1516,38 +1516,33 @@ export default function Budget() {
                 <SheetTitle>Change history</SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-[calc(100vh-6rem)] mt-4">
-                {auditLog.length === 0 ? (
+                {approvalAuditEvents.length === 0 ? (
                   <p className="text-muted-foreground text-sm py-8 text-center">
                     No changes yet
                   </p>
                 ) : (
                   <div className="space-y-3 pr-4">
-                    {auditLog.map((entry) => (
+                    {approvalAuditEvents.map((event) => (
                       <div
-                        key={entry.id}
+                        key={event.id}
                         className="border rounded-lg p-3 space-y-1 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground text-xs">
-                            {formatAuditTimestamp(entry.timestamp, adminSettings.timeZone)}
+                            {formatAuditTimestamp(event.timestamp, adminSettings.timeZone)}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {entry.userName}
+                            {event.actorRole ? event.actorRole.charAt(0).toUpperCase() + event.actorRole.slice(1) : ''}
                           </span>
                         </div>
                         <div className="font-medium">
-                          {entry.costCenterName} › {entry.lineItemName}
+                          {formatAuditEvent(event)}
                         </div>
-                        <div className="text-muted-foreground">
-                          {MONTH_LABELS[entry.month]}:{' '}
-                          <span className="text-destructive line-through">
-                            {formatCurrency(entry.oldValue)}
-                          </span>{' '}
-                          →{' '}
-                          <span className="text-primary font-medium">
-                            {formatCurrency(entry.newValue)}
-                          </span>
-                        </div>
+                        {event.note && event.action !== 'budget_cell_edit' && event.action !== 'admin_override_cell_edit' && (
+                          <div className="text-muted-foreground text-xs">
+                            {event.note}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
