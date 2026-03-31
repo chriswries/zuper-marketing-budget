@@ -223,7 +223,7 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
         fetchRequests();
       }
     }
-  }, []);
+  }, [fetchRequests]);
 
   // Bulk set requests (for compatibility with existing code)
   const setRequests = useCallback((updater: (prev: SpendRequest[]) => SpendRequest[]) => {
