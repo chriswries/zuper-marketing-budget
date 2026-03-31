@@ -5,7 +5,7 @@
  * Matching/rollups to line items is implemented in Track B Prompt B2.
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
