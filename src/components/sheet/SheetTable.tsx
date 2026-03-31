@@ -141,6 +141,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
   const [highlightedLineItemId, setHighlightedLineItemId] = useState<string | null>(null);
   const focusHandled = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Ref map for keyboard navigation between editable cells: key = "lineItemId:monthIndex"
+  const cellRefs = useRef<Map<string, EditableCellHandle>>(new Map());
 
   // Focus/scroll/highlight logic
   useEffect(() => {
