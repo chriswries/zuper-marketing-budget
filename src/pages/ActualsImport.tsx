@@ -396,8 +396,10 @@ export default function ActualsImport() {
 
     const now = new Date().toISOString();
     const batchId = crypto.randomUUID();
-    const transactions: ActualsTransaction[] = validRows.map((row) => ({
-      id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!),
+    const transactions: ActualsTransaction[] = validRows.map((row, idx) => {
+      const tiebreaker = row.externalId || `${row.description || ''}_${idx}`;
+      return {
+      id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!, tiebreaker),
       source,
       fiscalYearId: selectedFYId,
       txnDate: row.txnDate!,
