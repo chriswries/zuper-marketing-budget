@@ -255,7 +255,11 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
               console.error('Failed to persist request:', error);
             }
           })
-        );
+        ).catch((err) => {
+          console.error('Failed to persist bulk request updates:', err);
+          toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+          fetchRequests();
+        });
       }
 
       return next;
