@@ -128,20 +128,75 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     fetchRequests();
   }, [fetchRequests]);
 
-  // Set up realtime subscription
+  // Set up realtime subscription with surgical updates
   useEffect(() => {
     const channel = supabase
       .channel('spend_requests_changes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'spend_requests',
         },
-        () => {
-          // On any change, refetch all requests (simple approach)
+        (payload) => {
+          try {
+            const newRow = payload.new as Record<string, unknown>;
+            if (newRow && newRow.id && newRow.data) {
+              const mapped = rowToRequest(newRow as Parameters<typeof rowToRequest>[0]);
+              setRequestsState((prev) => {
+                if (prev.some((r) => r.id === mapped.id)) return prev;
+                return [mapped, ...prev];
+              });
+              return;
+            }
+          } catch (e) {
+            logger.warn('Realtime INSERT parse failed, falling back to refetch', e);
+          }
           fetchRequests();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'spend_requests',
+        },
+        (payload) => {
+          try {
+            const updatedRow = payload.new as Record<string, unknown>;
+            if (updatedRow && updatedRow.id && updatedRow.data) {
+              const mapped = rowToRequest(updatedRow as Parameters<typeof rowToRequest>[0]);
+              setRequestsState((prev) => {
+                const idx = prev.findIndex((r) => r.id === mapped.id);
+                if (idx === -1) return [mapped, ...prev];
+                const next = [...prev];
+                next[idx] = mapped;
+                return next;
+              });
+              return;
+            }
+          } catch (e) {
+            logger.warn('Realtime UPDATE parse failed, falling back to refetch', e);
+          }
+          fetchRequests();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'spend_requests',
+        },
+        (payload) => {
+          const oldRow = payload.old as Record<string, unknown>;
+          if (oldRow && oldRow.id) {
+            setRequestsState((prev) => prev.filter((r) => r.id !== oldRow.id));
+          } else {
+            fetchRequests();
+          }
         }
       )
       .subscribe();

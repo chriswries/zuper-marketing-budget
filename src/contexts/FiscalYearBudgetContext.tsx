@@ -232,19 +232,75 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     initializeFiscalYears();
   }, [authLoading, session, fetchFiscalYears]);
 
-  // Set up realtime subscription
+  // Set up realtime subscription with surgical updates
   useEffect(() => {
     const channel = supabase
       .channel('fiscal_years_changes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'fiscal_years',
         },
-        () => {
+        (payload) => {
+          try {
+            const newRow = payload.new as Record<string, unknown>;
+            if (newRow && newRow.id && newRow.data) {
+              const mapped = rowToFiscalYear(newRow as Parameters<typeof rowToFiscalYear>[0]);
+              setFiscalYears((prev) => {
+                if (prev.some((fy) => fy.id === mapped.id)) return prev;
+                return [mapped, ...prev];
+              });
+              return;
+            }
+          } catch (e) {
+            logger.warn('Realtime INSERT parse failed, falling back to refetch', e);
+          }
           fetchFiscalYears();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'fiscal_years',
+        },
+        (payload) => {
+          try {
+            const updatedRow = payload.new as Record<string, unknown>;
+            if (updatedRow && updatedRow.id && updatedRow.data) {
+              const mapped = rowToFiscalYear(updatedRow as Parameters<typeof rowToFiscalYear>[0]);
+              setFiscalYears((prev) => {
+                const idx = prev.findIndex((fy) => fy.id === mapped.id);
+                if (idx === -1) return [mapped, ...prev];
+                const next = [...prev];
+                next[idx] = mapped;
+                return next;
+              });
+              return;
+            }
+          } catch (e) {
+            logger.warn('Realtime UPDATE parse failed, falling back to refetch', e);
+          }
+          fetchFiscalYears();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'fiscal_years',
+        },
+        (payload) => {
+          const oldRow = payload.old as Record<string, unknown>;
+          if (oldRow && oldRow.id) {
+            setFiscalYears((prev) => prev.filter((fy) => fy.id !== oldRow.id));
+          } else {
+            fetchFiscalYears();
+          }
         }
       )
       .subscribe();
