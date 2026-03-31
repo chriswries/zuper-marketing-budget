@@ -44,9 +44,6 @@ function assembleRequest(
   row: Record<string, unknown>,
   stepRows: Array<Record<string, unknown>>,
 ): SpendRequest {
-  const data = (row.data as Record<string, unknown>) || {};
-
-  // Read from relational columns, fall back to JSONB for unmigrated data
   const approvalSteps: ApprovalStep[] = stepRows.length > 0
     ? stepRows.map((s) => ({
         level: s.level as ApprovalStep['level'],
@@ -54,36 +51,36 @@ function assembleRequest(
         updatedAt: (s.updated_at as string) ?? undefined,
         comment: (s.comment as string) ?? undefined,
       }))
-    : ((data.approvalSteps as ApprovalStep[]) ?? createDefaultApprovalSteps());
+    : createDefaultApprovalSteps();
 
   const request: SpendRequest = {
     id: row.id as string,
-    costCenterId: (row.cost_center_id as string) ?? (data.costCenterId as string) ?? '',
-    costCenterName: (row.cost_center_name as string) ?? (data.costCenterName as string) ?? '',
-    vendorName: (row.vendor_name as string) ?? (data.vendorName as string) ?? '',
-    amount: (row.amount as number) ?? (data.amount as number) ?? 0,
-    startMonth: ((row.start_month as string) ?? (data.startMonth as string) ?? 'feb') as SpendRequest['startMonth'],
-    endMonth: ((row.end_month as string) ?? (data.endMonth as string) ?? 'jan') as SpendRequest['endMonth'],
-    isContracted: (row.is_contracted as boolean) ?? (data.isContracted as boolean) ?? false,
-    justification: (row.justification as string) ?? (data.justification as string) ?? '',
+    costCenterId: (row.cost_center_id as string) ?? '',
+    costCenterName: (row.cost_center_name as string) ?? '',
+    vendorName: (row.vendor_name as string) ?? '',
+    amount: (row.amount as number) ?? 0,
+    startMonth: ((row.start_month as string) ?? 'feb') as SpendRequest['startMonth'],
+    endMonth: ((row.end_month as string) ?? 'jan') as SpendRequest['endMonth'],
+    isContracted: (row.is_contracted as boolean) ?? false,
+    justification: (row.justification as string) ?? '',
     status: row.status as RequestStatus,
-    createdAt: (row.created_at as string) ?? (data.createdAt as string) ?? '',
+    createdAt: (row.created_at as string) ?? '',
     approvalSteps,
-    requesterId: (row.requester_id as string) ?? (data.requesterId as string) ?? undefined,
-    originSheet: ((row.origin_sheet as string) ?? (data.originSheet as string) ?? undefined) as SpendRequest['originSheet'],
+    requesterId: (row.requester_id as string) ?? undefined,
+    originSheet: ((row.origin_sheet as string) ?? undefined) as SpendRequest['originSheet'],
     originFiscalYearId: (row.origin_fiscal_year_id as string) ?? undefined,
-    originCostCenterId: (row.origin_cost_center_id as string) ?? (data.originCostCenterId as string) ?? undefined,
-    originLineItemId: (row.origin_line_item_id as string) ?? (data.originLineItemId as string) ?? undefined,
-    originKind: ((row.origin_kind as string) ?? (data.originKind as string) ?? undefined) as SpendRequest['originKind'],
-    lineItemName: (row.line_item_name as string) ?? (data.lineItemName as string) ?? undefined,
-    targetRequestId: (row.target_request_id as string) ?? (data.targetRequestId as string) ?? undefined,
-    targetRequestSnapshot: data.targetRequestSnapshot as SpendRequest['targetRequestSnapshot'],
-    deletionPending: data.deletionPending as boolean | undefined,
+    originCostCenterId: (row.origin_cost_center_id as string) ?? undefined,
+    originLineItemId: (row.origin_line_item_id as string) ?? undefined,
+    originKind: ((row.origin_kind as string) ?? undefined) as SpendRequest['originKind'],
+    lineItemName: (row.line_item_name as string) ?? undefined,
+    targetRequestId: (row.target_request_id as string) ?? undefined,
+    targetRequestSnapshot: undefined,
+    deletionPending: undefined,
     deletedAt: (row.deleted_at as string) ?? undefined,
-    deletedByRole: data.deletedByRole as string | undefined,
-    deletedJustification: data.deletedJustification as string | undefined,
-    currentAmount: (row.current_amount as number) ?? (data.currentAmount as number) ?? undefined,
-    revisedAmount: (row.revised_amount as number) ?? (data.revisedAmount as number) ?? undefined,
+    deletedByRole: undefined,
+    deletedJustification: undefined,
+    currentAmount: (row.current_amount as number) ?? undefined,
+    revisedAmount: (row.revised_amount as number) ?? undefined,
   };
 
   return migrateRequest(request);
