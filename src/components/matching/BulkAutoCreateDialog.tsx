@@ -58,7 +58,7 @@ interface BulkAutoCreateDialogProps {
   costCenters: CostCenter[];
   existingRuleKeys: Set<string>;
   fiscalYearId: string;
-  currentRole: string;
+  currentRole: UserRole;
   onComplete: () => void;
 }
 
