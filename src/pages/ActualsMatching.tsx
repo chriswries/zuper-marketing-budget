@@ -622,6 +622,26 @@ export default function ActualsMatching() {
               </Card>
             </div>
 
+            {/* Bulk Actions */}
+            {canEdit && stats.unmatchedCount > 0 && costCenters.length > 0 && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Bulk Actions</p>
+                      <p className="text-sm text-muted-foreground">
+                        {stats.unmatchedCount} unmatched transaction(s) — auto-create line items and match them all at once.
+                      </p>
+                    </div>
+                    <Button onClick={() => setBulkDialogOpen(true)}>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Auto-Create &amp; Match All
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Transactions Table */}
             <Card>
               <CardHeader>
