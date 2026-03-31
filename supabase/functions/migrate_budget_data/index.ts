@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
                   cancellation_status, cancellation_request_id
                 ) VALUES (
                   ${li.id}, ${cc.id}, ${fyId}, ${li.name},
-                  ${li.vendor?.id ?? null}, ${li.vendor?.name ?? null},
+                  ${null}, ${li.vendor?.name ?? null},
                   ${li.ownerId ?? null},
                   ${li.isContracted ?? false}, ${li.isAccrual ?? false}, ${li.isSoftwareSubscription ?? false},
                   ${li.contractStartDate ?? null}, ${li.contractEndDate ?? null},
