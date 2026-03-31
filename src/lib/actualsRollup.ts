@@ -4,6 +4,7 @@
  */
 
 import type { Month, MONTHS } from '@/types/budget';
+import { createZeroMonthlyValues } from '@/types/budget';
 import type { ActualsTransaction } from '@/types/actuals';
 import type { TransactionMatch } from './actualsMatchingStore';
 import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
