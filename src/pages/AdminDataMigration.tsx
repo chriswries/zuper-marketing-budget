@@ -340,14 +340,7 @@ export default function AdminDataMigration() {
             insertedFYs++;
             dbFiscalYearIds.add(id);
 
-            // Upsert forecast for this newly inserted FY
-            if (legacyData.forecasts[id]) {
-              await supabase.from('fy_forecasts').upsert({
-                fiscal_year_id: id,
-                data: legacyData.forecasts[id] as unknown as Json,
-              });
-              insertedForecasts++;
-            }
+            // Note: fy_forecasts table has been dropped; forecast data is in monthly_values
 
             // Insert actuals for this newly inserted FY
             if (legacyData.actuals[id] && legacyData.actuals[id].length > 0) {
