@@ -143,6 +143,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Route>
                   </Routes>
+                  </ErrorBoundary>
                 </RequestsProvider>
               </FiscalYearBudgetProvider>
             </CurrentUserRoleProvider>
