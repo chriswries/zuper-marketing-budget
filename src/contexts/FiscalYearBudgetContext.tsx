@@ -325,7 +325,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         fetchFiscalYears();
       }
     }
-  }, []);
+  }, [fetchFiscalYears]);
 
   const deleteFiscalYearBudget = useCallback(async (id: string) => {
     // Optimistically remove from state
