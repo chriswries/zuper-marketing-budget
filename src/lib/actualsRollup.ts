@@ -67,13 +67,6 @@ export interface ActualsRollupResult {
   summary: RollupSummary;
 }
 
-function createZeroMonthlyValues(): Record<Month, number> {
-  return {
-    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
-    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
-  };
-}
-
 interface BuildActualsRollupArgs {
   fiscalYearId: string;
   fiscalYear: FiscalYearBudget;

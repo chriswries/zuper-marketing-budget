@@ -1,12 +1,5 @@
-import { CostCenter, MonthlyValues } from '@/types/budget';
+import { CostCenter, MonthlyValues, createZeroMonthlyValues } from '@/types/budget';
 import { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-
-function createZeroMonthlyValues(): MonthlyValues {
-  return {
-    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
-    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
-  };
-}
 
 /**
  * Creates a new set of forecast cost centers from an approved budget.
