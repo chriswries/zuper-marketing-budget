@@ -184,6 +184,7 @@ export default function ActualsImport() {
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
   const [importRefreshKey, setImportRefreshKey] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
   // Reset wizard state when FY changes
   useEffect(() => {
     setFile(null);
