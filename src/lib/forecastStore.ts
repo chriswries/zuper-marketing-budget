@@ -224,13 +224,6 @@ export async function saveForecastForFY(fyId: string, costCenters: CostCenter[])
       }
     }
 
-    // Also write to fy_forecasts JSONB as backup during transition
-    await supabase
-      .from('fy_forecasts')
-      .upsert({
-        fiscal_year_id: fyId,
-        data: costCenters as any,
-      });
   } catch (err) {
     logger.error('Error saving forecast:', err);
   }
