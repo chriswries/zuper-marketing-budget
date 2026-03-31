@@ -173,6 +173,65 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
     }
   };
 
+  const handleUndoLegacy = async () => {
+    setConfirmLegacy(false);
+    setUndoingLegacy(true);
+
+    try {
+      // 1. Get txn_ids for legacy transactions
+      const { data: txnRows, error: txnErr } = await supabase
+        .from("actuals_transactions")
+        .select("txn_id")
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (txnErr) throw new Error(`Failed to query legacy transactions: ${txnErr.message}`);
+
+      const txnIds = (txnRows ?? []).map((r) => r.txn_id);
+
+      // 2. Delete matches
+      if (txnIds.length > 0) {
+        const { error: matchErr } = await supabase
+          .from("actuals_matches")
+          .delete()
+          .eq("fiscal_year_id", fiscalYearId)
+          .in("txn_id", txnIds);
+
+        if (matchErr) throw new Error(`Failed to delete matches: ${matchErr.message}`);
+      }
+
+      // 3. Delete the transactions
+      const { error: delErr } = await supabase
+        .from("actuals_transactions")
+        .delete()
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (delErr) throw new Error(`Failed to delete legacy transactions: ${delErr.message}`);
+
+      // 4. Invalidate caches
+      invalidateActualsCache(fiscalYearId);
+      invalidateMatchingCache(fiscalYearId);
+
+      // 5. Refresh
+      await loadBatches();
+
+      toast({
+        title: "Legacy imports undone",
+        description: `${txnIds.length} pre-tracking transactions removed.`,
+      });
+    } catch (err) {
+      console.error("Legacy undo failed:", err);
+      toast({
+        title: "Undo failed",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setUndoingLegacy(false);
+    }
+  };
+
   if (!fiscalYearId) return null;
 
   return (
