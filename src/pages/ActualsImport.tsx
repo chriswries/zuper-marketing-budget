@@ -5,7 +5,7 @@
  * Matching/rollups to line items is implemented in Track B Prompt B2.
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -54,7 +54,7 @@ import type {
   ColumnMapping, 
   ParsedRow 
 } from '@/types/actuals';
-
+import { ImportHistoryPanel } from '@/components/import/ImportHistoryPanel';
 type Step = 'upload' | 'mapping' | 'preview' | 'confirm';
 
 // Helper to parse dates flexibly — returns YYYY-MM-DD string to avoid timezone shifts
@@ -134,7 +134,7 @@ export default function ActualsImport() {
   const [amountSignMode, setAmountSignMode] = useState<'expenses_positive' | 'expenses_negative'>('expenses_positive');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
-
+  const [importRefreshKey, setImportRefreshKey] = useState(0);
   // Reset wizard state when FY changes
   useEffect(() => {
     setFile(null);
@@ -397,6 +397,7 @@ export default function ActualsImport() {
             : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
         });
 
+        setImportRefreshKey(k => k + 1);
         navigate('/admin');
         return;
       }
@@ -418,6 +419,7 @@ export default function ActualsImport() {
         description: `Total: ${formatUSD(totalAmount)}. Batch: ${batchId.slice(0, 8)}`,
       });
 
+      setImportRefreshKey(k => k + 1);
       navigate('/admin');
     } catch (err) {
       toast({
@@ -1012,6 +1014,13 @@ export default function ActualsImport() {
       )}
 
       {renderStep()}
+
+      {/* Import History */}
+      {canImport && selectedFYId && (
+        <div className="mt-8">
+          <ImportHistoryPanel fiscalYearId={selectedFYId} refreshKey={importRefreshKey} />
+        </div>
+      )}
     </div>
   );
 }
