@@ -342,6 +342,7 @@ export default function ActualsImport() {
     }
 
     const now = new Date().toISOString();
+    const batchId = crypto.randomUUID();
     const transactions: ActualsTransaction[] = validRows.map((row) => ({
       id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!),
       source,
@@ -356,37 +357,76 @@ export default function ActualsImport() {
       externalId: row.externalId,
       raw: row.raw,
       createdAt: now,
+      importBatchId: batchId,
+      importFilename: file?.name ?? null,
     }));
 
-    if (replaceExisting) {
-      await replaceActuals(selectedFYId, transactions);
-      toast({
-        title: `Imported ${transactions.length} transactions`,
-        description: `Total: ${formatUSD(totalAmount)}`,
-      });
-    } else {
-      // Dedup: filter out transactions whose id already exists
-      const existing = loadActuals(selectedFYId);
-      const existingIds = new Set(existing.map(t => t.id));
-      const newTransactions = transactions.filter(t => !existingIds.has(t.id));
-      const skippedCount = transactions.length - newTransactions.length;
+    try {
+      if (replaceExisting) {
+        await replaceActuals(selectedFYId, transactions);
+      } else {
+        // Dedup: filter out transactions whose id already exists
+        const existing = loadActuals(selectedFYId);
+        const existingIds = new Set(existing.map(t => t.id));
+        const newTransactions = transactions.filter(t => !existingIds.has(t.id));
+        const skippedCount = transactions.length - newTransactions.length;
 
-      if (newTransactions.length > 0) {
-        await appendActuals(selectedFYId, newTransactions);
+        if (newTransactions.length > 0) {
+          await appendActuals(selectedFYId, newTransactions);
+        }
+
+        // Insert batch record
+        const importedCount = replaceExisting ? transactions.length : (transactions.length - (transactions.length - (newTransactions?.length ?? transactions.length)));
+        const importedTotal = (replaceExisting ? transactions : newTransactions).reduce((s, t) => s + t.amount, 0);
+
+        await supabase.from('import_batches').insert({
+          id: batchId,
+          fiscal_year_id: selectedFYId,
+          filename: file?.name ?? 'unknown',
+          source: source,
+          row_count: replaceExisting ? transactions.length : newTransactions.length,
+          total_amount: importedTotal,
+          imported_by_role: currentRole ?? 'admin',
+          status: 'active',
+        });
+
+        toast({
+          title: `Imported ${newTransactions.length} transactions`,
+          description: skippedCount > 0
+            ? `${skippedCount} duplicate(s) skipped. Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`
+            : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
+        });
+
+        navigate('/admin');
+        return;
       }
 
-      const newTotal = newTransactions.reduce((sum, t) => sum + t.amount, 0);
+      // For replace mode, insert batch record too
+      await supabase.from('import_batches').insert({
+        id: batchId,
+        fiscal_year_id: selectedFYId,
+        filename: file?.name ?? 'unknown',
+        source: source,
+        row_count: transactions.length,
+        total_amount: totalAmount,
+        imported_by_role: currentRole ?? 'admin',
+        status: 'active',
+      });
+
       toast({
-        title: `Imported ${newTransactions.length} transactions`,
-        description: skippedCount > 0
-          ? `${skippedCount} duplicate transaction(s) skipped. Total: ${formatUSD(newTotal)}`
-          : `Total: ${formatUSD(newTotal)}`,
+        title: `Imported ${transactions.length} transactions (replaced)`,
+        description: `Total: ${formatUSD(totalAmount)}. Batch: ${batchId.slice(0, 8)}`,
+      });
+
+      navigate('/admin');
+    } catch (err) {
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
       });
     }
-
-    // Navigate back to admin
-    navigate('/admin');
-  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast]);
+  }, [selectedFYId, validRows, invalidRows, skipInvalidRows, source, replaceExisting, totalAmount, navigate, toast, file, currentRole]);
 
   // Render based on step
   const renderStep = () => {
