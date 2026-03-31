@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Storage module for actuals transactions.
  * Persists to Supabase actuals_transactions table.
@@ -71,7 +72,7 @@ export async function loadActualsAsync(fiscalYearId: string): Promise<ActualsTra
       .eq('fiscal_year_id', fiscalYearId);
 
     if (error) {
-      console.error('Failed to load actuals:', error);
+      logger.error('Failed to load actuals:', error);
       return [];
     }
 
@@ -79,7 +80,7 @@ export async function loadActualsAsync(fiscalYearId: string): Promise<ActualsTra
     actualsCache[fiscalYearId] = txns;
     return txns;
   } catch (err) {
-    console.error('Error loading actuals:', err);
+    logger.error('Error loading actuals:', err);
     return [];
   }
 }
@@ -91,7 +92,7 @@ export function loadActuals(fiscalYearId: string): ActualsTransaction[] {
   }
   
   // Trigger async load for next time
-  loadActualsAsync(fiscalYearId).catch(console.error);
+  loadActualsAsync(fiscalYearId).catch(logger.error);
   
   return [];
 }
@@ -110,10 +111,10 @@ export async function appendActuals(fiscalYearId: string, txns: ActualsTransacti
       .insert(rows);
 
     if (error) {
-      console.error('Failed to append actuals:', error);
+      logger.error('Failed to append actuals:', error);
     }
   } catch (err) {
-    console.error('Error appending actuals:', err);
+    logger.error('Error appending actuals:', err);
   }
 }
 
@@ -148,10 +149,10 @@ export async function deleteActualsForFY(fiscalYearId: string): Promise<void> {
       .eq('fiscal_year_id', fiscalYearId);
 
     if (error) {
-      console.error('Failed to delete actuals:', error);
+      logger.error('Failed to delete actuals:', error);
     }
   } catch (err) {
-    console.error('Error deleting actuals:', err);
+    logger.error('Error deleting actuals:', err);
   }
 }
 

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Global Canonical Vendor Registry Store
  * 
@@ -53,7 +54,7 @@ export async function listCanonicalVendors(includeInactive = false): Promise<Can
     .order('name', { ascending: true });
 
   if (error) {
-    console.error('Failed to load canonical vendors:', error);
+    logger.error('Failed to load canonical vendors:', error);
     return [];
   }
 
@@ -111,7 +112,7 @@ export async function upsertCanonicalVendor(name: string): Promise<CanonicalVend
     .single();
 
   if (error) {
-    console.error('Failed to create canonical vendor:', error);
+    logger.error('Failed to create canonical vendor:', error);
     return null;
   }
 
@@ -139,7 +140,7 @@ export async function setCanonicalVendorActive(id: string, isActive: boolean): P
     .eq('id', id);
 
   if (error) {
-    console.error('Failed to update canonical vendor active status:', error);
+    logger.error('Failed to update canonical vendor active status:', error);
   }
 
   invalidateVendorsCache();
@@ -166,7 +167,7 @@ export async function listVendorAliases(includeInactive = false): Promise<Vendor
     .order('alias_display', { ascending: true });
 
   if (error) {
-    console.error('Failed to load vendor aliases:', error);
+    logger.error('Failed to load vendor aliases:', error);
     return [];
   }
 
@@ -235,7 +236,7 @@ export async function upsertVendorAlias(
         .eq('id', existing.id);
 
       if (error) {
-        console.error('Failed to update vendor alias:', error);
+        logger.error('Failed to update vendor alias:', error);
         return null;
       }
 
@@ -262,7 +263,7 @@ export async function upsertVendorAlias(
     .single();
 
   if (error) {
-    console.error('Failed to create vendor alias:', error);
+    logger.error('Failed to create vendor alias:', error);
     return null;
   }
 
@@ -292,7 +293,7 @@ export async function setVendorAliasActive(id: string, isActive: boolean): Promi
     .eq('id', id);
 
   if (error) {
-    console.error('Failed to update vendor alias active status:', error);
+    logger.error('Failed to update vendor alias active status:', error);
   }
 
   invalidateAliasesCache();
@@ -442,6 +443,6 @@ export async function logVendorRegistryAudit(
       meta: meta as unknown as import('@/integrations/supabase/types').Json,
     }]);
   } catch (err) {
-    console.error('Failed to log vendor registry audit event:', err);
+    logger.error('Failed to log vendor registry audit event:', err);
   }
 }

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Storage module for actuals transaction matching and merchant rules.
  * Persists to Supabase actuals_matching table.
@@ -47,7 +48,7 @@ export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<Ac
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to load actuals matching:', error);
+      logger.error('Failed to load actuals matching:', error);
       return DEFAULT_MATCHING_DATA;
     }
 
@@ -63,7 +64,7 @@ export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<Ac
     matchingCache[fiscalYearId] = result;
     return result;
   } catch (err) {
-    console.error('Error loading actuals matching:', err);
+    logger.error('Error loading actuals matching:', err);
     return DEFAULT_MATCHING_DATA;
   }
 }
@@ -75,7 +76,7 @@ export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
   }
   
   // Trigger async load
-  loadActualsMatchingAsync(fiscalYearId).catch(console.error);
+  loadActualsMatchingAsync(fiscalYearId).catch(logger.error);
   
   return DEFAULT_MATCHING_DATA;
 }
@@ -94,10 +95,10 @@ export async function saveActualsMatching(fiscalYearId: string, data: ActualsMat
       });
 
     if (error) {
-      console.error('Failed to save actuals matching:', error);
+      logger.error('Failed to save actuals matching:', error);
     }
   } catch (err) {
-    console.error('Error saving actuals matching:', err);
+    logger.error('Error saving actuals matching:', err);
   }
 }
 
@@ -219,10 +220,10 @@ export async function deleteActualsMatchingForFY(fiscalYearId: string): Promise<
       .eq('fiscal_year_id', fiscalYearId);
 
     if (error) {
-      console.error('Failed to delete actuals matching:', error);
+      logger.error('Failed to delete actuals matching:', error);
     }
   } catch (err) {
-    console.error('Error deleting actuals matching:', err);
+    logger.error('Error deleting actuals matching:', err);
   }
 }
 

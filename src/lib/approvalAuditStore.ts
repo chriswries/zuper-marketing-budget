@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { supabase } from '@/integrations/supabase/client';
 import {
   ApprovalEntityType,
@@ -52,7 +53,7 @@ export async function loadApprovalAudit(
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Failed to load approval audit:', error);
+    logger.error('Failed to load approval audit:', error);
     return [];
   }
 
@@ -98,7 +99,7 @@ export async function appendApprovalAudit(
     .single();
 
   if (error) {
-    console.error('Failed to append approval audit:', error);
+    logger.error('Failed to append approval audit:', error);
   }
 
   const fullEvent: ApprovalAuditEvent = {
@@ -244,7 +245,7 @@ export async function loadAllApprovalAuditEvents(): Promise<ApprovalAuditEvent[]
     .limit(500);
 
   if (error) {
-    console.error('Failed to load all approval audit events:', error);
+    logger.error('Failed to load all approval audit events:', error);
     return [];
   }
 
@@ -263,7 +264,7 @@ export async function removeApprovalAuditForEntity(
     .eq('entity_id', entityId);
 
   if (error) {
-    console.error('Failed to remove approval audit for entity:', error);
+    logger.error('Failed to remove approval audit for entity:', error);
   }
 
   // Clear cache
@@ -304,7 +305,7 @@ export async function replaceApprovalAuditForEntity(
       .insert(rows);
 
     if (error) {
-      console.error('Failed to replace approval audit for entity:', error);
+      logger.error('Failed to replace approval audit for entity:', error);
     }
   }
 
