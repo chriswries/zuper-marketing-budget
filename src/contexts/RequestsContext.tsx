@@ -219,7 +219,8 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('Failed to update request:', error);
-        // Could refetch to revert on error
+        toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+        fetchRequests();
       }
     }
   }, []);
