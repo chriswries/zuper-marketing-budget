@@ -407,6 +407,13 @@ export default function ActualsImport() {
     const batchId = crypto.randomUUID();
     const rawTransactions: ActualsTransaction[] = validRows.map((row) => {
       const tiebreaker = row.externalId || `${row.description || ''}_${row.rowIndex}`;
+      console.log('Row debug:', {
+        rowIndex: row.rowIndex,
+        desc: row.description?.slice(0, 20),
+        ext: row.externalId,
+        tiebreaker,
+      });
+
       return {
       id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!, tiebreaker),
       source,
