@@ -136,9 +136,11 @@ export async function appendActuals(fiscalYearId: string, txns: ActualsTransacti
 
     if (error) {
       logger.error('Failed to append actuals:', error);
+      throw new Error(`Failed to append actuals: ${error.message}`);
     }
   } catch (err) {
     logger.error('Error appending actuals:', err);
+    throw err;
   }
 }
 
