@@ -414,7 +414,6 @@ export default function ActualsImport() {
       importFilename: file?.name ?? null,
     }));
 
-    try {
       if (replaceExisting) {
         await replaceActuals(selectedFYId, transactions);
       } else {
@@ -450,7 +449,7 @@ export default function ActualsImport() {
             : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
         });
 
-      invalidateActualsCache(selectedFYId);
+        invalidateActualsCache(selectedFYId);
         invalidateMatchingCache(selectedFYId);
         setImportRefreshKey(k => k + 1);
         navigate('/admin');
@@ -484,9 +483,6 @@ export default function ActualsImport() {
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       });
-    } finally {
-      setIsImporting(false);
-    }
     } finally {
       setIsImporting(false);
     }
