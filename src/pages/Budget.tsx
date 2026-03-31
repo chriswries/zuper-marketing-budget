@@ -151,26 +151,35 @@ export default function Budget() {
     currentRole,
   });
 
-  // Justification dialog state
-  const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
-  const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentJustificationData | null>(null);
-  const [pendingUpdatedValues, setPendingUpdatedValues] = useState<MonthlyValues | null>(null);
-  const [pendingOldValues, setPendingOldValues] = useState<MonthlyValues | null>(null);
-
-  // Admin override dialog state
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
-  const [pendingOverrideAction, setPendingOverrideAction] = useState<{
-    type: 'cell_edit' | 'delete_line_item';
-    costCenterId: string;
-    lineItemId: string;
-    month?: Month;
-    oldValue?: number;
-    newValue?: number;
-    updatedValues?: MonthlyValues;
-  } | null>(null);
-
   // Admin override mode
   const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
+
+  const {
+    handleCellChange,
+    justificationDialogOpen,
+    pendingAdjustment,
+    pendingUpdatedValues,
+    pendingOldValues,
+    setJustificationDialogOpen,
+    handleJustificationSubmit,
+    handleJustificationCancel,
+    overrideDialogOpen,
+    pendingOverrideAction,
+    setOverrideDialogOpen,
+    setPendingOverrideAction,
+    handleOverrideSubmit,
+    handleOverrideCancel,
+  } = useBudgetCellEdit({
+    selectedFiscalYear,
+    selectedFiscalYearId,
+    updateFiscalYearBudget,
+    addRequest,
+    updateRequest,
+    adminSettings,
+    currentRole,
+    isAdminOverride,
+    setApprovalAuditEvents,
+  });
 
   // Edit tags dialog state
   const [editTagsOpen, setEditTagsOpen] = useState(false);
