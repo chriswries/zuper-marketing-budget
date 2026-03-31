@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      actuals_matches: {
+        Row: {
+          cost_center_id: string
+          created_at: string
+          fiscal_year_id: string
+          line_item_id: string
+          match_source: string
+          matched_at: string
+          matched_by_role: string
+          merchant_key: string | null
+          txn_id: string
+        }
+        Insert: {
+          cost_center_id: string
+          created_at?: string
+          fiscal_year_id: string
+          line_item_id: string
+          match_source?: string
+          matched_at?: string
+          matched_by_role: string
+          merchant_key?: string | null
+          txn_id: string
+        }
+        Update: {
+          cost_center_id?: string
+          created_at?: string
+          fiscal_year_id?: string
+          line_item_id?: string
+          match_source?: string
+          matched_at?: string
+          matched_by_role?: string
+          merchant_key?: string | null
+          txn_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actuals_matches_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actuals_matches_fiscal_year_id_txn_id_fkey"
+            columns: ["fiscal_year_id", "txn_id"]
+            isOneToOne: true
+            referencedRelation: "actuals_transactions"
+            referencedColumns: ["fiscal_year_id", "txn_id"]
+          },
+        ]
+      }
       actuals_matching: {
         Row: {
           created_at: string
@@ -262,6 +313,47 @@ export type Database = {
             foreignKeyName: "fy_forecasts_fiscal_year_id_fkey"
             columns: ["fiscal_year_id"]
             isOneToOne: true
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchant_rules: {
+        Row: {
+          cost_center_id: string
+          created_at: string
+          created_by_role: string
+          fiscal_year_id: string
+          id: string
+          line_item_id: string
+          merchant_key: string
+          updated_at: string
+        }
+        Insert: {
+          cost_center_id: string
+          created_at?: string
+          created_by_role: string
+          fiscal_year_id: string
+          id?: string
+          line_item_id: string
+          merchant_key: string
+          updated_at?: string
+        }
+        Update: {
+          cost_center_id?: string
+          created_at?: string
+          created_by_role?: string
+          fiscal_year_id?: string
+          id?: string
+          line_item_id?: string
+          merchant_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_rules_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
             referencedRelation: "fiscal_years"
             referencedColumns: ["id"]
           },
