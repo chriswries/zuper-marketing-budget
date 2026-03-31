@@ -365,13 +365,34 @@ export default function AdminDataMigration() {
               insertedActuals += legacyData.actuals[id].length;
             }
 
-            // Upsert matching for this newly inserted FY
+            // Upsert matching for this newly inserted FY (relational tables)
             if (legacyData.matching[id]) {
-              await supabase.from('actuals_matching').upsert({
-                fiscal_year_id: id,
-                matches_by_txn_id: legacyData.matching[id].matchesByTxnId as unknown as Json,
-                rules_by_merchant_key: legacyData.matching[id].rulesByMerchantKey as unknown as Json,
-              });
+              const matchData = legacyData.matching[id];
+              // Insert matches
+              for (const [txnId, match] of Object.entries(matchData.matchesByTxnId ?? {})) {
+                const m = match as any;
+                await supabase.from('actuals_matches').upsert({
+                  fiscal_year_id: id,
+                  txn_id: txnId,
+                  cost_center_id: m.costCenterId,
+                  line_item_id: m.lineItemId,
+                  match_source: m.matchSource ?? 'manual',
+                  matched_at: m.matchedAt ?? new Date().toISOString(),
+                  matched_by_role: m.matchedByRole ?? 'admin',
+                  merchant_key: m.merchantKey ?? null,
+                }, { onConflict: 'fiscal_year_id,txn_id' });
+              }
+              // Insert rules
+              for (const [merchantKey, rule] of Object.entries(matchData.rulesByMerchantKey ?? {})) {
+                const r = rule as any;
+                await supabase.from('merchant_rules').upsert({
+                  fiscal_year_id: id,
+                  merchant_key: merchantKey,
+                  cost_center_id: r.costCenterId,
+                  line_item_id: r.lineItemId,
+                  created_by_role: r.createdByRole ?? 'admin',
+                }, { onConflict: 'fiscal_year_id,merchant_key' });
+              }
               insertedMatching++;
             }
           }
