@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { supabase } from '@/integrations/supabase/client';
 import { CostCenter, LineItem, MonthlyValues, MONTHS, FiscalYearStatus, createZeroMonthlyValues } from '@/types/budget';
 export type { FiscalYearStatus } from '@/types/budget';
-import type { Json } from '@/integrations/supabase/types';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
@@ -202,8 +202,6 @@ async function persistFYMetadata(fy: FiscalYearBudget): Promise<boolean> {
       archived_by_role: fy.archivedByRole ?? null,
       archived_justification: fy.archivedJustification ?? null,
       previous_status_before_archive: fy.previousStatusBeforeArchive ?? null,
-      // Keep JSONB backup in sync
-      data: fiscalYearToDataJson(fy),
     })
     .eq('id', fy.id);
   return !error;
@@ -283,7 +281,7 @@ async function persistCostCentersAndLineItems(fyId: string, costCenters: CostCen
         approval_request_id: li.approvalRequestId ?? null,
         adjustment_status: li.adjustmentStatus ?? null,
         adjustment_request_id: li.adjustmentRequestId ?? null,
-        adjustment_before_values: li.adjustmentBeforeValues ? (li.adjustmentBeforeValues as unknown as Json) : null,
+        adjustment_before_values: li.adjustmentBeforeValues ? (li.adjustmentBeforeValues as any) : null,
         adjustment_sheet: li.adjustmentSheet ?? null,
         deletion_status: li.deletionStatus ?? null,
         deletion_request_id: li.deletionRequestId ?? null,
@@ -318,10 +316,6 @@ async function persistBudgetMonthlyValues(fyId: string, costCenters: CostCenter[
   }
 }
 
-function fiscalYearToDataJson(fy: FiscalYearBudget): Json {
-  const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive, ...rest } = fy;
-  return rest as unknown as Json;
-}
 
 // ─── Provider ───
 
@@ -530,8 +524,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         approval_submitted_at: draft.approval.submittedAt ?? null,
         approval_approved_at: draft.approval.approvedAt ?? null,
         approval_rejected_at: draft.approval.rejectedAt ?? null,
-        data: fiscalYearToDataJson(draft),
-      });
+      } as any);
 
       if (fyError) {
         logger.error('Failed to create fiscal year:', fyError);

@@ -224,13 +224,6 @@ export async function saveForecastForFY(fyId: string, costCenters: CostCenter[])
       }
     }
 
-    // Also write to fy_forecasts JSONB as backup during transition
-    await supabase
-      .from('fy_forecasts')
-      .upsert({
-        fiscal_year_id: fyId,
-        data: costCenters as any,
-      });
   } catch (err) {
     logger.error('Error saving forecast:', err);
   }
@@ -253,11 +246,6 @@ export async function clearForecastForFY(fyId: string): Promise<void> {
       logger.error('Failed to clear forecast monthly values:', error);
     }
 
-    // Also clear legacy JSONB backup
-    await supabase
-      .from('fy_forecasts')
-      .delete()
-      .eq('fiscal_year_id', fyId);
   } catch (err) {
     logger.error('Error clearing forecast:', err);
   }

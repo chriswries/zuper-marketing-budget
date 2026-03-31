@@ -1,4 +1,4 @@
-import { CostCenter, MonthlyValues, MONTHS, createZeroMonthlyValues } from '@/types/budget';
+import { CostCenter, MONTHS, createZeroMonthlyValues } from '@/types/budget';
 import { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
@@ -44,20 +44,7 @@ export async function createForecastCostCentersFromBudget(fy: FiscalYearBudget):
     }
   }
 
-  // Also write to fy_forecasts JSONB as backup during transition
-  const resultCCs = buildForecastCostCenters(fy);
-  try {
-    await supabase
-      .from('fy_forecasts')
-      .upsert({
-        fiscal_year_id: fyId,
-        data: resultCCs as any,
-      });
-  } catch (err) {
-    logger.error('Failed to write fy_forecasts backup:', err);
-  }
-
-  return resultCCs;
+  return buildForecastCostCenters(fy);
 }
 
 /**

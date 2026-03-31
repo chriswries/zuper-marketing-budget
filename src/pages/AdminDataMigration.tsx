@@ -325,29 +325,21 @@ export default function AdminDataMigration() {
       // 1. Insert FYs that don't exist
       for (const fy of legacyData.fiscalYears) {
         if (!dbFiscalYearIds.has(fy.id)) {
-          const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive, ...rest } = fy;
+          const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive } = fy;
           const { error } = await supabase.from('fiscal_years').insert({
             id,
             name,
             status,
-            data: rest as unknown as Json,
             archived_at: archivedAt ?? null,
             archived_by_role: archivedByRole ?? null,
             archived_justification: archivedJustification ?? null,
             previous_status_before_archive: previousStatusBeforeArchive ?? null,
-          });
+          } as any);
           if (!error) {
             insertedFYs++;
             dbFiscalYearIds.add(id);
 
-            // Upsert forecast for this newly inserted FY
-            if (legacyData.forecasts[id]) {
-              await supabase.from('fy_forecasts').upsert({
-                fiscal_year_id: id,
-                data: legacyData.forecasts[id] as unknown as Json,
-              });
-              insertedForecasts++;
-            }
+            // Note: fy_forecasts table has been dropped; forecast data is in monthly_values
 
             // Insert actuals for this newly inserted FY
             if (legacyData.actuals[id] && legacyData.actuals[id].length > 0) {
@@ -406,8 +398,7 @@ export default function AdminDataMigration() {
             id: req.id,
             status: req.status,
             origin_fiscal_year_id: req.originFiscalYearId ?? null,
-            data: req as unknown as Json,
-          });
+          } as any);
           if (!error) {
             insertedRequests++;
           }
@@ -493,7 +484,7 @@ export default function AdminDataMigration() {
       await supabase.from('actuals_matches').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('merchant_rules').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('actuals_transactions').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('fy_forecasts').delete().neq('fiscal_year_id', '00000000-0000-0000-0000-000000000000');
+      
       await supabase.from('fiscal_years').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
       // 2. Insert all legacy data
@@ -501,27 +492,20 @@ export default function AdminDataMigration() {
       let insertedRequests = 0;
 
       for (const fy of legacyData.fiscalYears) {
-        const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive, ...rest } = fy;
+        const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive } = fy;
         const { error } = await supabase.from('fiscal_years').insert({
           id,
           name,
           status,
-          data: rest as unknown as Json,
           archived_at: archivedAt ?? null,
           archived_by_role: archivedByRole ?? null,
           archived_justification: archivedJustification ?? null,
           previous_status_before_archive: previousStatusBeforeArchive ?? null,
-        });
+        } as any);
         if (!error) {
           insertedFYs++;
 
-          // Insert forecast
-          if (legacyData.forecasts[id]) {
-            await supabase.from('fy_forecasts').insert({
-              fiscal_year_id: id,
-              data: legacyData.forecasts[id] as unknown as Json,
-            });
-          }
+          // Note: fy_forecasts table has been dropped; forecast data is in monthly_values
 
           // Insert actuals
           if (legacyData.actuals[id]) {
@@ -573,8 +557,7 @@ export default function AdminDataMigration() {
           id: req.id,
           status: req.status,
           origin_fiscal_year_id: req.originFiscalYearId ?? null,
-          data: req as unknown as Json,
-        });
+        } as any);
         if (!error) {
           insertedRequests++;
         }
