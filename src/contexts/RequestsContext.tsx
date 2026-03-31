@@ -97,6 +97,9 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
   // Track previous statuses to detect transitions
   const prevStatusesRef = useRef<Record<string, RequestStatus>>({});
 
+  // Track IDs that need persistence from setRequests bulk updates
+  const pendingPersistRef = useRef<Set<string>>(new Set());
+
   // Fetch all requests from DB
   const fetchRequests = useCallback(async () => {
     try {
