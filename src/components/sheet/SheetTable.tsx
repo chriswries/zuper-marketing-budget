@@ -731,7 +731,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                               <TableCell className="relative z-0 w-[220px] min-w-[220px] text-muted-foreground text-sm bg-background group-hover:bg-muted">
                                 {item.vendor?.name ?? '—'}
                               </TableCell>
-                              {MONTHS.map((month) => {
+                              {MONTHS.map((month, monthIdx) => {
                                 const cellValue = item[valueType][month];
                                 // Only apply locked months logic for forecastValues (not budgetValues)
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
@@ -744,9 +744,17 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const effectiveMonthLocked = isAdminOverride ? false : isMonthLocked;
                                 
                                 if (isEditable && !effectiveMonthLocked && !isItemLocked && !isPendingLocked) {
+                                  const cellKey = `${item.id}:${monthIdx}`;
                                   return (
                                     <EditableCell
                                       key={month}
+                                      ref={(handle) => {
+                                        if (handle) {
+                                          cellRefs.current.set(cellKey, handle);
+                                        } else {
+                                          cellRefs.current.delete(cellKey);
+                                        }
+                                      }}
                                       value={cellValue}
                                       formatted={formatCurrency(cellValue)}
                                       className="w-[120px] min-w-[120px]"
@@ -759,6 +767,7 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                           newValue,
                                         });
                                       }}
+                                      onNavigate={buildOnNavigate(item.id, monthIdx)}
                                     />
                                   );
                                 }
