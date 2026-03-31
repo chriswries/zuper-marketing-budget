@@ -400,10 +400,21 @@ export default function BurnRateRunwayReport() {
         Back
       </Button>
       
-      <PageHeader
-        title="Burn Rate / Runway"
-        description="Track spending velocity and forecast when budget will be exhausted"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Burn Rate / Runway"
+          description="Track spending velocity and forecast when budget will be exhausted"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 no-print"
+          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Burn_Rate_Runway`)}
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+      </div>
       
       {/* Controls */}
       <Card>

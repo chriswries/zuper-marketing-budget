@@ -529,10 +529,21 @@ export default function ForecastActualsVarianceReport() {
             Showing: {scopeMode === 'fy' ? 'Full FY' : `YTD through ${MONTH_LABELS[asOfMonth]}`}
           </div>
         </div>
-        <Button onClick={handleExportCsv} variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleExportCsv} variant="outline" className="gap-2 no-print">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 no-print"
+            onClick={() => exportReportToPdf(`${selectedFiscalYear.name}_Forecast_vs_Actuals_Variance`)}
+          >
+            <FileDown className="h-4 w-4" />
+            Export PDF
+          </Button>
+        </div>
       </div>
       
       {/* Summary Cards */}

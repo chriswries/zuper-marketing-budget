@@ -303,10 +303,21 @@ export default function CostCenterLeaderboardReport() {
         Back
       </Button>
       
-      <PageHeader
-        title="Cost Center Leaderboard"
-        description="Rank cost centers by spend and variance"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Cost Center Leaderboard"
+          description="Rank cost centers by spend and variance"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 no-print"
+          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Cost_Center_Leaderboard`)}
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+      </div>
       
       {/* Two leaderboards side by side */}
       <div className="grid gap-6 lg:grid-cols-2">

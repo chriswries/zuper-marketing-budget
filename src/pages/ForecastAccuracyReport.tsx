@@ -329,10 +329,21 @@ export default function ForecastAccuracyReport() {
         Back
       </Button>
       
-      <PageHeader
-        title="Forecast Accuracy"
-        description="Measure how accurately forecasts predict actual spending"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Forecast Accuracy"
+          description="Measure how accurately forecasts predict actual spending"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 no-print"
+          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Forecast_Accuracy`)}
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+      </div>
       
       {/* YTD Accuracy KPI */}
       <Card>
