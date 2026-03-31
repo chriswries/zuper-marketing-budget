@@ -397,10 +397,10 @@ export default function ForecastAccuracyReport() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 font-medium">Month</th>
-                  <th className="text-right py-2 font-medium">Forecast (Cum)</th>
-                  <th className="text-right py-2 font-medium">Actuals (Cum)</th>
-                  <th className="text-right py-2 font-medium">Accuracy</th>
+                  <th className="text-left py-2 font-medium sticky top-0 bg-background">Month</th>
+                  <th className="text-right py-2 font-medium sticky top-0 bg-background">Forecast (Cum)</th>
+                  <th className="text-right py-2 font-medium sticky top-0 bg-background">Actuals (Cum)</th>
+                  <th className="text-right py-2 font-medium sticky top-0 bg-background">Accuracy</th>
                 </tr>
               </thead>
               <tbody>

@@ -858,7 +858,7 @@ interface LineItemRowProps {
 function LineItemRow({ item, showMonthly, onViewInForecast, onViewInActuals }: LineItemRowProps) {
   return (
     <TableRow className="text-sm">
-      <TableCell className="pl-10">
+      <TableCell className="pl-10 sticky left-0 z-20 bg-background border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-2">
           <span>{item.name}</span>
           {item.status === 'forecast_only' && (
