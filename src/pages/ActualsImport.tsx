@@ -46,7 +46,8 @@ import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
 import { parseCsv } from '@/lib/csvParse';
-import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@/lib/actualsStore';
+import { loadActuals, appendActuals, replaceActuals, getActualsSummary, invalidateActualsCache } from '@/lib/actualsStore';
+import { invalidateMatchingCache } from '@/lib/actualsMatchingStore';
 import { supabase } from '@/integrations/supabase/client';
 
 const NONE_VALUE = "__none__";
