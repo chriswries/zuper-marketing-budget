@@ -65,8 +65,10 @@ import {
 } from '@/lib/actualsMatchingStore';
 import { recomputeAndSaveActualsRollup } from '@/lib/actualsRollupStore';
 import type { ActualsTransaction } from '@/types/actuals';
-import { Link, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
-
+import { MONTHS } from '@/types/budget';
+import { supabase } from '@/integrations/supabase/client';
+import { Link, CheckCircle, XCircle, AlertTriangle, Info, Plus, Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 type FilterTab = 'all' | 'unmatched' | 'matched';
 
 export default function ActualsMatching() {
