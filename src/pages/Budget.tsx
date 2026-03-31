@@ -1347,8 +1347,8 @@ export default function Budget() {
       const lineItemWithApproval: LineItem = {
         ...lineItem,
         budgetValues,
-        forecastValues: createEmptyMonthlyValues(),
-        actualValues: createEmptyMonthlyValues(),
+        forecastValues: createZeroMonthlyValues(),
+        actualValues: createZeroMonthlyValues(),
         approvalStatus: 'pending',
         approvalRequestId: requestId,
       };

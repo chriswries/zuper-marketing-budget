@@ -542,7 +542,7 @@ export default function Forecast() {
       const oldTotal = calculateFYTotal(originalLineItem.forecastValues);
       const newTotal = calculateFYTotal(updatedLineItem.forecastValues);
       if (oldTotal !== newTotal) {
-        changes.push(`FY total: ${formatCurrency(oldTotal)} → ${formatCurrency(newTotal)}`);
+        changes.push(`FY total: ${formatCurrencyLocal(oldTotal)} → ${formatCurrencyLocal(newTotal)}`);
       }
       if (originalLineItem.isContracted !== updatedLineItem.isContracted) {
         changes.push(`contracted: ${originalLineItem.isContracted ? 'Yes' : 'No'} → ${updatedLineItem.isContracted ? 'Yes' : 'No'}`);
