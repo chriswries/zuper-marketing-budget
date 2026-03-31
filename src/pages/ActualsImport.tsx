@@ -748,7 +748,6 @@ export default function ActualsImport() {
                 </AlertDescription>
               </Alert>
             )}
-            </div>
 
             {/* Preview Table */}
             <Card>
