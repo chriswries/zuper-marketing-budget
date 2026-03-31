@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { formatCurrency } from '@/lib/format';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
