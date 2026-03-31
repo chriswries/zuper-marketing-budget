@@ -25,12 +25,14 @@ const CALENDAR_MONTH_TO_KEY: Record<number, Month> = {
 };
 
 /**
- * Convert ISO date string to month key (jan, feb, etc.)
+ * Convert date string (YYYY-MM-DD or ISO) to month key (jan, feb, etc.)
+ * Parses the month directly from the string to avoid timezone shifts.
  */
 export function isoDateToMonthKey(isoDate: string): Month {
-  const date = new Date(isoDate);
-  const monthIndex = date.getUTCMonth();
-  return CALENDAR_MONTH_TO_KEY[monthIndex];
+  // Extract YYYY-MM-DD portion (handles both "2027-01-31" and "2027-01-31T17:00:00Z")
+  const datePart = isoDate.split('T')[0];
+  const monthNum = parseInt(datePart.split('-')[1], 10); // 1-12
+  return CALENDAR_MONTH_TO_KEY[monthNum - 1];
 }
 
 export interface CostCenterRollup {

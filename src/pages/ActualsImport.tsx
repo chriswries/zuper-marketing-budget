@@ -56,31 +56,29 @@ import type {
 
 type Step = 'upload' | 'mapping' | 'preview' | 'confirm';
 
-// Helper to parse dates flexibly
-function parseDate(value: string): Date | null {
+// Helper to parse dates flexibly — returns YYYY-MM-DD string to avoid timezone shifts
+function parseDate(value: string): string | null {
   if (!value) return null;
   
-  // Try common formats
   const trimmed = value.trim();
   
-  // ISO format
-  const isoDate = new Date(trimmed);
-  if (!isNaN(isoDate.getTime())) return isoDate;
-  
-  // MM/DD/YYYY or M/D/YYYY
-  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    const [, month, day, year] = slashMatch;
-    const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    if (!isNaN(d.getTime())) return d;
+  // ISO format (e.g. 2027-01-31T17:00:00Z) — extract date portion before T
+  if (trimmed.includes('T')) {
+    const datePart = trimmed.split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
   }
   
   // YYYY-MM-DD
   const dashMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dashMatch) {
-    const [, year, month, day] = dashMatch;
-    const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    if (!isNaN(d.getTime())) return d;
+    return trimmed; // already in correct format
+  }
+  
+  // MM/DD/YYYY or M/D/YYYY
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, month, day, year] = slashMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
   
   return null;
