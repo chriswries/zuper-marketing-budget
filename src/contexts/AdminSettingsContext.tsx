@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback,
 import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_TIME_ZONE } from '@/lib/dateTime';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 export interface AdminSettings {
   increaseApprovalAbsoluteUsd: number;
