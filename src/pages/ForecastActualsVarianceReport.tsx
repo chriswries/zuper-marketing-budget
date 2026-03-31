@@ -76,11 +76,6 @@ function getMonthlyTotalsForCostCenter(
   return totals;
 }
 
-function formatCurrency(value: number): string {
-  const sign = value >= 0 ? '' : '-';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
 function formatVariance(value: number): string {
   const sign = value > 0 ? '+' : '';
   return `${sign}${formatCurrency(value)}`;

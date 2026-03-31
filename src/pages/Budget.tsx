@@ -29,7 +29,8 @@ import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYear
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
-import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
+import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter, createZeroMonthlyValues } from '@/types/budget';
+import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';

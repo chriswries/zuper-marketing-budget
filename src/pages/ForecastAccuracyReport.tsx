@@ -18,11 +18,6 @@ import {
 } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
-function formatCurrency(value: number): string {
-  const sign = value >= 0 ? '' : '-';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
 function formatPct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
