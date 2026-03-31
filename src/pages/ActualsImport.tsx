@@ -357,8 +357,8 @@ export default function ActualsImport() {
   const canConfirm = validRows.length > 0 && selectedFYId && (invalidRows.length === 0 || skipInvalidRows);
 
   // Generate a deterministic content hash for dedup
-  const contentHash = (fyId: string, txnDate: string, merchant: string, amount: number): string => {
-    return btoa(JSON.stringify([fyId, txnDate, merchant, amount])).slice(0, 32);
+  const contentHash = (fyId: string, txnDate: string, merchant: string, amount: number, tiebreaker: string): string => {
+    return btoa(JSON.stringify([fyId, txnDate, merchant, amount, tiebreaker])).slice(0, 32);
   };
 
   // Handle import confirmation
