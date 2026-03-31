@@ -392,6 +392,30 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Legacy Undo Confirmation Dialog */}
+      <AlertDialog open={confirmLegacy} onOpenChange={setConfirmLegacy}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo all legacy imports?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete {legacyStats?.count ?? 0} pre-tracking transactions
+              totaling {legacyStats ? formatUSD(legacyStats.total) : "$0"}.
+              Matches for these transactions will also be removed.
+              This cannot be undone. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUndoLegacy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Legacy Transactions
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
