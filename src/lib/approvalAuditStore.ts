@@ -185,6 +185,7 @@ const actionLabels: Record<ApprovalAuditAction, string> = {
   fy_restored: 'Fiscal year restored',
   fy_hard_deleted: 'Fiscal year hard deleted',
   fy_bundle_imported: 'Fiscal year bundle imported',
+  budget_cell_edit: 'Budget cell edit',
   // Vendor registry actions
   vendor_created: 'Vendor created',
   vendor_updated: 'Vendor updated',
