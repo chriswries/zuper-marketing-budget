@@ -52,6 +52,8 @@ function rowToTransaction(row: {
     raw: raw.raw as Record<string, unknown> ?? raw,
     createdAt: raw.createdAt as string ?? new Date().toISOString(),
     canonicalVendorId: row.canonical_vendor_id ?? (raw.canonicalVendorId as string | undefined) ?? null,
+    importBatchId: row.import_batch_id ?? null,
+    importFilename: row.import_filename ?? null,
   };
 }
 
