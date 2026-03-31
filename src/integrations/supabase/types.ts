@@ -65,38 +65,6 @@ export type Database = {
           },
         ]
       }
-      actuals_matching: {
-        Row: {
-          created_at: string
-          fiscal_year_id: string
-          matches_by_txn_id: Json
-          rules_by_merchant_key: Json
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          fiscal_year_id: string
-          matches_by_txn_id?: Json
-          rules_by_merchant_key?: Json
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          fiscal_year_id?: string
-          matches_by_txn_id?: Json
-          rules_by_merchant_key?: Json
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "actuals_matching_fiscal_year_id_fkey"
-            columns: ["fiscal_year_id"]
-            isOneToOne: true
-            referencedRelation: "fiscal_years"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       actuals_transactions: {
         Row: {
           amount: number
@@ -697,7 +665,6 @@ export type Database = {
           cost_center_name: string | null
           created_at: string
           current_amount: number | null
-          data: Json
           deleted_at: string | null
           end_month: string | null
           id: string
@@ -723,7 +690,6 @@ export type Database = {
           cost_center_name?: string | null
           created_at?: string
           current_amount?: number | null
-          data: Json
           deleted_at?: string | null
           end_month?: string | null
           id: string
@@ -749,7 +715,6 @@ export type Database = {
           cost_center_name?: string | null
           created_at?: string
           current_amount?: number | null
-          data?: Json
           deleted_at?: string | null
           end_month?: string | null
           id?: string
