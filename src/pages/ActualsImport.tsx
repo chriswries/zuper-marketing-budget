@@ -54,7 +54,7 @@ import type {
   ColumnMapping, 
   ParsedRow 
 } from '@/types/actuals';
-
+import { ImportHistoryPanel } from '@/components/import/ImportHistoryPanel';
 type Step = 'upload' | 'mapping' | 'preview' | 'confirm';
 
 // Helper to parse dates flexibly — returns YYYY-MM-DD string to avoid timezone shifts
