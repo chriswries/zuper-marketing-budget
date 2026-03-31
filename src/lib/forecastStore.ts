@@ -246,11 +246,6 @@ export async function clearForecastForFY(fyId: string): Promise<void> {
       logger.error('Failed to clear forecast monthly values:', error);
     }
 
-    // Also clear legacy JSONB backup
-    await supabase
-      .from('fy_forecasts')
-      .delete()
-      .eq('fiscal_year_id', fyId);
   } catch (err) {
     logger.error('Error clearing forecast:', err);
   }
