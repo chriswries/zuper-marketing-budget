@@ -318,6 +318,47 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* Legacy row */}
+                  {legacyStats && (
+                    <TableRow className="bg-muted/30">
+                      <TableCell className="text-sm text-muted-foreground italic">—</TableCell>
+                      <TableCell className="text-sm italic text-muted-foreground">
+                        Pre-tracking imports
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">mixed</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {legacyStats.count.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatUSD(legacyStats.total)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">Legacy</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canUndo && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmLegacy(true)}
+                            disabled={undoingLegacy}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {undoingLegacy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Undo2 className="h-4 w-4 mr-1" />
+                                Undo All
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
