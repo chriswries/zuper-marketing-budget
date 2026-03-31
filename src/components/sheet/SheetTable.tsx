@@ -47,7 +47,6 @@ import {
   calculateFYTotal,
 } from '@/types/budget';
 import { EditableCell, EditableCellHandle, NavigateDirection } from './EditableCell';
-import { MONTHS as MONTHS_ARRAY } from '@/types/budget';
 
 type ValueType = 'budgetValues' | 'forecastValues' | 'actualValues';
 
