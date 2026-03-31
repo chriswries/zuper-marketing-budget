@@ -358,7 +358,16 @@ export default function ActualsImport() {
 
   // Generate a deterministic content hash for dedup
   const contentHash = (fyId: string, txnDate: string, merchant: string, amount: number, tiebreaker: string): string => {
-    return btoa(JSON.stringify([fyId, txnDate, merchant, amount, tiebreaker])).slice(0, 32);
+    const input = `${fyId}|${txnDate}|${merchant}|${amount}|${tiebreaker}`;
+    let hash = 0;
+
+    for (let i = 0; i < input.length; i += 1) {
+      const char = input.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash &= hash;
+    }
+
+    return `txn-${Math.abs(hash).toString(36)}-${tiebreaker.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`;
   };
 
   // Handle import confirmation
@@ -398,6 +407,13 @@ export default function ActualsImport() {
     const batchId = crypto.randomUUID();
     const rawTransactions: ActualsTransaction[] = validRows.map((row) => {
       const tiebreaker = row.externalId || `${row.description || ''}_${row.rowIndex}`;
+      console.log('Row debug:', {
+        rowIndex: row.rowIndex,
+        desc: row.description?.slice(0, 20),
+        ext: row.externalId,
+        tiebreaker,
+      });
+
       return {
       id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!, tiebreaker),
       source,
