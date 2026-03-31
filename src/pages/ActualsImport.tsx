@@ -653,14 +653,14 @@ export default function ActualsImport() {
                   <div className="space-y-2">
                     <Label>Category</Label>
                     <Select
-                      value={mapping.category || ''}
-                      onValueChange={(v) => setMapping(m => ({ ...m, category: v || undefined }))}
+                      value={mapping.category || NONE_VALUE}
+                      onValueChange={(v) => setMapping(m => ({ ...m, category: v === NONE_VALUE ? undefined : v }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="(optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={NONE_VALUE}>None</SelectItem>
                         {csvHeaders.map(h => (
                           <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
