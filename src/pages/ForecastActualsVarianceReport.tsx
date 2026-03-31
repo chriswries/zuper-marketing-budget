@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import {
@@ -123,12 +123,14 @@ export default function ForecastActualsVarianceReport() {
       return;
     }
     
-    let forecast = loadForecastForFY(selectedFiscalYearId);
+    const forecast = loadForecastForFY(selectedFiscalYearId);
     
     if (!forecast) {
-      // Initialize from approved budget
-      forecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-      saveForecastForFY(selectedFiscalYearId, forecast);
+      createForecastCostCentersFromBudget(selectedFiscalYear).then((fc) => {
+        setForecastCCs(fc);
+        setInitialized(true);
+      });
+      return;
     }
     
     setForecastCCs(forecast);

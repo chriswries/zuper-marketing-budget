@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, calculateFYTotal, CostCenter } from '@/types/budget';
@@ -111,11 +111,14 @@ export default function BurnRateRunwayReport() {
       return;
     }
     
-    let forecast = loadForecastForFY(selectedFiscalYearId);
+    const forecast = loadForecastForFY(selectedFiscalYearId);
     
     if (!forecast) {
-      forecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-      saveForecastForFY(selectedFiscalYearId, forecast);
+      createForecastCostCentersFromBudget(selectedFiscalYear).then((fc) => {
+        setForecastCCs(fc);
+        setInitialized(true);
+      });
+      return;
     }
     
     setForecastCCs(forecast);

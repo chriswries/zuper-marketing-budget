@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { FiscalYearBudget, BudgetApprovalStep } from '@/contexts/FiscalYearBudgetContext';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { loadApprovalAudit, appendApprovalAudit } from '@/lib/approvalAuditStore';
-import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
+import { logger } from '@/lib/logger';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
 
 interface UseBudgetApprovalArgs {
@@ -133,11 +133,11 @@ export function useBudgetApproval({
       const now = new Date().toISOString();
 
       if (allApproved) {
-        const forecastCostCenters = createForecastCostCentersFromBudget({
+        // Fire and forget - async forecast creation
+        createForecastCostCentersFromBudget({
           ...fy,
           approval: { ...fy.approval, steps },
-        });
-        saveForecastForFY(fy.id, forecastCostCenters);
+        }).catch((err) => logger.error('Failed to create forecast from budget:', err));
       }
 
       return {

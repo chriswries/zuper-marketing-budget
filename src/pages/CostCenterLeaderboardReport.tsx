@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useFiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-import { loadForecastForFY, saveForecastForFY } from '@/lib/forecastStore';
+import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, CostCenter, MonthlyValues } from '@/types/budget';
@@ -72,11 +72,11 @@ export default function CostCenterLeaderboardReport() {
       return;
     }
     
-    let forecast = loadForecastForFY(selectedFiscalYearId);
+    const forecast = loadForecastForFY(selectedFiscalYearId);
     
     if (!forecast) {
-      forecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-      saveForecastForFY(selectedFiscalYearId, forecast);
+      createForecastCostCentersFromBudget(selectedFiscalYear).then(setForecastCCs);
+      return;
     }
     
     setForecastCCs(forecast);
