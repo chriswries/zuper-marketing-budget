@@ -1,8 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+function getAllowedOrigin(req: Request): string {
+  const allowlist = [
+    Deno.env.get('SITE_URL') || '',
+    'http://localhost:5173',
+  ].filter(Boolean)
+  const origin = req.headers.get('Origin') || ''
+  return allowlist.includes(origin) ? origin : allowlist[0] || 'https://zuper-budget.lovable.app'
+}
+
+function getCorsHeaders(req: Request) {
+  return {
+    'Access-Control-Allow-Origin': getAllowedOrigin(req),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
 }
 
 interface ResetPasswordRequest {
