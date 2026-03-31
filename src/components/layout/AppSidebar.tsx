@@ -5,7 +5,6 @@ import {
   FileText, 
   BarChart3, 
   CheckSquare, 
-  Upload, 
   Settings 
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
