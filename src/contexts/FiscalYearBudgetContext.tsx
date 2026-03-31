@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CostCenter } from '@/types/budget';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
 
 export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
