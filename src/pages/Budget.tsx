@@ -32,8 +32,7 @@ import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter, createZeroMonthlyValues } from '@/types/budget';
 import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
-import { saveForecastForFY } from '@/lib/forecastStore';
-import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
+import { useBudgetApproval } from '@/hooks/useBudgetApproval';
 import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
 import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
@@ -131,7 +130,26 @@ export default function Budget() {
   const [addLineItemOpen, setAddLineItemOpen] = useState(false);
   const [editAllocationsOpen, setEditAllocationsOpen] = useState(false);
   const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
-  const [approvalAuditEvents, setApprovalAuditEvents] = useState<ApprovalAuditEvent[]>([]);
+
+  const {
+    handleSubmitForApproval,
+    handleApproveNextStep,
+    handleReject,
+    handleResetToDraft,
+    nextPendingBudgetStep,
+    canApproveBudgetStep,
+    approvalAuditEvents,
+    setApprovalAuditEvents,
+    submissionBlockers,
+    canSubmit,
+    allocationsBalanced,
+    hasPendingLineItems,
+  } = useBudgetApproval({
+    selectedFiscalYearId,
+    selectedFiscalYear,
+    updateFiscalYearBudget,
+    currentRole,
+  });
 
   // Justification dialog state
   const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
@@ -190,47 +208,7 @@ export default function Budget() {
     return status === 'draft' || status === 'rejected';
   }, [selectedFiscalYear, isFinance]);
 
-  // Determine the next pending budget approval step
-  const nextPendingBudgetStep = useMemo(() => {
-    if (!selectedFiscalYear?.approval?.steps) return null;
-    return selectedFiscalYear.approval.steps.find((s) => s.status === 'pending') ?? null;
-  }, [selectedFiscalYear]);
-
-  // Role gating for budget approvals
-  const canApproveBudgetStep = nextPendingBudgetStep?.level === currentRole;
   const isAdmin = currentRole === 'admin';
-
-  // Check if allocations are balanced
-  const allocationsBalanced = useMemo(() => {
-    if (!selectedFiscalYear) return false;
-    const totalAllocated = selectedFiscalYear.costCenters.reduce(
-      (sum, cc) => sum + cc.annualLimit,
-      0
-    );
-    return Math.abs(totalAllocated - selectedFiscalYear.targetBudget) <= 1;
-  }, [selectedFiscalYear]);
-
-  // Check if any line items are pending approval (create or adjustment)
-  const hasPendingLineItems = useMemo(() => {
-    if (!selectedFiscalYear) return false;
-    return selectedFiscalYear.costCenters.some((cc) =>
-      cc.lineItems.some((item) => item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending')
-    );
-  }, [selectedFiscalYear]);
-
-  // Compute submission blockers
-  const submissionBlockers = useMemo(() => {
-    const blockers: string[] = [];
-    if (!allocationsBalanced) {
-      blockers.push('Allocations must balance to target budget');
-    }
-    if (hasPendingLineItems) {
-      blockers.push('All line items must be approved before submission');
-    }
-    return blockers;
-  }, [allocationsBalanced, hasPendingLineItems]);
-
-  const canSubmit = submissionBlockers.length === 0;
 
   // Count budget line item requests needing approval by current role
   const budgetApprovalsCount = useMemo(() => {
@@ -337,171 +315,6 @@ export default function Budget() {
     },
     [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]
   );
-
-  // Approval workflow handlers
-  const handleSubmitForApproval = useCallback(() => {
-    if (!selectedFiscalYearId || !canSubmit) return;
-
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-      ...fy,
-      updatedAt: new Date().toISOString(),
-      approval: {
-        ...fy.approval,
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-        approvedAt: undefined,
-        rejectedAt: undefined,
-        steps: [
-          { level: 'cmo', status: 'pending' },
-          { level: 'finance', status: 'pending' },
-        ],
-      },
-    }));
-
-    // Append audit event
-    appendApprovalAudit('budget', selectedFiscalYearId, {
-      action: 'submitted_for_approval',
-      actorRole: currentRole,
-    });
-    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-  }, [selectedFiscalYearId, canSubmit, updateFiscalYearBudget, currentRole]);
-
-  const handleApproveNextStep = useCallback(() => {
-    if (!selectedFiscalYearId || !selectedFiscalYear) return;
-
-    const stepLevel = nextPendingBudgetStep?.level;
-
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
-      const steps = [...fy.approval.steps];
-      const pendingIndex = steps.findIndex((s) => s.status === 'pending');
-
-      if (pendingIndex === -1) return fy;
-
-      steps[pendingIndex] = {
-        ...steps[pendingIndex],
-        status: 'approved',
-        updatedAt: new Date().toISOString(),
-      };
-
-      const allApproved = steps.every((s) => s.status === 'approved');
-      const now = new Date().toISOString();
-
-      if (allApproved) {
-        // Create forecast from approved budget
-        const forecastCostCenters = createForecastCostCentersFromBudget({
-          ...fy,
-          approval: { ...fy.approval, steps },
-        });
-        saveForecastForFY(fy.id, forecastCostCenters);
-      }
-
-      return {
-        ...fy,
-        updatedAt: now,
-        status: allApproved ? 'active' : fy.status,
-        approval: {
-          ...fy.approval,
-          steps,
-          status: allApproved ? 'approved' : 'pending',
-          approvedAt: allApproved ? now : undefined,
-        },
-      };
-    });
-
-    // Append audit event for step approval
-    appendApprovalAudit('budget', selectedFiscalYearId, {
-      action: 'approved_step',
-      actorRole: currentRole,
-      stepLevel: stepLevel as 'cmo' | 'finance',
-    });
-
-    // Check if this was the final step
-    const steps = selectedFiscalYear.approval?.steps ?? [];
-    const pendingCount = steps.filter((s) => s.status === 'pending').length;
-    if (pendingCount === 1) {
-      // This was the last pending step, append final_approved
-      appendApprovalAudit('budget', selectedFiscalYearId, {
-        action: 'final_approved',
-        actorRole: currentRole,
-      });
-    }
-
-    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-  }, [selectedFiscalYearId, selectedFiscalYear, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
-
-  const handleReject = useCallback(() => {
-    if (!selectedFiscalYearId) return;
-
-    const stepLevel = nextPendingBudgetStep?.level;
-
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => {
-      const steps = [...fy.approval.steps];
-      const pendingIndex = steps.findIndex((s) => s.status === 'pending');
-
-      if (pendingIndex !== -1) {
-        steps[pendingIndex] = {
-          ...steps[pendingIndex],
-          status: 'rejected',
-          updatedAt: new Date().toISOString(),
-        };
-      }
-
-      return {
-        ...fy,
-        updatedAt: new Date().toISOString(),
-        approval: {
-          ...fy.approval,
-          steps,
-          status: 'rejected',
-          rejectedAt: new Date().toISOString(),
-        },
-      };
-    });
-
-    // Append audit event
-    appendApprovalAudit('budget', selectedFiscalYearId, {
-      action: 'rejected_step',
-      actorRole: currentRole,
-      stepLevel: stepLevel as 'cmo' | 'finance',
-    });
-    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-  }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole, nextPendingBudgetStep]);
-
-  const handleResetToDraft = useCallback(() => {
-    if (!selectedFiscalYearId) return;
-
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-      ...fy,
-      updatedAt: new Date().toISOString(),
-      status: 'planning',
-      approval: {
-        status: 'draft',
-        steps: [
-          { level: 'cmo', status: 'pending' },
-          { level: 'finance', status: 'pending' },
-        ],
-        submittedAt: undefined,
-        approvedAt: undefined,
-        rejectedAt: undefined,
-      },
-    }));
-
-    // Append audit event
-    appendApprovalAudit('budget', selectedFiscalYearId, {
-      action: 'reset',
-      actorRole: currentRole,
-    });
-    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-  }, [selectedFiscalYearId, updateFiscalYearBudget, currentRole]);
-
-  // Load audit events when FY changes
-  useEffect(() => {
-    if (selectedFiscalYearId) {
-      loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-    } else {
-      setApprovalAuditEvents([]);
-    }
-  }, [selectedFiscalYearId]);
 
   // Sync line item approval/adjustment status with request status
   useEffect(() => {
