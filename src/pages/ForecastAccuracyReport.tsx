@@ -9,7 +9,8 @@ import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, CostCenter } from '@/types/budget';
-import { ArrowLeft, Receipt, Target, Loader2 } from 'lucide-react';
+import { ArrowLeft, Receipt, Target, Loader2, FileDown } from 'lucide-react';
+import { exportReportToPdf } from '@/lib/exportPdf';
 import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelpers';
 import {
   ChartContainer,
