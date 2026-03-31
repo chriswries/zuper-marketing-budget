@@ -162,6 +162,58 @@ All colors MUST be HSL.
   }
 }
 
+/* Print styles for report PDF export */
+@media print {
+  /* Hide non-report UI */
+  nav,
+  [data-sidebar],
+  header,
+  .sidebar,
+  [class*="AppSidebar"],
+  [class*="AppHeader"],
+  .no-print {
+    display: none !important;
+  }
+
+  /* Full width for report content */
+  main,
+  [class*="SidebarInset"],
+  [class*="AppLayout"] > div {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+  }
+
+  /* Ensure tables don't break mid-row */
+  tr {
+    break-inside: avoid;
+  }
+
+  /* Ensure charts/cards print with backgrounds */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: landscape;
+    margin: 0.5in;
+  }
+}
+
+/* Hide print-only elements on screen */
+.print-only {
+  display: none;
+}
+
 /* SheetTable first column - responsive width with clamp */
 .sheet-first-col {
   width: clamp(280px, 35vw, 640px);
