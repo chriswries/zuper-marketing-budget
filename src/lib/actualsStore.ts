@@ -33,6 +33,8 @@ function rowToTransaction(row: {
   source: string | null;
   raw: Json;
   canonical_vendor_id?: string | null;
+  import_batch_id?: string | null;
+  import_filename?: string | null;
 }): ActualsTransaction {
   const raw = row.raw as Record<string, unknown>;
   return {
