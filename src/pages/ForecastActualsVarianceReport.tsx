@@ -797,7 +797,7 @@ function CostCenterSection({
         className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
         onClick={onToggle}
       >
-        <TableCell className="py-3">
+        <TableCell className="py-3 sticky left-0 z-20 bg-muted/50 border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
           <div className="flex items-center gap-2">
             {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
