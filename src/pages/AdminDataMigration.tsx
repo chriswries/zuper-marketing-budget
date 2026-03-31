@@ -538,13 +538,32 @@ export default function AdminDataMigration() {
             }
           }
 
-          // Insert matching
+          // Insert matching (relational tables)
           if (legacyData.matching[id]) {
-            await supabase.from('actuals_matching').insert({
-              fiscal_year_id: id,
-              matches_by_txn_id: legacyData.matching[id].matchesByTxnId as unknown as Json,
-              rules_by_merchant_key: legacyData.matching[id].rulesByMerchantKey as unknown as Json,
-            });
+            const matchData = legacyData.matching[id];
+            for (const [txnId, match] of Object.entries(matchData.matchesByTxnId ?? {})) {
+              const m = match as any;
+              await supabase.from('actuals_matches').insert({
+                fiscal_year_id: id,
+                txn_id: txnId,
+                cost_center_id: m.costCenterId,
+                line_item_id: m.lineItemId,
+                match_source: m.matchSource ?? 'manual',
+                matched_at: m.matchedAt ?? new Date().toISOString(),
+                matched_by_role: m.matchedByRole ?? 'admin',
+                merchant_key: m.merchantKey ?? null,
+              });
+            }
+            for (const [merchantKey, rule] of Object.entries(matchData.rulesByMerchantKey ?? {})) {
+              const r = rule as any;
+              await supabase.from('merchant_rules').insert({
+                fiscal_year_id: id,
+                merchant_key: merchantKey,
+                cost_center_id: r.costCenterId,
+                line_item_id: r.lineItemId,
+                created_by_role: r.createdByRole ?? 'admin',
+              });
+            }
           }
         }
       }
