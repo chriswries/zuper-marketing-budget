@@ -138,6 +138,7 @@ export default function ActualsImport() {
     amount: '',
   });
   const [source, setSource] = useState<ActualsSource>('unknown');
+  const [amountSignMode, setAmountSignMode] = useState<'expenses_positive' | 'expenses_negative'>('expenses_positive');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
 
@@ -148,6 +149,7 @@ export default function ActualsImport() {
     setCsvRows([]);
     setMapping({ txnDate: '', merchantName: '', amount: '' });
     setSource('unknown');
+    setAmountSignMode('expenses_positive');
     setReplaceExisting(false);
     setSkipInvalidRows(true);
     setStep('upload');
@@ -257,9 +259,9 @@ export default function ActualsImport() {
       let parsedAmount = parseAmount(amountValue);
       if (parsedAmount === null) {
         errors.push(`Invalid amount: "${amountValue}"`);
-      } else {
-        // Always normalize to positive spend
-        parsedAmount = Math.abs(parsedAmount);
+      } else if (amountSignMode === 'expenses_negative') {
+        // Flip sign: negatives become positive expenses
+        parsedAmount = -parsedAmount;
       }
       
       // Optional fields
@@ -282,10 +284,11 @@ export default function ActualsImport() {
         errors,
       };
     });
-  }, [csvRows, mapping]);
+  }, [csvRows, mapping, amountSignMode]);
 
-  // Stats
-  const validRows = parsedRows.filter(r => r.errors.length === 0);
+  // Stats — filter out credits/refunds (amount <= 0) after sign normalization
+  const creditRows = parsedRows.filter(r => r.errors.length === 0 && (r.amount ?? 0) <= 0);
+  const validRows = parsedRows.filter(r => r.errors.length === 0 && (r.amount ?? 0) > 0);
   const invalidRows = parsedRows.filter(r => r.errors.length > 0);
   const totalAmount = validRows.reduce((sum, r) => sum + (r.amount ?? 0), 0);
   const minDate = validRows.reduce((min, r) => {
@@ -667,13 +670,31 @@ export default function ActualsImport() {
               </CardContent>
             </Card>
 
-            {/* Amount Sign Info */}
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Amounts are automatically normalized to positive spend values regardless of the sign in your CSV.
-              </AlertDescription>
-            </Alert>
+            {/* Amount Sign Mode */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Amount Sign Convention</CardTitle>
+                <CardDescription>
+                  How does your CSV represent expenses?
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={amountSignMode}
+                  onValueChange={(v) => setAmountSignMode(v as 'expenses_positive' | 'expenses_negative')}
+                  className="space-y-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expenses_positive" id="sign-positive" />
+                    <Label htmlFor="sign-positive">Expenses are positive numbers</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expenses_negative" id="sign-negative" />
+                    <Label htmlFor="sign-negative">Expenses are negative numbers (flip sign)</Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep('upload')}>
@@ -718,6 +739,15 @@ export default function ActualsImport() {
                 </CardContent>
               </Card>
             </div>
+
+            {creditRows.length > 0 && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  {creditRows.length} credit/refund row(s) excluded (amount ≤ 0 after sign normalization).
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Preview Table */}
             <Card>
