@@ -118,6 +118,8 @@ Deno.serve(async (req) => {
 
           // 3. Insert cost centers and line items from budget data
           const costCenters = data.costCenters || []
+          const monthlyBatch: Array<{line_item_id:string, fiscal_year_id:string, value_type:string, month:string, amount:number}> = []
+
           for (const cc of costCenters) {
             await sql`
               INSERT INTO cost_centers (id, fiscal_year_id, name, owner_id, annual_limit)
@@ -155,21 +157,15 @@ Deno.serve(async (req) => {
               `
               totalLineItems++
 
-              // 4. Insert budget monthly values
+              // Collect budget monthly values
               const budgetValues = li.budgetValues || {}
               for (const month of MONTHS) {
-                const amount = budgetValues[month] ?? 0
-                await sql`
-                  INSERT INTO monthly_values (line_item_id, fiscal_year_id, value_type, month, amount)
-                  VALUES (${li.id}, ${fyId}, 'budget', ${month}, ${amount})
-                  ON CONFLICT (line_item_id, value_type, month) DO NOTHING
-                `
-                totalMonthlyValues++
+                monthlyBatch.push({ line_item_id: li.id, fiscal_year_id: fyId, value_type: 'budget', month, amount: budgetValues[month] ?? 0 })
               }
             }
           }
 
-          // 5. Insert forecast monthly values from fy_forecasts
+          // Collect forecast monthly values
           const forecastData = forecastsByFy[fyId]
           if (forecastData) {
             const fCostCenters = (forecastData as any).costCenters || (Array.isArray(forecastData) ? forecastData : [])
@@ -178,17 +174,19 @@ Deno.serve(async (req) => {
               for (const fli of fLineItems) {
                 const forecastValues = fli.forecastValues || fli.budgetValues || {}
                 for (const month of MONTHS) {
-                  const amount = forecastValues[month] ?? 0
-                  await sql`
-                    INSERT INTO monthly_values (line_item_id, fiscal_year_id, value_type, month, amount)
-                    VALUES (${fli.id}, ${fyId}, 'forecast', ${month}, ${amount})
-                    ON CONFLICT (line_item_id, value_type, month) DO NOTHING
-                  `
-                  totalMonthlyValues++
+                  monthlyBatch.push({ line_item_id: fli.id, fiscal_year_id: fyId, value_type: 'forecast', month, amount: forecastValues[month] ?? 0 })
                 }
               }
             }
           }
+
+          // Batch insert monthly values
+          const batchSize = 500
+          for (let i = 0; i < monthlyBatch.length; i += batchSize) {
+            const batch = monthlyBatch.slice(i, i + batchSize)
+            await sql`INSERT INTO monthly_values ${sql(batch, 'line_item_id', 'fiscal_year_id', 'value_type', 'month', 'amount')} ON CONFLICT (line_item_id, value_type, month) DO NOTHING`
+          }
+          totalMonthlyValues += monthlyBatch.length
         } catch (fyError) {
           errors.push(`FY ${fyId}: ${String(fyError)}`)
         }
