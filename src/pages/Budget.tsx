@@ -210,47 +210,7 @@ export default function Budget() {
     return status === 'draft' || status === 'rejected';
   }, [selectedFiscalYear, isFinance]);
 
-  // Determine the next pending budget approval step
-  const nextPendingBudgetStep = useMemo(() => {
-    if (!selectedFiscalYear?.approval?.steps) return null;
-    return selectedFiscalYear.approval.steps.find((s) => s.status === 'pending') ?? null;
-  }, [selectedFiscalYear]);
-
-  // Role gating for budget approvals
-  const canApproveBudgetStep = nextPendingBudgetStep?.level === currentRole;
   const isAdmin = currentRole === 'admin';
-
-  // Check if allocations are balanced
-  const allocationsBalanced = useMemo(() => {
-    if (!selectedFiscalYear) return false;
-    const totalAllocated = selectedFiscalYear.costCenters.reduce(
-      (sum, cc) => sum + cc.annualLimit,
-      0
-    );
-    return Math.abs(totalAllocated - selectedFiscalYear.targetBudget) <= 1;
-  }, [selectedFiscalYear]);
-
-  // Check if any line items are pending approval (create or adjustment)
-  const hasPendingLineItems = useMemo(() => {
-    if (!selectedFiscalYear) return false;
-    return selectedFiscalYear.costCenters.some((cc) =>
-      cc.lineItems.some((item) => item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending')
-    );
-  }, [selectedFiscalYear]);
-
-  // Compute submission blockers
-  const submissionBlockers = useMemo(() => {
-    const blockers: string[] = [];
-    if (!allocationsBalanced) {
-      blockers.push('Allocations must balance to target budget');
-    }
-    if (hasPendingLineItems) {
-      blockers.push('All line items must be approved before submission');
-    }
-    return blockers;
-  }, [allocationsBalanced, hasPendingLineItems]);
-
-  const canSubmit = submissionBlockers.length === 0;
 
   // Count budget line item requests needing approval by current role
   const budgetApprovalsCount = useMemo(() => {
