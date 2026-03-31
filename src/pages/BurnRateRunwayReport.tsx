@@ -21,6 +21,8 @@ import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2 
 import { getMonthIndex, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
 import { formatCurrency } from '@/lib/format';
 
+type BurnMode = 'actuals_constant' | 'forecast_adjusted';
+
 function formatMonths(value: number): string {
   if (value === Infinity || isNaN(value)) return '∞';
   return value.toFixed(1);

@@ -14,6 +14,8 @@ import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelp
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
 
+type SortDirection = 'high_low' | 'low_high';
+
 function formatVariance(value: number): string {
   const sign = value > 0 ? '+' : '';
   return `${sign}${formatCurrency(value)}`;
