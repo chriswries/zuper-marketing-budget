@@ -47,6 +47,7 @@ import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { formatAuditTimestamp } from '@/lib/dateTime';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 import { toast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/format';
 import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import { Badge } from '@/components/ui/badge';
