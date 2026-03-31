@@ -396,8 +396,8 @@ export default function ActualsImport() {
 
     const now = new Date().toISOString();
     const batchId = crypto.randomUUID();
-    const transactions: ActualsTransaction[] = validRows.map((row, idx) => {
-      const tiebreaker = row.externalId || `${row.description || ''}_${idx}`;
+    const rawTransactions: ActualsTransaction[] = validRows.map((row) => {
+      const tiebreaker = row.externalId || `${row.description || ''}_${row.rowIndex}`;
       return {
       id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!, tiebreaker),
       source,
@@ -416,6 +416,24 @@ export default function ActualsImport() {
       importFilename: file?.name ?? null,
     };
     });
+
+    // Dedup safety net: keep first occurrence of each txn_id
+    const seenIds = new Set<string>();
+    const transactions = rawTransactions.filter(t => {
+      if (seenIds.has(t.id)) return false;
+      seenIds.add(t.id);
+      return true;
+    });
+    const dedupedCount = rawTransactions.length - transactions.length;
+    if (dedupedCount > 0) {
+      console.warn(`Deduped ${dedupedCount} transactions with duplicate txn_ids within batch`);
+    }
+
+    // Debug: log first 5 ids and any duplicates
+    console.log('First 5 txn_ids:', transactions.slice(0, 5).map(t => t.id));
+    const allIds = rawTransactions.map(t => t.id);
+    const dupes = allIds.filter((id, i) => allIds.indexOf(id) !== i);
+    console.log('Duplicate txn_ids:', dupes.length, dupes.slice(0, 5));
 
       if (replaceExisting) {
         await replaceActuals(selectedFYId, transactions);
