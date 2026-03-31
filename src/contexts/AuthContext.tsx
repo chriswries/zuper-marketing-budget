@@ -37,7 +37,7 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext: Context<AuthContextValue | undefined> = createContext<AuthContextValue | undefined>(undefined);
 
 // Retry helper for profile fetch (handles trigger race on signup)
 async function fetchProfileWithRetry(userId: string, maxRetries = 5, delayMs = 200): Promise<Profile | null> {
