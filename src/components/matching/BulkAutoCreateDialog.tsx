@@ -39,6 +39,7 @@ import {
 import { MONTHS } from "@/types/budget";
 import type { ActualsTransaction } from "@/types/actuals";
 import type { CostCenter } from "@/types/budget";
+import type { UserRole } from "@/contexts/AuthContext";
 import { formatCurrencyWithCents as formatUSD } from "@/lib/format";
 
 interface MerchantGroup {
