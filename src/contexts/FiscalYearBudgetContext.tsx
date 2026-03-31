@@ -202,8 +202,6 @@ async function persistFYMetadata(fy: FiscalYearBudget): Promise<boolean> {
       archived_by_role: fy.archivedByRole ?? null,
       archived_justification: fy.archivedJustification ?? null,
       previous_status_before_archive: fy.previousStatusBeforeArchive ?? null,
-      // Keep JSONB backup in sync
-      data: fiscalYearToDataJson(fy),
     })
     .eq('id', fy.id);
   return !error;
