@@ -290,14 +290,12 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     if (!updatedRequest || !oldRequest) return;
 
     try {
-      // Always update status + relational columns + JSONB backup
       const { error: updateErr } = await supabase
         .from('spend_requests')
         .update({
           status: (updatedRequest as SpendRequest).status,
           origin_fiscal_year_id: (updatedRequest as SpendRequest).originFiscalYearId ?? null,
           deleted_at: (updatedRequest as SpendRequest).deletedAt ?? null,
-          data: buildJsonbData(updatedRequest as SpendRequest),
           ...buildRelationalColumns(updatedRequest as SpendRequest),
         })
         .eq('id', id);
