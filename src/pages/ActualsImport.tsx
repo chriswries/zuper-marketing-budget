@@ -310,8 +310,13 @@ export default function ActualsImport() {
   // Can confirm import?
   const canConfirm = validRows.length > 0 && selectedFYId && (invalidRows.length === 0 || skipInvalidRows);
 
+  // Generate a deterministic content hash for dedup
+  const contentHash = (fyId: string, txnDate: string, merchant: string, amount: number): string => {
+    return btoa(JSON.stringify([fyId, txnDate, merchant, amount])).slice(0, 32);
+  };
+
   // Handle import confirmation
-  const handleConfirmImport = useCallback(() => {
+  const handleConfirmImport = useCallback(async () => {
     // Guard: FY must be selected
     if (!selectedFYId) {
       toast({
@@ -341,8 +346,8 @@ export default function ActualsImport() {
     }
 
     const now = new Date().toISOString();
-    const transactions: ActualsTransaction[] = validRows.map((row, idx) => ({
-      id: `txn-${Date.now()}-${idx}`,
+    const transactions: ActualsTransaction[] = validRows.map((row) => ({
+      id: contentHash(selectedFYId, row.txnDate!, row.merchantName!, row.amount!),
       source,
       fiscalYearId: selectedFYId,
       txnDate: row.txnDate!,
@@ -358,15 +363,30 @@ export default function ActualsImport() {
     }));
 
     if (replaceExisting) {
-      replaceActuals(selectedFYId, transactions);
+      await replaceActuals(selectedFYId, transactions);
+      toast({
+        title: `Imported ${transactions.length} transactions`,
+        description: `Total: ${formatUSD(totalAmount)}`,
+      });
     } else {
-      appendActuals(selectedFYId, transactions);
-    }
+      // Dedup: filter out transactions whose id already exists
+      const existing = loadActuals(selectedFYId);
+      const existingIds = new Set(existing.map(t => t.id));
+      const newTransactions = transactions.filter(t => !existingIds.has(t.id));
+      const skippedCount = transactions.length - newTransactions.length;
 
-    toast({
-      title: `Imported ${transactions.length} transactions`,
-      description: `Total: ${formatUSD(totalAmount)}`,
-    });
+      if (newTransactions.length > 0) {
+        await appendActuals(selectedFYId, newTransactions);
+      }
+
+      const newTotal = newTransactions.reduce((sum, t) => sum + t.amount, 0);
+      toast({
+        title: `Imported ${newTransactions.length} transactions`,
+        description: skippedCount > 0
+          ? `${skippedCount} duplicate transaction(s) skipped. Total: ${formatUSD(newTotal)}`
+          : `Total: ${formatUSD(newTotal)}`,
+      });
+    }
 
     // Navigate back to admin
     navigate('/admin');
