@@ -217,6 +217,41 @@ export type Database = {
         }
         Relationships: []
       }
+      budget_approval_steps: {
+        Row: {
+          fiscal_year_id: string
+          id: string
+          level: string
+          status: string
+          step_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          fiscal_year_id: string
+          id?: string
+          level: string
+          status?: string
+          step_order: number
+          updated_at?: string | null
+        }
+        Update: {
+          fiscal_year_id?: string
+          id?: string
+          level?: string
+          status?: string
+          step_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_approval_steps_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       canonical_vendors: {
         Row: {
           created_at: string
@@ -247,45 +282,107 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_centers: {
+        Row: {
+          annual_limit: number
+          created_at: string
+          fiscal_year_id: string
+          id: string
+          name: string
+          owner_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          annual_limit?: number
+          created_at?: string
+          fiscal_year_id: string
+          id: string
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          annual_limit?: number
+          created_at?: string
+          fiscal_year_id?: string
+          id?: string
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_centers_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fiscal_years: {
         Row: {
+          approval_approved_at: string | null
+          approval_rejected_at: string | null
+          approval_status: string
+          approval_submitted_at: string | null
           archived_at: string | null
           archived_by_role: string | null
           archived_by_user_id: string | null
           archived_justification: string | null
           created_at: string
           data: Json
+          end_date: string | null
           id: string
           name: string
           previous_status_before_archive: string | null
+          start_date: string | null
           status: string
+          target_budget: number
           updated_at: string
+          year: number | null
         }
         Insert: {
+          approval_approved_at?: string | null
+          approval_rejected_at?: string | null
+          approval_status?: string
+          approval_submitted_at?: string | null
           archived_at?: string | null
           archived_by_role?: string | null
           archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
           data: Json
+          end_date?: string | null
           id: string
           name: string
           previous_status_before_archive?: string | null
+          start_date?: string | null
           status: string
+          target_budget?: number
           updated_at?: string
+          year?: number | null
         }
         Update: {
+          approval_approved_at?: string | null
+          approval_rejected_at?: string | null
+          approval_status?: string
+          approval_submitted_at?: string | null
           archived_at?: string | null
           archived_by_role?: string | null
           archived_by_user_id?: string | null
           archived_justification?: string | null
           created_at?: string
           data?: Json
+          end_date?: string | null
           id?: string
           name?: string
           previous_status_before_archive?: string | null
+          start_date?: string | null
           status?: string
+          target_budget?: number
           updated_at?: string
+          year?: number | null
         }
         Relationships: []
       }
@@ -314,6 +411,115 @@ export type Database = {
             columns: ["fiscal_year_id"]
             isOneToOne: true
             referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      line_items: {
+        Row: {
+          adjustment_before_values: Json | null
+          adjustment_request_id: string | null
+          adjustment_sheet: string | null
+          adjustment_status: string | null
+          approval_request_id: string | null
+          approval_status: string | null
+          auto_renew: boolean | null
+          cancellation_notice_days: number | null
+          cancellation_request_id: string | null
+          cancellation_status: string | null
+          contract_end_date: string | null
+          contract_start_date: string | null
+          cost_center_id: string
+          created_at: string
+          deletion_request_id: string | null
+          deletion_status: string | null
+          fiscal_year_id: string
+          id: string
+          is_accrual: boolean
+          is_contracted: boolean
+          is_software_subscription: boolean
+          name: string
+          owner_id: string | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        Insert: {
+          adjustment_before_values?: Json | null
+          adjustment_request_id?: string | null
+          adjustment_sheet?: string | null
+          adjustment_status?: string | null
+          approval_request_id?: string | null
+          approval_status?: string | null
+          auto_renew?: boolean | null
+          cancellation_notice_days?: number | null
+          cancellation_request_id?: string | null
+          cancellation_status?: string | null
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          cost_center_id: string
+          created_at?: string
+          deletion_request_id?: string | null
+          deletion_status?: string | null
+          fiscal_year_id: string
+          id: string
+          is_accrual?: boolean
+          is_contracted?: boolean
+          is_software_subscription?: boolean
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name?: string | null
+        }
+        Update: {
+          adjustment_before_values?: Json | null
+          adjustment_request_id?: string | null
+          adjustment_sheet?: string | null
+          adjustment_status?: string | null
+          approval_request_id?: string | null
+          approval_status?: string | null
+          auto_renew?: boolean | null
+          cancellation_notice_days?: number | null
+          cancellation_request_id?: string | null
+          cancellation_status?: string | null
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          cost_center_id?: string
+          created_at?: string
+          deletion_request_id?: string | null
+          deletion_status?: string | null
+          fiscal_year_id?: string
+          id?: string
+          is_accrual?: boolean
+          is_contracted?: boolean
+          is_software_subscription?: boolean
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+          vendor_id?: string | null
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "line_items_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "line_items_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "line_items_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -355,6 +561,48 @@ export type Database = {
             columns: ["fiscal_year_id"]
             isOneToOne: false
             referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_values: {
+        Row: {
+          amount: number
+          fiscal_year_id: string
+          id: string
+          line_item_id: string
+          month: string
+          value_type: string
+        }
+        Insert: {
+          amount?: number
+          fiscal_year_id: string
+          id?: string
+          line_item_id: string
+          month: string
+          value_type: string
+        }
+        Update: {
+          amount?: number
+          fiscal_year_id?: string
+          id?: string
+          line_item_id?: string
+          month?: string
+          value_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_values_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_values_line_item_id_fkey"
+            columns: ["line_item_id"]
+            isOneToOne: false
+            referencedRelation: "line_items"
             referencedColumns: ["id"]
           },
         ]
