@@ -49,6 +49,7 @@ const App = () => (
             <CurrentUserRoleProvider>
               <FiscalYearBudgetProvider>
                 <RequestsProvider>
+                  <ErrorBoundary>
                   <Toaster />
                   <Sonner />
                   <Routes>
