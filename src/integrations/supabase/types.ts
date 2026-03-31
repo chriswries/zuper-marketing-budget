@@ -71,6 +71,8 @@ export type Database = {
           canonical_vendor_id: string | null
           created_at: string
           fiscal_year_id: string
+          import_batch_id: string | null
+          import_filename: string | null
           merchant: string | null
           raw: Json
           source: string | null
@@ -82,6 +84,8 @@ export type Database = {
           canonical_vendor_id?: string | null
           created_at?: string
           fiscal_year_id: string
+          import_batch_id?: string | null
+          import_filename?: string | null
           merchant?: string | null
           raw: Json
           source?: string | null
@@ -93,6 +97,8 @@ export type Database = {
           canonical_vendor_id?: string | null
           created_at?: string
           fiscal_year_id?: string
+          import_batch_id?: string | null
+          import_filename?: string | null
           merchant?: string | null
           raw?: Json
           source?: string | null
@@ -350,6 +356,56 @@ export type Database = {
           year?: number | null
         }
         Relationships: []
+      }
+      import_batches: {
+        Row: {
+          filename: string
+          fiscal_year_id: string
+          id: string
+          imported_at: string
+          imported_by_role: string
+          row_count: number
+          source: string
+          status: string
+          total_amount: number
+          undone_at: string | null
+          undone_by_role: string | null
+        }
+        Insert: {
+          filename: string
+          fiscal_year_id: string
+          id?: string
+          imported_at?: string
+          imported_by_role: string
+          row_count: number
+          source?: string
+          status?: string
+          total_amount: number
+          undone_at?: string | null
+          undone_by_role?: string | null
+        }
+        Update: {
+          filename?: string
+          fiscal_year_id?: string
+          id?: string
+          imported_at?: string
+          imported_by_role?: string
+          row_count?: number
+          source?: string
+          status?: string
+          total_amount?: number
+          undone_at?: string | null
+          undone_by_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_fiscal_year_id_fkey"
+            columns: ["fiscal_year_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_years"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       line_items: {
         Row: {
