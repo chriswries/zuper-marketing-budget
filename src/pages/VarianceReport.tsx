@@ -39,7 +39,8 @@ import {
 } from '@/lib/budgetForecastVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter, Month } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, ArrowLeft } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, ArrowLeft, FileDown } from 'lucide-react';
+import { exportReportToPdf } from '@/lib/exportPdf';
 import { toast } from '@/hooks/use-toast';
 import { ScopeMode, sumYTD, getCurrentFiscalMonth } from '@/lib/ytdHelpers';
 
