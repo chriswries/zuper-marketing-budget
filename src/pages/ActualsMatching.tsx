@@ -92,6 +92,8 @@ export default function ActualsMatching() {
   const [selectedCostCenterId, setSelectedCostCenterId] = useState<string>('');
   const [selectedLineItemId, setSelectedLineItemId] = useState<string>('');
   const [createMerchantRule, setCreateMerchantRule] = useState(false);
+  const [newLineItemName, setNewLineItemName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   // Unmatch dialog state
   const [unmatchDialogOpen, setUnmatchDialogOpen] = useState(false);
