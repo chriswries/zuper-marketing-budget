@@ -110,11 +110,6 @@ function buildRelationalColumns(request: SpendRequest) {
   };
 }
 
-function buildJsonbData(request: SpendRequest): Json {
-  // Keep rarely-queried fields and approval steps snapshot in JSONB for backup
-  const { id, status, originFiscalYearId, deletedAt, ...rest } = request;
-  return rest as unknown as Json;
-}
 
 export function RequestsProvider({ children }: { children: ReactNode }) {
   const [requests, setRequestsState] = useState<SpendRequest[]>([]);
