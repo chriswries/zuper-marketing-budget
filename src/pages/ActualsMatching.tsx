@@ -96,6 +96,9 @@ export default function ActualsMatching() {
   const [newLineItemName, setNewLineItemName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
+  // Bulk auto-create dialog
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+
   // Unmatch dialog state
   const [unmatchDialogOpen, setUnmatchDialogOpen] = useState(false);
   const [txnToUnmatch, setTxnToUnmatch] = useState<ActualsTransaction | null>(null);
