@@ -191,6 +191,16 @@ export default function ActualsMatching() {
   // Cost centers and line items from selected FY
   const costCenters = selectedFiscalYear?.costCenters ?? [];
 
+  // Unmatched transactions and existing rule keys for bulk dialog
+  const unmatchedTransactions = useMemo(
+    () => transactions.filter((t) => !matchesByTxnId[t.id]),
+    [transactions, matchesByTxnId]
+  );
+  const existingRuleKeys = useMemo(
+    () => new Set(Object.keys(rulesByMerchantKey)),
+    [rulesByMerchantKey]
+  );
+
   // Line items filtered by selected cost center
   const availableLineItems = useMemo(() => {
     if (!selectedCostCenterId) return [];
