@@ -46,7 +46,8 @@ import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { getVisibleFiscalYears } from '@/lib/fiscalYearVisibility';
 import { formatDate } from '@/lib/dateTime';
 import { parseCsv } from '@/lib/csvParse';
-import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@/lib/actualsStore';
+import { loadActuals, appendActuals, replaceActuals, getActualsSummary, invalidateActualsCache } from '@/lib/actualsStore';
+import { invalidateMatchingCache } from '@/lib/actualsMatchingStore';
 import { supabase } from '@/integrations/supabase/client';
 
 const NONE_VALUE = "__none__";
@@ -445,6 +446,8 @@ export default function ActualsImport() {
             : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
         });
 
+      invalidateActualsCache(selectedFYId);
+        invalidateMatchingCache(selectedFYId);
         setImportRefreshKey(k => k + 1);
         navigate('/admin');
         return;
@@ -467,6 +470,8 @@ export default function ActualsImport() {
         description: `Total: ${formatUSD(totalAmount)}. Batch: ${batchId.slice(0, 8)}`,
       });
 
+      invalidateActualsCache(selectedFYId);
+      invalidateMatchingCache(selectedFYId);
       setImportRefreshKey(k => k + 1);
       navigate('/admin');
     } catch (err) {
