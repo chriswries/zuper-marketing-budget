@@ -284,10 +284,11 @@ export default function ActualsImport() {
         errors,
       };
     });
-  }, [csvRows, mapping]);
+  }, [csvRows, mapping, amountSignMode]);
 
-  // Stats
-  const validRows = parsedRows.filter(r => r.errors.length === 0);
+  // Stats — filter out credits/refunds (amount <= 0) after sign normalization
+  const creditRows = parsedRows.filter(r => r.errors.length === 0 && (r.amount ?? 0) <= 0);
+  const validRows = parsedRows.filter(r => r.errors.length === 0 && (r.amount ?? 0) > 0);
   const invalidRows = parsedRows.filter(r => r.errors.length > 0);
   const totalAmount = validRows.reduce((sum, r) => sum + (r.amount ?? 0), 0);
   const minDate = validRows.reduce((min, r) => {
