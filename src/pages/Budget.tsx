@@ -33,7 +33,7 @@ import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues,
 import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { useBudgetApproval } from '@/hooks/useBudgetApproval';
-import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { useBudgetCellEdit, OverrideAction } from '@/hooks/useBudgetCellEdit';
 import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import {
