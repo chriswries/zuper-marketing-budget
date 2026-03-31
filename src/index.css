@@ -164,48 +164,80 @@ All colors MUST be HSL.
 
 /* Print styles for report PDF export */
 @media print {
-  /* Hide non-report UI */
+  /* Hide all navigation, sidebar, header */
   nav,
   [data-sidebar],
   header,
-  .sidebar,
   [class*="AppSidebar"],
   [class*="AppHeader"],
+  [class*="SidebarProvider"] > [class*="sidebar"] {
+    display: none !important;
+  }
+
+  /* Hide interactive controls that don't belong in a PDF */
   .no-print {
     display: none !important;
   }
 
   /* Full width for report content */
+  body,
+  #root,
   main,
+  [class*="SidebarProvider"],
   [class*="SidebarInset"],
-  [class*="AppLayout"] > div {
-    margin: 0 !important;
-    padding: 0 !important;
+  [class*="AppLayout"] {
     width: 100% !important;
     max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Make the main content area fill the page */
+  [class*="SidebarInset"] {
     margin-left: 0 !important;
-  }
-
-  /* Ensure tables don't break mid-row */
-  tr {
-    break-inside: avoid;
-  }
-
-  /* Ensure charts/cards print with backgrounds */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Show print-only elements */
-  .print-only {
-    display: block !important;
+    flex: 1 !important;
   }
 
   /* Page setup */
   @page {
     size: landscape;
     margin: 0.5in;
+  }
+
+  /* Table handling */
+  table {
+    font-size: 10px !important;
+    width: 100% !important;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  /* Preserve colors */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Cards should not have shadows in print */
+  [class*="Card"],
+  .rounded-lg.border {
+    box-shadow: none !important;
+    border: 1px solid hsl(var(--border)) !important;
+  }
+
+  /* Print-only header */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Sticky positioning breaks print */
+  .sticky,
+  [class*="sticky"] {
+    position: static !important;
   }
 }
 

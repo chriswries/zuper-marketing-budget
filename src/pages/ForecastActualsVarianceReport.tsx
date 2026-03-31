@@ -607,7 +607,7 @@ export default function ForecastActualsVarianceReport() {
       </div>
       
       {/* Filters */}
-      <Card>
+      <Card className="no-print">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             {/* Scope Toggle */}

@@ -421,8 +421,7 @@ export default function BurnRateRunwayReport() {
         </Button>
       </div>
       
-      {/* Controls */}
-      <Card>
+      <Card className="no-print">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             {/* Mode Toggle */}
