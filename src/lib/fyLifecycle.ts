@@ -178,7 +178,7 @@ export async function hardDeleteFiscalYear(
   // 8. Delete actuals rollup cache for FY
   deleteActualsRollupForFY(fyId);
 
-  // 9. Delete the FY itself from DB (this will cascade delete fy_forecasts, actuals_transactions, actuals_matching)
+  // 9. Delete the FY itself from DB (this will cascade delete fy_forecasts, actuals_transactions, actuals_matches, merchant_rules)
   await deleteFiscalYearBudget(fyId);
 
   return {
