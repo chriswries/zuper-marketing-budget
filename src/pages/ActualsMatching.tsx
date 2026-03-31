@@ -315,6 +315,101 @@ export default function ActualsMatching() {
     });
   };
 
+  // Handle create new line item and match
+  const handleCreateAndMatch = useCallback(async () => {
+    if (!selectedTxn || !selectedFiscalYearId || !selectedFiscalYear || !selectedCostCenterId) return;
+    if (!newLineItemName.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const lineItemId = crypto.randomUUID();
+      const costCenterName = costCenters.find(cc => cc.id === selectedCostCenterId)?.name ?? '';
+
+      // 1. Insert line item
+      const { error: liErr } = await supabase.from('line_items').insert({
+        id: lineItemId,
+        cost_center_id: selectedCostCenterId,
+        fiscal_year_id: selectedFiscalYearId,
+        name: newLineItemName.trim(),
+        vendor_name: selectedTxn.merchantName || null,
+        is_contracted: false,
+        is_accrual: false,
+        is_software_subscription: false,
+      });
+      if (liErr) throw new Error(`Failed to create line item: ${liErr.message}`);
+
+      // 2. Insert 24 monthly_values rows (12 budget + 12 forecast, all zero)
+      const monthlyRows = MONTHS.flatMap(month => [
+        { line_item_id: lineItemId, fiscal_year_id: selectedFiscalYearId, month, value_type: 'budget', amount: 0 },
+        { line_item_id: lineItemId, fiscal_year_id: selectedFiscalYearId, month, value_type: 'forecast', amount: 0 },
+      ]);
+      const { error: mvErr } = await supabase.from('monthly_values').insert(monthlyRows);
+      if (mvErr) throw new Error(`Failed to create monthly values: ${mvErr.message}`);
+
+      // 3. Match the transaction
+      const merchantKey = normalizeMerchantKey(selectedTxn.merchantName);
+      const match: TransactionMatch = {
+        txnId: selectedTxn.id,
+        costCenterId: selectedCostCenterId,
+        lineItemId,
+        matchSource: 'manual',
+        matchedAt: new Date().toISOString(),
+        matchedByRole: currentRole,
+        merchantKey,
+      };
+      await addTransactionMatch(selectedFiscalYearId, match);
+
+      // 4. Optionally create merchant rule
+      if (createMerchantRule) {
+        const rule: MerchantRule = {
+          merchantKey,
+          costCenterId: selectedCostCenterId,
+          lineItemId,
+          createdAt: new Date().toISOString(),
+          createdByRole: currentRole,
+        };
+        await addMerchantRule(selectedFiscalYearId, rule);
+
+        const appliedCount = await applyMerchantRules(
+          selectedFiscalYearId,
+          transactions.filter(t => t.id !== selectedTxn.id),
+          currentRole
+        );
+        if (appliedCount > 0) {
+          toast({
+            title: 'Merchant rule created',
+            description: `Rule applied to ${appliedCount} additional transaction(s).`,
+          });
+        }
+      }
+
+      // 5. Recompute rollup
+      recomputeAndSaveActualsRollup(selectedFiscalYearId, selectedFiscalYear);
+
+      // 6. Reload matching + FY data
+      const matchingData = await loadActualsMatchingAsync(selectedFiscalYearId);
+      setMatchesByTxnId(matchingData.matchesByTxnId);
+      setRulesByMerchantKey(matchingData.rulesByMerchantKey);
+
+      setMatchDialogOpen(false);
+      setSelectedTxn(null);
+
+      toast({
+        title: 'Line item created & matched',
+        description: `Created "${newLineItemName.trim()}" in ${costCenterName} and matched transaction.`,
+      });
+    } catch (err) {
+      console.error('Create and match failed:', err);
+      toast({
+        title: 'Failed to create line item',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  }, [selectedTxn, selectedFiscalYearId, selectedFiscalYear, selectedCostCenterId, newLineItemName, createMerchantRule, currentRole, costCenters, transactions, toast]);
+
   // Open unmatch dialog
   const handleOpenUnmatchDialog = (txn: ActualsTransaction) => {
     setTxnToUnmatch(txn);
