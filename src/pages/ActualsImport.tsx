@@ -138,6 +138,7 @@ export default function ActualsImport() {
     amount: '',
   });
   const [source, setSource] = useState<ActualsSource>('unknown');
+  const [amountSignMode, setAmountSignMode] = useState<'expenses_positive' | 'expenses_negative'>('expenses_positive');
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [skipInvalidRows, setSkipInvalidRows] = useState(true);
 
