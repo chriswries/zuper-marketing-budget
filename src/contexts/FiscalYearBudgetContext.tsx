@@ -321,7 +321,8 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
 
       if (error) {
         console.error('Failed to update fiscal year:', error);
-        // Could refetch to revert
+        toast({ variant: 'destructive', title: 'Failed to save changes', description: 'Data has been refreshed from the server.' });
+        fetchFiscalYears();
       }
     }
   }, []);
