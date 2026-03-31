@@ -22,7 +22,7 @@ import {
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
 import { BudgetAllocationSummary } from '@/components/budget/BudgetAllocationSummary';
-import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
+import { AdjustmentJustificationDialog } from '@/components/sheet/AdjustmentJustificationDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
 import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
 import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
