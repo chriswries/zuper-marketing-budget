@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
