@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DEFAULT_TIME_ZONE } from '@/lib/dateTime';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export interface AdminSettings {
   increaseApprovalAbsoluteUsd: number;
@@ -80,7 +81,7 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
 
         if (error) {
-          console.error('Failed to load admin settings:', error);
+          logger.error('Failed to load admin settings:', error);
           if (mounted) setLoading(false);
           return;
         }
@@ -97,14 +98,14 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
             .single();
 
           if (insertError) {
-            console.error('Failed to create admin settings:', insertError);
+            logger.error('Failed to create admin settings:', insertError);
           } else if (newRow) {
             rowIdRef.current = newRow.id;
             if (mounted) setSettings(mapRowToSettings(newRow));
           }
         }
       } catch (err) {
-        console.error('Error loading admin settings:', err);
+        logger.error('Error loading admin settings:', err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -131,7 +132,7 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
         setSettings(mapRowToSettings(data));
       }
     } catch (err) {
-      console.error('Error reloading admin settings:', err);
+      logger.error('Error reloading admin settings:', err);
     }
   }, []);
 
@@ -150,7 +151,7 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
         .eq('id', rowIdRef.current);
 
       if (error) {
-        console.error('Failed to update admin settings:', error);
+        logger.error('Failed to update admin settings:', error);
         toast({ variant: 'destructive', title: 'Failed to save settings', description: 'Settings have been refreshed from the server.' });
         reloadSettings();
       }
@@ -163,7 +164,7 @@ export function AdminSettingsProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Failed to upsert admin settings:', error);
+        logger.error('Failed to upsert admin settings:', error);
         toast({ variant: 'destructive', title: 'Failed to save settings', description: 'Settings have been refreshed from the server.' });
         reloadSettings();
       } else if (data) {

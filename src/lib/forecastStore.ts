@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Forecast store - persists to Supabase fy_forecasts table.
  */
@@ -18,7 +19,7 @@ export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[]
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to load forecast:', error);
+      logger.error('Failed to load forecast:', error);
       return null;
     }
 
@@ -31,7 +32,7 @@ export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[]
     forecastCache[fyId] = costCenters;
     return costCenters;
   } catch (err) {
-    console.error('Error loading forecast:', err);
+    logger.error('Error loading forecast:', err);
     return null;
   }
 }
@@ -44,7 +45,7 @@ export function loadForecastForFY(fyId: string): CostCenter[] | null {
   }
   
   // Trigger async load for next time
-  loadForecastForFYAsync(fyId).catch(console.error);
+  loadForecastForFYAsync(fyId).catch(logger.error);
   
   return null;
 }
@@ -62,10 +63,10 @@ export async function saveForecastForFY(fyId: string, costCenters: CostCenter[])
       });
 
     if (error) {
-      console.error('Failed to save forecast:', error);
+      logger.error('Failed to save forecast:', error);
     }
   } catch (err) {
-    console.error('Error saving forecast:', err);
+    logger.error('Error saving forecast:', err);
   }
 }
 
@@ -80,10 +81,10 @@ export async function clearForecastForFY(fyId: string): Promise<void> {
       .eq('fiscal_year_id', fyId);
 
     if (error) {
-      console.error('Failed to clear forecast:', error);
+      logger.error('Failed to clear forecast:', error);
     }
   } catch (err) {
-    console.error('Error clearing forecast:', err);
+    logger.error('Error clearing forecast:', err);
   }
 }
 

@@ -5,6 +5,7 @@ export type { FiscalYearStatus } from '@/types/budget';
 import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export type BudgetApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 export type BudgetApprovalLevel = 'cmo' | 'finance';
@@ -67,7 +68,7 @@ function loadSelectedFromStorage(): string | null {
       return JSON.parse(stored);
     }
   } catch (e) {
-    console.error('Failed to load selected FY from localStorage', e);
+    logger.error('Failed to load selected FY from localStorage', e);
   }
   return null;
 }
@@ -76,7 +77,7 @@ function saveSelectedToStorage(id: string | null): void {
   try {
     localStorage.setItem(STORAGE_KEY_SELECTED, JSON.stringify(id));
   } catch (e) {
-    console.error('Failed to save selected FY to localStorage', e);
+    logger.error('Failed to save selected FY to localStorage', e);
   }
 }
 
@@ -157,7 +158,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Failed to fetch fiscal years:', error);
+        logger.error('Failed to fetch fiscal years:', error);
         return [];
       }
 
@@ -165,7 +166,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       setFiscalYears(mapped);
       return mapped;
     } catch (err) {
-      console.error('Error fetching fiscal years:', err);
+      logger.error('Error fetching fiscal years:', err);
       return [];
     } finally {
       setLoading(false);
@@ -199,7 +200,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
     initializedForSessionRef.current = sessionKey;
 
     const initializeFiscalYears = async () => {
-      console.log('Initializing fiscal years for session:', sessionKey);
+      logger.info('Initializing fiscal years for session:', sessionKey);
       const loadedFYs = await fetchFiscalYears();
       
       if (loadedFYs.length === 0) {
@@ -221,7 +222,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         const defaultFY = activeFYs.length > 0 ? activeFYs[0] : loadedFYs[0];
         
         if (defaultFY) {
-          console.log('Auto-selecting fiscal year:', defaultFY.name);
+          logger.info('Auto-selecting fiscal year:', defaultFY.name);
           setSelectedFiscalYearIdState(defaultFY.id);
           saveSelectedToStorage(defaultFY.id);
         }
@@ -280,7 +281,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       .insert(row);
 
     if (error) {
-      console.error('Failed to create fiscal year:', error);
+      logger.error('Failed to create fiscal year:', error);
       // Remove from state on error
       setFiscalYears((prev) => prev.filter((fy) => fy.id !== draft.id));
       toast({ variant: 'destructive', title: 'Failed to create fiscal year', description: 'Your changes could not be saved. Please try again.' });
@@ -319,7 +320,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         .eq('id', id);
 
       if (error) {
-        console.error('Failed to update fiscal year:', error);
+        logger.error('Failed to update fiscal year:', error);
         toast({ variant: 'destructive', title: 'Failed to save changes', description: 'Data has been refreshed from the server.' });
         fetchFiscalYears();
       }
@@ -341,7 +342,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       .eq('id', id);
 
     if (error) {
-      console.error('Failed to delete fiscal year:', error);
+      logger.error('Failed to delete fiscal year:', error);
       toast({ variant: 'destructive', title: 'Failed to delete fiscal year', description: 'Data has been refreshed from the server.' });
       fetchFiscalYears();
     }
