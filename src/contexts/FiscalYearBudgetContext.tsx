@@ -284,6 +284,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
       console.error('Failed to create fiscal year:', error);
       // Remove from state on error
       setFiscalYears((prev) => prev.filter((fy) => fy.id !== draft.id));
+      toast({ variant: 'destructive', title: 'Failed to create fiscal year', description: 'Your changes could not be saved. Please try again.' });
       return false;
     }
     return true;
