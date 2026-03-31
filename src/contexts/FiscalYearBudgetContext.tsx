@@ -316,10 +316,6 @@ async function persistBudgetMonthlyValues(fyId: string, costCenters: CostCenter[
   }
 }
 
-function fiscalYearToDataJson(fy: FiscalYearBudget): Json {
-  const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive, ...rest } = fy;
-  return rest as unknown as Json;
-}
 
 // ─── Provider ───
 
