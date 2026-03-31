@@ -233,6 +233,7 @@ export default function ActualsMatching() {
     }
     
     setCreateMerchantRule(false);
+    setNewLineItemName(txn.merchantName || '');
     setMatchDialogOpen(true);
   };
 
