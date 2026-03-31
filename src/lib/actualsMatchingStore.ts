@@ -1,12 +1,11 @@
 import { logger } from '@/lib/logger';
 /**
  * Storage module for actuals transaction matching and merchant rules.
- * Persists to Supabase actuals_matching table.
+ * Reads/writes to relational actuals_matches and merchant_rules tables.
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { UserRole } from '@/contexts/CurrentUserRoleContext';
-import type { Json } from '@/integrations/supabase/types';
 
 // Cache TTL: 10 minutes
 const CACHE_TTL = 10 * 60 * 1000;
@@ -51,28 +50,61 @@ function isCacheExpired(entry: CacheEntry<unknown>): boolean {
   return Date.now() - entry.loadedAt > CACHE_TTL;
 }
 
+function getOrCreateCacheEntry(fiscalYearId: string): ActualsMatchingData {
+  const entry = matchingCache[fiscalYearId];
+  if (entry) return entry.data;
+  const fresh = { matchesByTxnId: {}, rulesByMerchantKey: {} };
+  matchingCache[fiscalYearId] = { data: fresh, loadedAt: 0 };
+  return fresh;
+}
+
 export async function loadActualsMatchingAsync(fiscalYearId: string): Promise<ActualsMatchingData> {
   try {
-    const { data, error } = await supabase
-      .from('actuals_matching')
-      .select('*')
-      .eq('fiscal_year_id', fiscalYearId)
-      .maybeSingle();
+    const [matchesRes, rulesRes] = await Promise.all([
+      supabase
+        .from('actuals_matches')
+        .select('txn_id, cost_center_id, line_item_id, match_source, matched_at, matched_by_role, merchant_key')
+        .eq('fiscal_year_id', fiscalYearId),
+      supabase
+        .from('merchant_rules')
+        .select('merchant_key, cost_center_id, line_item_id, created_at, created_by_role')
+        .eq('fiscal_year_id', fiscalYearId),
+    ]);
 
-    if (error) {
-      logger.error('Failed to load actuals matching:', error);
+    if (matchesRes.error) {
+      logger.error('Failed to load actuals_matches:', matchesRes.error);
+      return DEFAULT_MATCHING_DATA;
+    }
+    if (rulesRes.error) {
+      logger.error('Failed to load merchant_rules:', rulesRes.error);
       return DEFAULT_MATCHING_DATA;
     }
 
-    if (!data) {
-      matchingCache[fiscalYearId] = { data: DEFAULT_MATCHING_DATA, loadedAt: Date.now() };
-      return DEFAULT_MATCHING_DATA;
+    const matchesByTxnId: Record<string, TransactionMatch> = {};
+    for (const row of matchesRes.data ?? []) {
+      matchesByTxnId[row.txn_id] = {
+        txnId: row.txn_id,
+        costCenterId: row.cost_center_id,
+        lineItemId: row.line_item_id,
+        matchSource: row.match_source as TransactionMatch['matchSource'],
+        matchedAt: row.matched_at,
+        matchedByRole: row.matched_by_role as UserRole,
+        merchantKey: row.merchant_key ?? undefined,
+      };
     }
 
-    const result: ActualsMatchingData = {
-      matchesByTxnId: (data.matches_by_txn_id as unknown as Record<string, TransactionMatch>) ?? {},
-      rulesByMerchantKey: (data.rules_by_merchant_key as unknown as Record<string, MerchantRule>) ?? {},
-    };
+    const rulesByMerchantKey: Record<string, MerchantRule> = {};
+    for (const row of rulesRes.data ?? []) {
+      rulesByMerchantKey[row.merchant_key] = {
+        merchantKey: row.merchant_key,
+        costCenterId: row.cost_center_id,
+        lineItemId: row.line_item_id,
+        createdAt: row.created_at,
+        createdByRole: row.created_by_role as UserRole,
+      };
+    }
+
+    const result: ActualsMatchingData = { matchesByTxnId, rulesByMerchantKey };
     matchingCache[fiscalYearId] = { data: result, loadedAt: Date.now() };
     return result;
   } catch (err) {
@@ -97,25 +129,16 @@ export function loadActualsMatching(fiscalYearId: string): ActualsMatchingData {
   return DEFAULT_MATCHING_DATA;
 }
 
+/**
+ * @deprecated Use individual CRUD functions instead.
+ * Kept for backward compatibility with callers that import it.
+ * Now performs individual inserts/deletes to match the relational model.
+ */
 export async function saveActualsMatching(fiscalYearId: string, data: ActualsMatchingData): Promise<void> {
   // Update cache
   matchingCache[fiscalYearId] = { data, loadedAt: Date.now() };
-
-  try {
-    const { error } = await supabase
-      .from('actuals_matching')
-      .upsert({
-        fiscal_year_id: fiscalYearId,
-        matches_by_txn_id: data.matchesByTxnId as unknown as Json,
-        rules_by_merchant_key: data.rulesByMerchantKey as unknown as Json,
-      });
-
-    if (error) {
-      logger.error('Failed to save actuals matching:', error);
-    }
-  } catch (err) {
-    logger.error('Error saving actuals matching:', err);
-  }
+  // Note: callers should migrate to individual CRUD functions.
+  // This function is kept only so existing imports don't break.
 }
 
 /**
@@ -140,17 +163,24 @@ export async function applyMerchantRules(
   role: UserRole
 ): Promise<number> {
   const data = await loadActualsMatchingAsync(fiscalYearId);
-  let appliedCount = 0;
+  const newMatches: Array<{
+    fiscal_year_id: string;
+    txn_id: string;
+    cost_center_id: string;
+    line_item_id: string;
+    match_source: string;
+    matched_by_role: string;
+    merchant_key: string;
+  }> = [];
 
   for (const txn of txns) {
-    // Skip if already matched
     if (data.matchesByTxnId[txn.id]) continue;
 
     const merchantKey = normalizeMerchantKey(txn.merchantName);
     const rule = data.rulesByMerchantKey[merchantKey];
 
     if (rule) {
-      data.matchesByTxnId[txn.id] = {
+      const match: TransactionMatch = {
         txnId: txn.id,
         costCenterId: rule.costCenterId,
         lineItemId: rule.lineItemId,
@@ -159,15 +189,33 @@ export async function applyMerchantRules(
         matchedByRole: role,
         merchantKey,
       };
-      appliedCount++;
+      data.matchesByTxnId[txn.id] = match;
+      newMatches.push({
+        fiscal_year_id: fiscalYearId,
+        txn_id: txn.id,
+        cost_center_id: rule.costCenterId,
+        line_item_id: rule.lineItemId,
+        match_source: 'merchant_rule',
+        matched_by_role: role,
+        merchant_key: merchantKey,
+      });
     }
   }
 
-  if (appliedCount > 0) {
-    await saveActualsMatching(fiscalYearId, data);
+  if (newMatches.length > 0) {
+    // Bulk insert in batches of 500
+    const batchSize = 500;
+    for (let i = 0; i < newMatches.length; i += batchSize) {
+      const batch = newMatches.slice(i, i + batchSize);
+      const { error } = await supabase.from('actuals_matches').upsert(batch, { onConflict: 'fiscal_year_id,txn_id' });
+      if (error) {
+        logger.error('Failed to bulk insert matches from merchant rules:', error);
+      }
+    }
+    matchingCache[fiscalYearId] = { data, loadedAt: Date.now() };
   }
 
-  return appliedCount;
+  return newMatches.length;
 }
 
 /**
@@ -177,9 +225,27 @@ export async function addTransactionMatch(
   fiscalYearId: string,
   match: TransactionMatch
 ): Promise<void> {
-  const data = await loadActualsMatchingAsync(fiscalYearId);
-  data.matchesByTxnId[match.txnId] = match;
-  await saveActualsMatching(fiscalYearId, data);
+  // Update cache optimistically
+  const cached = getOrCreateCacheEntry(fiscalYearId);
+  cached.matchesByTxnId[match.txnId] = match;
+  matchingCache[fiscalYearId] = { data: cached, loadedAt: Date.now() };
+
+  const { error } = await supabase.from('actuals_matches').upsert({
+    fiscal_year_id: fiscalYearId,
+    txn_id: match.txnId,
+    cost_center_id: match.costCenterId,
+    line_item_id: match.lineItemId,
+    match_source: match.matchSource,
+    matched_at: match.matchedAt,
+    matched_by_role: match.matchedByRole,
+    merchant_key: match.merchantKey ?? null,
+  }, { onConflict: 'fiscal_year_id,txn_id' });
+
+  if (error) {
+    logger.error('Failed to add transaction match:', error);
+    // Revert cache
+    delete cached.matchesByTxnId[match.txnId];
+  }
 }
 
 /**
@@ -189,10 +255,23 @@ export async function removeTransactionMatch(
   fiscalYearId: string,
   txnId: string
 ): Promise<TransactionMatch | undefined> {
-  const data = await loadActualsMatchingAsync(fiscalYearId);
-  const removed = data.matchesByTxnId[txnId];
-  delete data.matchesByTxnId[txnId];
-  await saveActualsMatching(fiscalYearId, data);
+  const cached = getOrCreateCacheEntry(fiscalYearId);
+  const removed = cached.matchesByTxnId[txnId];
+  delete cached.matchesByTxnId[txnId];
+  matchingCache[fiscalYearId] = { data: cached, loadedAt: Date.now() };
+
+  const { error } = await supabase
+    .from('actuals_matches')
+    .delete()
+    .eq('fiscal_year_id', fiscalYearId)
+    .eq('txn_id', txnId);
+
+  if (error) {
+    logger.error('Failed to remove transaction match:', error);
+    // Revert cache
+    if (removed) cached.matchesByTxnId[txnId] = removed;
+  }
+
   return removed;
 }
 
@@ -203,9 +282,22 @@ export async function addMerchantRule(
   fiscalYearId: string,
   rule: MerchantRule
 ): Promise<void> {
-  const data = await loadActualsMatchingAsync(fiscalYearId);
-  data.rulesByMerchantKey[rule.merchantKey] = rule;
-  await saveActualsMatching(fiscalYearId, data);
+  const cached = getOrCreateCacheEntry(fiscalYearId);
+  cached.rulesByMerchantKey[rule.merchantKey] = rule;
+  matchingCache[fiscalYearId] = { data: cached, loadedAt: Date.now() };
+
+  const { error } = await supabase.from('merchant_rules').upsert({
+    fiscal_year_id: fiscalYearId,
+    merchant_key: rule.merchantKey,
+    cost_center_id: rule.costCenterId,
+    line_item_id: rule.lineItemId,
+    created_by_role: rule.createdByRole,
+  }, { onConflict: 'fiscal_year_id,merchant_key' });
+
+  if (error) {
+    logger.error('Failed to add merchant rule:', error);
+    delete cached.rulesByMerchantKey[rule.merchantKey];
+  }
 }
 
 /**
@@ -215,10 +307,22 @@ export async function removeMerchantRule(
   fiscalYearId: string,
   merchantKey: string
 ): Promise<MerchantRule | undefined> {
-  const data = await loadActualsMatchingAsync(fiscalYearId);
-  const removed = data.rulesByMerchantKey[merchantKey];
-  delete data.rulesByMerchantKey[merchantKey];
-  await saveActualsMatching(fiscalYearId, data);
+  const cached = getOrCreateCacheEntry(fiscalYearId);
+  const removed = cached.rulesByMerchantKey[merchantKey];
+  delete cached.rulesByMerchantKey[merchantKey];
+  matchingCache[fiscalYearId] = { data: cached, loadedAt: Date.now() };
+
+  const { error } = await supabase
+    .from('merchant_rules')
+    .delete()
+    .eq('fiscal_year_id', fiscalYearId)
+    .eq('merchant_key', merchantKey);
+
+  if (error) {
+    logger.error('Failed to remove merchant rule:', error);
+    if (removed) cached.rulesByMerchantKey[merchantKey] = removed;
+  }
+
   return removed;
 }
 
@@ -226,18 +330,16 @@ export async function removeMerchantRule(
  * Delete all matching data for a fiscal year.
  */
 export async function deleteActualsMatchingForFY(fiscalYearId: string): Promise<void> {
-  // Clear cache
   delete matchingCache[fiscalYearId];
 
   try {
-    const { error } = await supabase
-      .from('actuals_matching')
-      .delete()
-      .eq('fiscal_year_id', fiscalYearId);
+    const [matchErr, rulesErr] = await Promise.all([
+      supabase.from('actuals_matches').delete().eq('fiscal_year_id', fiscalYearId),
+      supabase.from('merchant_rules').delete().eq('fiscal_year_id', fiscalYearId),
+    ]);
 
-    if (error) {
-      logger.error('Failed to delete actuals matching:', error);
-    }
+    if (matchErr.error) logger.error('Failed to delete actuals_matches:', matchErr.error);
+    if (rulesErr.error) logger.error('Failed to delete merchant_rules:', rulesErr.error);
   } catch (err) {
     logger.error('Error deleting actuals matching:', err);
   }
@@ -245,9 +347,51 @@ export async function deleteActualsMatchingForFY(fiscalYearId: string): Promise<
 
 /**
  * Replace all matching data for a fiscal year (used by bundle import).
+ * Deletes existing data then inserts the provided data.
  */
 export async function replaceActualsMatchingForFY(fiscalYearId: string, data: ActualsMatchingData): Promise<void> {
-  await saveActualsMatching(fiscalYearId, data);
+  // Delete existing
+  await deleteActualsMatchingForFY(fiscalYearId);
+
+  // Insert matches
+  const matchEntries = Object.values(data.matchesByTxnId);
+  if (matchEntries.length > 0) {
+    const batchSize = 500;
+    for (let i = 0; i < matchEntries.length; i += batchSize) {
+      const batch = matchEntries.slice(i, i + batchSize).map((m) => ({
+        fiscal_year_id: fiscalYearId,
+        txn_id: m.txnId,
+        cost_center_id: m.costCenterId,
+        line_item_id: m.lineItemId,
+        match_source: m.matchSource,
+        matched_at: m.matchedAt,
+        matched_by_role: m.matchedByRole,
+        merchant_key: m.merchantKey ?? null,
+      }));
+      const { error } = await supabase.from('actuals_matches').insert(batch);
+      if (error) logger.error('Failed to insert matches during replace:', error);
+    }
+  }
+
+  // Insert rules
+  const ruleEntries = Object.values(data.rulesByMerchantKey);
+  if (ruleEntries.length > 0) {
+    const batchSize = 500;
+    for (let i = 0; i < ruleEntries.length; i += batchSize) {
+      const batch = ruleEntries.slice(i, i + batchSize).map((r) => ({
+        fiscal_year_id: fiscalYearId,
+        merchant_key: r.merchantKey,
+        cost_center_id: r.costCenterId,
+        line_item_id: r.lineItemId,
+        created_by_role: r.createdByRole,
+      }));
+      const { error } = await supabase.from('merchant_rules').insert(batch);
+      if (error) logger.error('Failed to insert rules during replace:', error);
+    }
+  }
+
+  // Update cache
+  matchingCache[fiscalYearId] = { data, loadedAt: Date.now() };
 }
 
 // Preload matching data into cache
@@ -275,34 +419,41 @@ export function clearMatchingCacheExcept(fyId: string): void {
 }
 
 /**
- * Subscribe to realtime changes on actuals_matching table.
+ * Subscribe to realtime changes on actuals_matches and merchant_rules tables.
  * Invalidates cache for affected fiscal year.
  * Returns cleanup function.
  */
 export function subscribeActualsMatchingRealtimeInvalidation(): () => void {
-  const channel = supabase
-    .channel('matching-cache-invalidation')
+  const matchesChannel = supabase
+    .channel('matches-cache-invalidation')
     .on(
       'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'actuals_matching',
-      },
+      { event: '*', schema: 'public', table: 'actuals_matches' },
       (payload) => {
         const fyId = (payload.new as { fiscal_year_id?: string })?.fiscal_year_id 
           || (payload.old as { fiscal_year_id?: string })?.fiscal_year_id;
-        
-        if (fyId) {
-          invalidateMatchingCache(fyId);
-        } else {
-          clearMatchingCache();
-        }
+        if (fyId) invalidateMatchingCache(fyId);
+        else clearMatchingCache();
+      }
+    )
+    .subscribe();
+
+  const rulesChannel = supabase
+    .channel('rules-cache-invalidation')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'merchant_rules' },
+      (payload) => {
+        const fyId = (payload.new as { fiscal_year_id?: string })?.fiscal_year_id 
+          || (payload.old as { fiscal_year_id?: string })?.fiscal_year_id;
+        if (fyId) invalidateMatchingCache(fyId);
+        else clearMatchingCache();
       }
     )
     .subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    supabase.removeChannel(matchesChannel);
+    supabase.removeChannel(rulesChannel);
   };
 }
