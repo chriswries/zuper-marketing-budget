@@ -1,113 +1,53 @@
 /**
- * Storage module for computed actuals rollups.
- * Persists rollups to sessionStorage (instead of localStorage) for better security.
- * Session storage clears on tab close, reducing exposure of financial data.
- * Also includes TTL (time-to-live) for cache expiration.
+ * Computation module for actuals rollups.
+ * No longer caches to sessionStorage — data is passed directly from async loaders.
  */
 
-import type { ActualsRollupResult, buildActualsRollup } from './actualsRollup';
+import type { ActualsRollupResult } from './actualsRollup';
 import { loadActuals } from './actualsStore';
 import { loadActualsMatching } from './actualsMatchingStore';
 import { buildActualsRollup as computeRollup } from './actualsRollup';
 import type { FiscalYearBudget } from '@/contexts/FiscalYearBudgetContext';
-
-// Cache TTL: 1 hour (in milliseconds)
-const CACHE_TTL_MS = 60 * 60 * 1000;
-
-export interface StoredRollup {
-  generatedAt: string; // ISO
-  rollup: ActualsRollupResult;
-  expiresAt: number; // Timestamp for TTL expiration
-}
-
-function getStorageKey(fiscalYearId: string): string {
-  return `actuals_rollup_${fiscalYearId}`;
-}
+import type { ActualsTransaction } from '@/types/actuals';
+import type { ActualsMatchingData } from './actualsMatchingStore';
 
 /**
- * Check if cached data is still valid (not expired).
- */
-function isCacheValid(stored: StoredRollup): boolean {
-  return Date.now() < stored.expiresAt;
-}
-
-export function loadActualsRollup(fiscalYearId: string): StoredRollup | null {
-  try {
-    // Use sessionStorage instead of localStorage for security
-    const stored = sessionStorage.getItem(getStorageKey(fiscalYearId));
-    if (!stored) return null;
-    
-    const parsed = JSON.parse(stored) as StoredRollup;
-    
-    // Check TTL expiration
-    if (!isCacheValid(parsed)) {
-      // Cache expired, remove it
-      sessionStorage.removeItem(getStorageKey(fiscalYearId));
-      return null;
-    }
-    
-    return parsed;
-  } catch {
-    console.error('Failed to load actuals rollup from sessionStorage');
-    return null;
-  }
-}
-
-export function saveActualsRollup(fiscalYearId: string, rollup: ActualsRollupResult): void {
-  const stored: StoredRollup = {
-    generatedAt: new Date().toISOString(),
-    rollup,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  };
-  try {
-    // Use sessionStorage instead of localStorage for security
-    sessionStorage.setItem(getStorageKey(fiscalYearId), JSON.stringify(stored));
-  } catch (error) {
-    console.error('Failed to save actuals rollup to sessionStorage:', error);
-  }
-}
-
-/**
- * Recompute rollup from current transactions and matches, then save.
+ * Recompute rollup from provided transactions and matches.
+ * If transactions/matchingData are not provided, falls back to sync cache (for legacy callers).
  */
 export function recomputeAndSaveActualsRollup(
   fiscalYearId: string,
-  fiscalYear: FiscalYearBudget
+  fiscalYear: FiscalYearBudget,
+  transactions?: ActualsTransaction[],
+  matchingData?: ActualsMatchingData
 ): ActualsRollupResult {
-  const transactions = loadActuals(fiscalYearId);
-  const matchingData = loadActualsMatching(fiscalYearId);
+  const txns = transactions ?? loadActuals(fiscalYearId);
+  const matching = matchingData ?? loadActualsMatching(fiscalYearId);
 
-  const rollup = computeRollup({
+  return computeRollup({
     fiscalYearId,
     fiscalYear,
-    transactions,
-    matchesByTxnId: matchingData.matchesByTxnId,
+    transactions: txns,
+    matchesByTxnId: matching.matchesByTxnId,
   });
-
-  saveActualsRollup(fiscalYearId, rollup);
-  return rollup;
 }
 
 /**
- * Get existing rollup or compute and save a fresh one.
- * For the Actuals view, we always recompute to ensure freshness.
+ * Get rollup by computing from provided data.
+ * If transactions/matchingData are not provided, falls back to sync cache.
  */
 export function getOrBuildActualsRollup(
   fiscalYearId: string,
-  fiscalYear: FiscalYearBudget
+  fiscalYear: FiscalYearBudget,
+  transactions?: ActualsTransaction[],
+  matchingData?: ActualsMatchingData
 ): ActualsRollupResult {
-  // Always recompute to ensure actuals view is fresh
-  return recomputeAndSaveActualsRollup(fiscalYearId, fiscalYear);
+  return recomputeAndSaveActualsRollup(fiscalYearId, fiscalYear, transactions, matchingData);
 }
 
 /**
- * Delete actuals rollup cache for a fiscal year.
+ * No-op kept for backward compatibility (sessionStorage caching removed).
  */
-export function deleteActualsRollupForFY(fiscalYearId: string): void {
-  try {
-    // Use sessionStorage instead of localStorage
-    sessionStorage.removeItem(getStorageKey(fiscalYearId));
-  } catch (error) {
-    console.error('Failed to delete actuals rollup from sessionStorage:', error);
-  }
+export function deleteActualsRollupForFY(_fiscalYearId: string): void {
+  // No-op: sessionStorage caching has been removed
 }

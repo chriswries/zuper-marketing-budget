@@ -48,13 +48,13 @@ export function useEnsureActualsLoaded(
 
     try {
       // Load actuals and matching data in parallel from DB
-      await Promise.all([
+      const [transactions, matchingData] = await Promise.all([
         loadActualsAsync(fiscalYearId),
         loadActualsMatchingAsync(fiscalYearId),
       ]);
 
-      // Now that data is in cache, build the rollup
-      const computedRollup = getOrBuildActualsRollup(fiscalYearId, fiscalYear);
+      // Build rollup from loaded data directly (no sync cache dependency)
+      const computedRollup = getOrBuildActualsRollup(fiscalYearId, fiscalYear, transactions, matchingData);
       setRollup(computedRollup);
       setActualsReady(true);
     } catch (err) {
