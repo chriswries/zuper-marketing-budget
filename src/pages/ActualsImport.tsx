@@ -1023,9 +1023,9 @@ export default function ActualsImport() {
               <Button variant="outline" onClick={() => setStep('preview')}>
                 Back to Preview
               </Button>
-              <Button onClick={handleConfirmImport} disabled={!canConfirm}>
+              <Button onClick={handleConfirmImport} disabled={!canConfirm || isImporting}>
                 <Upload className="h-4 w-4 mr-2" />
-                Confirm Import
+                {isImporting ? 'Importing…' : 'Confirm Import'}
               </Button>
             </div>
           </div>
