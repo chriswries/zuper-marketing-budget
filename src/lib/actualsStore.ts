@@ -33,6 +33,8 @@ function rowToTransaction(row: {
   source: string | null;
   raw: Json;
   canonical_vendor_id?: string | null;
+  import_batch_id?: string | null;
+  import_filename?: string | null;
 }): ActualsTransaction {
   const raw = row.raw as Record<string, unknown>;
   return {
@@ -50,6 +52,8 @@ function rowToTransaction(row: {
     raw: raw.raw as Record<string, unknown> ?? raw,
     createdAt: raw.createdAt as string ?? new Date().toISOString(),
     canonicalVendorId: row.canonical_vendor_id ?? (raw.canonicalVendorId as string | undefined) ?? null,
+    importBatchId: row.import_batch_id ?? null,
+    importFilename: row.import_filename ?? null,
   };
 }
 
@@ -63,6 +67,8 @@ function transactionToRow(txn: ActualsTransaction): {
   source: string | null;
   raw: Json;
   canonical_vendor_id: string | null;
+  import_batch_id: string | null;
+  import_filename: string | null;
 } {
   return {
     fiscal_year_id: txn.fiscalYearId,
@@ -73,6 +79,8 @@ function transactionToRow(txn: ActualsTransaction): {
     source: txn.source || null,
     raw: txn as unknown as Json,
     canonical_vendor_id: txn.canonicalVendorId ?? null,
+    import_batch_id: txn.importBatchId ?? null,
+    import_filename: txn.importFilename ?? null,
   };
 }
 

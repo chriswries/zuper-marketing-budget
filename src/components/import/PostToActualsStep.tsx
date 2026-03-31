@@ -37,6 +37,8 @@ import {
   hasLegacyActualsImportData,
 } from "@/lib/actualsImportStore";
 import { appendActuals } from "@/lib/actualsStore";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { toast } from "@/hooks/use-toast";
 
 interface PostToActualsStepProps {
@@ -106,6 +108,7 @@ export function PostToActualsStep({
 }: PostToActualsStepProps) {
   const navigate = useNavigate();
   const { settings: adminSettings } = useAdminSettings();
+  const { currentRole } = useCurrentUserRole();
   const [isPosted, setIsPosted] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -159,16 +162,33 @@ export function PostToActualsStep({
     setIsPosting(true);
 
     try {
-      // 1. Convert transactions to DB format
-      const actualsTransactions: ActualsTransaction[] = transactions.map(txn =>
-        convertToActualsTransaction(txn, fiscalYearId)
-      );
+      // 1. Generate batch ID
+      const batchId = crypto.randomUUID();
 
-      // 2. Persist to database
+      // 2. Convert transactions to DB format with batch tracking
+      const actualsTransactions: ActualsTransaction[] = transactions.map(txn => {
+        const t = convertToActualsTransaction(txn, fiscalYearId);
+        t.importBatchId = batchId;
+        t.importFilename = fileName ?? null;
+        return t;
+      });
+
+      // 3. Persist to database
       await appendActuals(fiscalYearId, actualsTransactions);
 
-      // 3. After successful DB write, save to localStorage as audit receipt
-      const batchId = `batch_${Date.now()}`;
+      // 4. Insert import_batches record
+      await supabase.from('import_batches').insert({
+        id: batchId,
+        fiscal_year_id: fiscalYearId,
+        filename: fileName ?? 'unknown',
+        source: 'bank',
+        row_count: actualsTransactions.length,
+        total_amount: totalAmount,
+        imported_by_role: currentRole ?? 'admin',
+        status: 'active',
+      });
+
+      // 5. Save to sessionStorage as audit receipt
       const batch: ActualsImportBatch = {
         id: batchId,
         createdAt: new Date().toISOString(),
@@ -181,20 +201,20 @@ export function PostToActualsStep({
 
       saveLatestActualsImport(batch);
 
-      // 4. Update state and notify parent
+      // 6. Update state and notify parent
       setIsPosted(true);
       setPostedBatchId(batchId);
       onPosted(batchId);
 
       toast({
         title: "Success",
-        description: `${transactions.length} transactions posted to Actuals.`,
+        description: `${transactions.length} transactions posted. Batch: ${batchId.slice(0, 8)}`,
       });
     } catch (error) {
       console.error("Failed to post actuals:", error);
       toast({
         title: "Failed to Post Actuals",
-        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {

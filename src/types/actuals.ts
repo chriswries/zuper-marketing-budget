@@ -20,6 +20,8 @@ export interface ActualsTransaction {
   raw: Record<string, unknown>; // original row for traceability
   createdAt: string; // ISO timestamp
   canonicalVendorId?: string | null; // Global canonical vendor reference
+  importBatchId?: string | null; // Links to import_batches.id
+  importFilename?: string | null; // Original CSV filename
 }
 
 export interface ActualsSummary {
