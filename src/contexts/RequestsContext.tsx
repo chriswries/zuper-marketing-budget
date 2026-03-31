@@ -228,46 +228,56 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchRequests]);
 
+  // Persist pending bulk changes via useEffect (outside setState)
+  useEffect(() => {
+    if (pendingPersistRef.current.size === 0) return;
+
+    const idsToSync = new Set(pendingPersistRef.current);
+    pendingPersistRef.current.clear();
+
+    const toSync = requests.filter((r) => idsToSync.has(r.id));
+    if (toSync.length === 0) return;
+
+    Promise.all(
+      toSync.map(async (request) => {
+        const row = requestToRow(request);
+        const { error } = await supabase
+          .from('spend_requests')
+          .upsert({
+            id: row.id,
+            status: row.status,
+            origin_fiscal_year_id: row.origin_fiscal_year_id,
+            deleted_at: row.deleted_at,
+            data: row.data,
+          });
+
+        if (error) {
+          throw error;
+        }
+      })
+    ).catch((err) => {
+      console.error('Failed to persist bulk request updates:', err);
+      toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+      fetchRequests();
+    });
+  }, [requests, fetchRequests]);
+
   // Bulk set requests (for compatibility with existing code)
   const setRequests = useCallback((updater: (prev: SpendRequest[]) => SpendRequest[]) => {
     setRequestsState((prev) => {
       const next = updater(prev);
 
-      // Find changed requests and persist them
-      const changedRequests = next.filter((r) => {
+      // Track changed request IDs by reference equality
+      for (const r of next) {
         const old = prev.find((p) => p.id === r.id);
-        return !old || JSON.stringify(old) !== JSON.stringify(r);
-      });
-
-      // Persist changes asynchronously
-      if (changedRequests.length > 0) {
-        Promise.all(
-          changedRequests.map(async (request) => {
-            const row = requestToRow(request);
-            const { error } = await supabase
-              .from('spend_requests')
-              .upsert({
-                id: row.id,
-                status: row.status,
-                origin_fiscal_year_id: row.origin_fiscal_year_id,
-                deleted_at: row.deleted_at,
-                data: row.data,
-              });
-
-            if (error) {
-              console.error('Failed to persist request:', error);
-            }
-          })
-        ).catch((err) => {
-          console.error('Failed to persist bulk request updates:', err);
-          toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
-          fetchRequests();
-        });
+        if (!old || old !== r) {
+          pendingPersistRef.current.add(r.id);
+        }
       }
 
       return next;
     });
-  }, [fetchRequests]);
+  }, []);
 
   return (
     <RequestsContext.Provider value={{ requests, addRequest, getRequest, updateRequest, setRequests, loading, refetch: fetchRequests }}>
