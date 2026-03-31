@@ -118,35 +118,23 @@ export async function appendActuals(fiscalYearId: string, txns: ActualsTransacti
 }
 
 export async function replaceActuals(fiscalYearId: string, txns: ActualsTransaction[]): Promise<void> {
-  // Update cache
-  actualsCache[fiscalYearId] = txns;
+  const rows = txns.map(transactionToRow);
 
-  try {
-    // Delete existing
-    const { error: deleteError } = await supabase
-      .from('actuals_transactions')
-      .delete()
-      .eq('fiscal_year_id', fiscalYearId);
+  const { data, error } = await supabase.functions.invoke('replace_actuals', {
+    body: { fiscalYearId, transactions: rows },
+  });
 
-    if (deleteError) {
-      console.error('Failed to delete existing actuals:', deleteError);
-      return;
-    }
-
-    // Insert new
-    if (txns.length > 0) {
-      const rows = txns.map(transactionToRow);
-      const { error: insertError } = await supabase
-        .from('actuals_transactions')
-        .insert(rows);
-
-      if (insertError) {
-        console.error('Failed to insert actuals:', insertError);
-      }
-    }
-  } catch (err) {
-    console.error('Error replacing actuals:', err);
+  if (error) {
+    const message = typeof error === 'object' && 'message' in error ? error.message : String(error);
+    throw new Error(`Failed to replace actuals: ${message}`);
   }
+
+  if (data?.error) {
+    throw new Error(`Failed to replace actuals: ${data.error}`);
+  }
+
+  // Update cache only after successful server-side transaction
+  actualsCache[fiscalYearId] = txns;
 }
 
 export async function deleteActualsForFY(fiscalYearId: string): Promise<void> {
