@@ -524,7 +524,7 @@ export function FiscalYearBudgetProvider({ children }: { children: ReactNode }) 
         approval_submitted_at: draft.approval.submittedAt ?? null,
         approval_approved_at: draft.approval.approvedAt ?? null,
         approval_rejected_at: draft.approval.rejectedAt ?? null,
-      });
+      } as any);
 
       if (fyError) {
         logger.error('Failed to create fiscal year:', fyError);
