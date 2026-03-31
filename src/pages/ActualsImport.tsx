@@ -397,6 +397,7 @@ export default function ActualsImport() {
             : `Total: ${formatUSD(importedTotal)}. Batch: ${batchId.slice(0, 8)}`,
         });
 
+        setImportRefreshKey(k => k + 1);
         navigate('/admin');
         return;
       }
