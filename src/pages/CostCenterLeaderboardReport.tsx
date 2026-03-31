@@ -9,7 +9,8 @@ import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, CostCenter, MonthlyValues } from '@/types/budget';
-import { ArrowLeft, Receipt, ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, Receipt, ArrowUpDown, Loader2, FileDown } from 'lucide-react';
+import { exportReportToPdf } from '@/lib/exportPdf';
 import { getLatestActualsMonthFromLineItems, getMonthIndex } from '@/lib/ytdHelpers';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
@@ -302,10 +303,21 @@ export default function CostCenterLeaderboardReport() {
         Back
       </Button>
       
-      <PageHeader
-        title="Cost Center Leaderboard"
-        description="Rank cost centers by spend and variance"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Cost Center Leaderboard"
+          description="Rank cost centers by spend and variance"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 no-print"
+          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Cost_Center_Leaderboard`)}
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+      </div>
       
       {/* Two leaderboards side by side */}
       <div className="grid gap-6 lg:grid-cols-2">

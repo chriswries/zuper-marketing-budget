@@ -17,7 +17,8 @@ import { loadForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
 import { useEnsureActualsLoaded } from '@/hooks/useEnsureActualsLoaded';
 import { MONTHS, MONTH_LABELS, Month, MonthlyValues, calculateFYTotal, CostCenter } from '@/types/budget';
-import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2 } from 'lucide-react';
+import { ArrowLeft, DollarSign, TrendingDown, Calendar, Flame, Receipt, Loader2, FileDown } from 'lucide-react';
+import { exportReportToPdf } from '@/lib/exportPdf';
 import { getMonthIndex, getLatestActualsMonthFromLineItems } from '@/lib/ytdHelpers';
 import { formatCurrency } from '@/lib/format';
 
@@ -399,10 +400,21 @@ export default function BurnRateRunwayReport() {
         Back
       </Button>
       
-      <PageHeader
-        title="Burn Rate / Runway"
-        description="Track spending velocity and forecast when budget will be exhausted"
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Burn Rate / Runway"
+          description="Track spending velocity and forecast when budget will be exhausted"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 no-print"
+          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Burn_Rate_Runway`)}
+        >
+          <FileDown className="h-4 w-4" />
+          Export PDF
+        </Button>
+      </div>
       
       {/* Controls */}
       <Card>
