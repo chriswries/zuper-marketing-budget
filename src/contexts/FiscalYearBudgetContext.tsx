@@ -281,7 +281,7 @@ async function persistCostCentersAndLineItems(fyId: string, costCenters: CostCen
         approval_request_id: li.approvalRequestId ?? null,
         adjustment_status: li.adjustmentStatus ?? null,
         adjustment_request_id: li.adjustmentRequestId ?? null,
-        adjustment_before_values: li.adjustmentBeforeValues ? (li.adjustmentBeforeValues as unknown as Json) : null,
+        adjustment_before_values: li.adjustmentBeforeValues ? (li.adjustmentBeforeValues as any) : null,
         adjustment_sheet: li.adjustmentSheet ?? null,
         deletion_status: li.deletionStatus ?? null,
         deletion_request_id: li.deletionRequestId ?? null,
