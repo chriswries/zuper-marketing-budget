@@ -21,7 +21,7 @@ export const MONTH_LABELS: Record<Month, string> = {
   jan: 'Jan',
 };
 
-export type FiscalYearStatus = 'planning' | 'active' | 'closed';
+export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
 export interface FiscalYear {
   id: string;
@@ -84,6 +84,14 @@ export interface CostCenter {
 // Helper to calculate FY total from monthly values
 export function calculateFYTotal(values: MonthlyValues): number {
   return MONTHS.reduce((sum, month) => sum + (values[month] || 0), 0);
+}
+
+// Helper to create zero-initialized monthly values
+export function createZeroMonthlyValues(): MonthlyValues {
+  return {
+    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
+    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
+  };
 }
 
 // Helper to calculate cost center rollup

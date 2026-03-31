@@ -100,15 +100,7 @@ function parseAmount(value: string): number | null {
   const num = parseFloat(cleaned);
   return isNaN(num) ? null : num;
 }
-
-// Format currency
-function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(amount);
-}
+import { formatCurrencyWithCents as formatUSD } from '@/lib/format';
 
 export default function ActualsImport() {
   const navigate = useNavigate();

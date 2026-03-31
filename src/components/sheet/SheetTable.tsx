@@ -109,14 +109,7 @@ interface SheetTableProps {
   tagsEditable?: boolean;
 }
 
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
+import { formatCurrency } from '@/lib/format';
 
 // Calculate rollup from filtered line items
 function calculateFilteredRollup(

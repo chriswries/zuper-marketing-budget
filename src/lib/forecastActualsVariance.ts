@@ -3,7 +3,7 @@
  * Compares forecast values against matched actuals rollup.
  */
 
-import { CostCenter, MonthlyValues, MONTHS, calculateFYTotal } from '@/types/budget';
+import { CostCenter, MonthlyValues, MONTHS, calculateFYTotal, createZeroMonthlyValues } from '@/types/budget';
 import { ActualsRollupResult, LineItemRollup } from './actualsRollup';
 
 export interface ForecastActualsLineItemRow {
@@ -40,13 +40,6 @@ export interface ForecastActualsReportResult {
     actualsTotal: number;
     variance: number;
     variancePct: number | null;
-  };
-}
-
-function createZeroMonthlyValues(): MonthlyValues {
-  return {
-    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
-    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
   };
 }
 

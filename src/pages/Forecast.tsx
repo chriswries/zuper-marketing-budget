@@ -47,6 +47,7 @@ import { useAdminSettings } from '@/contexts/AdminSettingsContext';
 import { formatAuditTimestamp } from '@/lib/dateTime';
 import { appendApprovalAudit } from '@/lib/approvalAuditStore';
 import { toast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/format';
 import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import { Badge } from '@/components/ui/badge';
@@ -66,15 +67,6 @@ function cleanupLegacyForecastStorage(): void {
 
 // Re-export CellChangeArgs for local use with narrowed type
 type ForecastCellChangeArgs = CellChangeArgs;
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
 
 // formatTimestamp is now handled by formatAuditTimestamp from dateTime.ts
 
@@ -534,7 +526,7 @@ export default function Forecast() {
 
     // Audit log for admin edit (only if we have an active FY)
     if (currentRole === 'admin' && originalLineItem && fyId) {
-      const formatCurrency = (value: number): string =>
+      const formatCurrencyLocal = (value: number): string =>
         new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
 
       const changes: string[] = [];
@@ -550,7 +542,7 @@ export default function Forecast() {
       const oldTotal = calculateFYTotal(originalLineItem.forecastValues);
       const newTotal = calculateFYTotal(updatedLineItem.forecastValues);
       if (oldTotal !== newTotal) {
-        changes.push(`FY total: ${formatCurrency(oldTotal)} → ${formatCurrency(newTotal)}`);
+        changes.push(`FY total: ${formatCurrencyLocal(oldTotal)} → ${formatCurrencyLocal(newTotal)}`);
       }
       if (originalLineItem.isContracted !== updatedLineItem.isContracted) {
         changes.push(`contracted: ${originalLineItem.isContracted ? 'Yes' : 'No'} → ${updatedLineItem.isContracted ? 'Yes' : 'No'}`);

@@ -29,7 +29,8 @@ import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYear
 import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
-import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
+import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter, createZeroMonthlyValues } from '@/types/budget';
+import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
@@ -82,23 +83,7 @@ import {
 } from 'lucide-react';
 
 
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
 // formatTimestamp is now handled by formatAuditTimestamp from dateTime.ts
-
-function createEmptyMonthlyValues(): MonthlyValues {
-  return {
-    feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0,
-    aug: 0, sep: 0, oct: 0, nov: 0, dec: 0, jan: 0,
-  };
-}
 
 function getApprovalStepLabel(level: string): string {
   switch (level) {
@@ -1362,8 +1347,8 @@ export default function Budget() {
       const lineItemWithApproval: LineItem = {
         ...lineItem,
         budgetValues,
-        forecastValues: createEmptyMonthlyValues(),
-        actualValues: createEmptyMonthlyValues(),
+        forecastValues: createZeroMonthlyValues(),
+        actualValues: createZeroMonthlyValues(),
         approvalStatus: 'pending',
         approvalRequestId: requestId,
       };
