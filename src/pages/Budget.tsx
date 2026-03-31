@@ -30,7 +30,7 @@ import { useRequests } from '@/contexts/RequestsContext';
 import { useCurrentUserRole } from '@/contexts/CurrentUserRoleContext';
 import { createDefaultApprovalSteps, OriginKind } from '@/types/requests';
 import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues, CostCenter } from '@/types/budget';
-import { AuditEntry } from '@/types/audit';
+import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { saveForecastForFY } from '@/lib/forecastStore';
 import { createForecastCostCentersFromBudget } from '@/lib/forecastFromBudget';
