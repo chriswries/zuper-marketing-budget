@@ -180,8 +180,8 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Failed to add request:', error);
-      // Remove from state on error
       setRequestsState((prev) => prev.filter((r) => r.id !== request.id));
+      toast({ variant: 'destructive', title: 'Failed to create request', description: 'Your changes could not be saved. Please try again.' });
     }
   }, []);
 
