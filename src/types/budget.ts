@@ -21,7 +21,7 @@ export const MONTH_LABELS: Record<Month, string> = {
   jan: 'Jan',
 };
 
-export type FiscalYearStatus = 'planning' | 'active' | 'closed';
+export type FiscalYearStatus = 'planning' | 'active' | 'closed' | 'archived';
 
 export interface FiscalYear {
   id: string;
