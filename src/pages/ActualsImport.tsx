@@ -414,7 +414,8 @@ export default function ActualsImport() {
       createdAt: now,
       importBatchId: batchId,
       importFilename: file?.name ?? null,
-    }));
+    };
+    });
 
       if (replaceExisting) {
         await replaceActuals(selectedFYId, transactions);
