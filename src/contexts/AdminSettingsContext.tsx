@@ -62,7 +62,7 @@ function mapSettingsToRow(settings: Partial<AdminSettings>): Record<string, unkn
 }
 
 export function AdminSettingsProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { profile, session, loading: authLoading } = useAuth();
   const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const rowIdRef = useRef<string | null>(null);

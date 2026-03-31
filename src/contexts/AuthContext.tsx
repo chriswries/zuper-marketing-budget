@@ -39,6 +39,19 @@ interface AuthContextValue {
 
 const AuthContext: Context<AuthContextValue | undefined> = createContext<AuthContextValue | undefined>(undefined);
 
+const AUTH_CONTEXT_FALLBACK: AuthContextValue = {
+  session: null,
+  user: null,
+  profile: null,
+  role: null,
+  loading: true,
+  profileLoading: true,
+  signIn: async () => ({ error: new Error('Auth is not ready yet.') }),
+  signUp: async () => ({ error: new Error('Auth is not ready yet.') }),
+  signOut: async () => {},
+  refreshProfile: async () => {},
+};
+
 // Retry helper for profile fetch (handles trigger race on signup)
 async function fetchProfileWithRetry(userId: string, maxRetries = 5, delayMs = 200): Promise<Profile | null> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
