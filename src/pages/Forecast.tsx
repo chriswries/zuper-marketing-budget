@@ -67,15 +67,6 @@ function cleanupLegacyForecastStorage(): void {
 // Re-export CellChangeArgs for local use with narrowed type
 type ForecastCellChangeArgs = CellChangeArgs;
 
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
 // formatTimestamp is now handled by formatAuditTimestamp from dateTime.ts
 
 export default function Forecast() {
