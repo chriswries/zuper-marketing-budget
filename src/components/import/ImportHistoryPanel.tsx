@@ -56,9 +56,12 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
   const { settings: adminSettings } = useAdminSettings();
 
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [legacyStats, setLegacyStats] = useState<{ count: number; total: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [undoing, setUndoing] = useState<string | null>(null);
+  const [undoingLegacy, setUndoingLegacy] = useState(false);
   const [confirmBatch, setConfirmBatch] = useState<ImportBatch | null>(null);
+  const [confirmLegacy, setConfirmLegacy] = useState(false);
 
   const canUndo = currentRole === "admin" || currentRole === "finance";
 
