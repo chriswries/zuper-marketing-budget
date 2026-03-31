@@ -652,33 +652,122 @@ export type Database = {
         }
         Relationships: []
       }
-      spend_requests: {
+      request_approval_steps: {
         Row: {
-          created_at: string
-          data: Json
-          deleted_at: string | null
+          comment: string | null
           id: string
-          origin_fiscal_year_id: string | null
+          level: string
+          request_id: string
           status: string
-          updated_at: string
+          step_order: number
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          data: Json
-          deleted_at?: string | null
-          id: string
-          origin_fiscal_year_id?: string | null
-          status: string
-          updated_at?: string
+          comment?: string | null
+          id?: string
+          level: string
+          request_id: string
+          status?: string
+          step_order: number
+          updated_at?: string | null
         }
         Update: {
+          comment?: string | null
+          id?: string
+          level?: string
+          request_id?: string
+          status?: string
+          step_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_approval_steps_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "spend_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      spend_requests: {
+        Row: {
+          amount: number | null
+          cost_center_id: string | null
+          cost_center_name: string | null
+          created_at: string
+          current_amount: number | null
+          data: Json
+          deleted_at: string | null
+          end_month: string | null
+          id: string
+          is_contracted: boolean | null
+          justification: string | null
+          line_item_name: string | null
+          origin_cost_center_id: string | null
+          origin_fiscal_year_id: string | null
+          origin_kind: string | null
+          origin_line_item_id: string | null
+          origin_sheet: string | null
+          requester_id: string | null
+          revised_amount: number | null
+          start_month: string | null
+          status: string
+          target_request_id: string | null
+          updated_at: string
+          vendor_name: string | null
+        }
+        Insert: {
+          amount?: number | null
+          cost_center_id?: string | null
+          cost_center_name?: string | null
           created_at?: string
+          current_amount?: number | null
+          data: Json
+          deleted_at?: string | null
+          end_month?: string | null
+          id: string
+          is_contracted?: boolean | null
+          justification?: string | null
+          line_item_name?: string | null
+          origin_cost_center_id?: string | null
+          origin_fiscal_year_id?: string | null
+          origin_kind?: string | null
+          origin_line_item_id?: string | null
+          origin_sheet?: string | null
+          requester_id?: string | null
+          revised_amount?: number | null
+          start_month?: string | null
+          status: string
+          target_request_id?: string | null
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Update: {
+          amount?: number | null
+          cost_center_id?: string | null
+          cost_center_name?: string | null
+          created_at?: string
+          current_amount?: number | null
           data?: Json
           deleted_at?: string | null
+          end_month?: string | null
           id?: string
+          is_contracted?: boolean | null
+          justification?: string | null
+          line_item_name?: string | null
+          origin_cost_center_id?: string | null
           origin_fiscal_year_id?: string | null
+          origin_kind?: string | null
+          origin_line_item_id?: string | null
+          origin_sheet?: string | null
+          requester_id?: string | null
+          revised_amount?: number | null
+          start_month?: string | null
           status?: string
+          target_request_id?: string | null
           updated_at?: string
+          vendor_name?: string | null
         }
         Relationships: []
       }
