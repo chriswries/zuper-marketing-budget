@@ -69,6 +69,7 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
     if (!fiscalYearId) return;
     setLoading(true);
     try {
+      // Load batches
       const { data, error } = await supabase
         .from("import_batches")
         .select("*")
@@ -79,6 +80,20 @@ export function ImportHistoryPanel({ fiscalYearId, refreshKey }: ImportHistoryPa
         console.error("Failed to load import batches:", error);
       } else {
         setBatches((data as ImportBatch[]) ?? []);
+      }
+
+      // Load legacy (NULL import_batch_id) stats
+      const { data: legacyRows, error: legacyErr } = await supabase
+        .from("actuals_transactions")
+        .select("amount")
+        .eq("fiscal_year_id", fiscalYearId)
+        .is("import_batch_id", null);
+
+      if (!legacyErr && legacyRows && legacyRows.length > 0) {
+        const total = legacyRows.reduce((s, r) => s + (r.amount ?? 0), 0);
+        setLegacyStats({ count: legacyRows.length, total });
+      } else {
+        setLegacyStats(null);
       }
     } finally {
       setLoading(false);
