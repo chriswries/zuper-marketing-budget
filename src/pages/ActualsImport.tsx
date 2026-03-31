@@ -267,12 +267,12 @@ export default function ActualsImport() {
       const category = mapping.category ? row[mapping.category] : undefined;
       const externalId = mapping.externalId ? row[mapping.externalId] : undefined;
       const postedDateValue = mapping.postedDate ? row[mapping.postedDate] : undefined;
-      const postedDate = postedDateValue ? parseDate(postedDateValue)?.toISOString() : undefined;
+      const postedDate = postedDateValue ? parseDate(postedDateValue) ?? undefined : undefined;
 
       return {
         rowIndex: index + 2, // 1-indexed, plus header row
         raw: row,
-        txnDate: parsedDate?.toISOString(),
+        txnDate: parsedDate ?? undefined,
         merchantName: merchantValue.trim() || undefined,
         amount: parsedAmount ?? undefined,
         description: description?.trim() || undefined,
