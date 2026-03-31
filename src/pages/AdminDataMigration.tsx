@@ -494,17 +494,16 @@ export default function AdminDataMigration() {
       let insertedRequests = 0;
 
       for (const fy of legacyData.fiscalYears) {
-        const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive, ...rest } = fy;
+        const { id, name, status, archivedAt, archivedByRole, archivedJustification, previousStatusBeforeArchive } = fy;
         const { error } = await supabase.from('fiscal_years').insert({
           id,
           name,
           status,
-          data: rest as unknown as Json,
           archived_at: archivedAt ?? null,
           archived_by_role: archivedByRole ?? null,
           archived_justification: archivedJustification ?? null,
           previous_status_before_archive: previousStatusBeforeArchive ?? null,
-        });
+        } as any);
         if (!error) {
           insertedFYs++;
 
