@@ -5,7 +5,6 @@ import {
   FileText, 
   BarChart3, 
   CheckSquare, 
-  Upload, 
   Settings 
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -38,7 +37,7 @@ const navItems = [
   { title: "Requests", url: "/requests", icon: FileText, adminOnly: false },
   { title: "Reports", url: "/reports", icon: BarChart3, adminOnly: false },
   { title: "Tasks", url: "/tasks", icon: CheckSquare, adminOnly: false },
-  { title: "Import Actuals", url: "/import", icon: Upload, adminOnly: false },
+  
   { title: "Admin", url: "/admin", icon: Settings, adminOnly: true },
 ];
 
