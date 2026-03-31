@@ -704,25 +704,17 @@ export default function Budget() {
           }),
         }));
 
-        // Add audit entry
+        // Add audit entry to Supabase
         if (oldValue !== newValue) {
           const costCenterName = costCenter?.name ?? '';
-          const entry: AuditEntry = {
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            userName: 'Marketing Admin',
-            sheet: 'budget',
-            fiscalYearId: selectedFiscalYearId,
-            costCenterId,
-            costCenterName,
-            lineItemId,
-            lineItemName,
-            month,
-            oldValue,
-            newValue,
-          };
-
-          setAuditLog((prev) => [entry, ...prev].slice(0, 50));
+          appendApprovalAudit('budget', selectedFiscalYearId, {
+            action: 'budget_cell_edit',
+            actorRole: currentRole,
+            note: `${costCenterName} › ${lineItemName} — ${MONTH_LABELS[month]}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`,
+            meta: { costCenterId, lineItemId, month, oldValue, newValue },
+          }).then(() => {
+            loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
+          });
         }
       }
     },
