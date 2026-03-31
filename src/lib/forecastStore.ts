@@ -225,9 +225,6 @@ export async function saveForecastForFY(fyId: string, costCenters: CostCenter[])
     }
 
     // Also write to fy_forecasts JSONB as backup during transition
-    try {
-      const { Json } = await import('@/integrations/supabase/types');
-    } catch {}
     await supabase
       .from('fy_forecasts')
       .upsert({

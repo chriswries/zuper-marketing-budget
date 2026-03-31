@@ -123,12 +123,14 @@ export default function ForecastActualsVarianceReport() {
       return;
     }
     
-    let forecast = loadForecastForFY(selectedFiscalYearId);
+    const forecast = loadForecastForFY(selectedFiscalYearId);
     
     if (!forecast) {
-      // Initialize from approved budget
-      forecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-      saveForecastForFY(selectedFiscalYearId, forecast);
+      createForecastCostCentersFromBudget(selectedFiscalYear).then((fc) => {
+        setForecastCCs(fc);
+        setInitialized(true);
+      });
+      return;
     }
     
     setForecastCCs(forecast);

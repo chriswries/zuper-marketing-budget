@@ -164,13 +164,12 @@ export default function Forecast() {
         return;
       }
       // Cache miss — load from database
-      loadForecastForFYAsync(fyId).then((forecast) => {
+      loadForecastForFYAsync(fyId).then(async (forecast) => {
         if (forecast) {
           setCostCenters(forecast);
         } else if (selectedFiscalYear) {
           // Only initialize from budget if truly no forecast exists in DB
-          const newForecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-          saveForecastForFY(fyId, newForecast);
+          const newForecast = await createForecastCostCentersFromBudget(selectedFiscalYear);
           setCostCenters(newForecast);
         }
         initialLoadDoneRef.current = true;

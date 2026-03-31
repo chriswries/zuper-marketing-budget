@@ -72,11 +72,11 @@ export default function CostCenterLeaderboardReport() {
       return;
     }
     
-    let forecast = loadForecastForFY(selectedFiscalYearId);
+    const forecast = loadForecastForFY(selectedFiscalYearId);
     
     if (!forecast) {
-      forecast = createForecastCostCentersFromBudget(selectedFiscalYear);
-      saveForecastForFY(selectedFiscalYearId, forecast);
+      createForecastCostCentersFromBudget(selectedFiscalYear).then(setForecastCCs);
+      return;
     }
     
     setForecastCCs(forecast);
