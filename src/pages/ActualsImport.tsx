@@ -670,13 +670,31 @@ export default function ActualsImport() {
               </CardContent>
             </Card>
 
-            {/* Amount Sign Info */}
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Amounts are automatically normalized to positive spend values regardless of the sign in your CSV.
-              </AlertDescription>
-            </Alert>
+            {/* Amount Sign Mode */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Amount Sign Convention</CardTitle>
+                <CardDescription>
+                  How does your CSV represent expenses?
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={amountSignMode}
+                  onValueChange={(v) => setAmountSignMode(v as 'expenses_positive' | 'expenses_negative')}
+                  className="space-y-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expenses_positive" id="sign-positive" />
+                    <Label htmlFor="sign-positive">Expenses are positive numbers</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expenses_negative" id="sign-negative" />
+                    <Label htmlFor="sign-negative">Expenses are negative numbers (flip sign)</Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep('upload')}>
