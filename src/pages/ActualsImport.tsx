@@ -48,6 +48,8 @@ import { formatDate } from '@/lib/dateTime';
 import { parseCsv } from '@/lib/csvParse';
 import { loadActuals, appendActuals, replaceActuals, getActualsSummary } from '@/lib/actualsStore';
 import { supabase } from '@/integrations/supabase/client';
+
+const NONE_VALUE = "__none__";
 import type { 
   ActualsTransaction, 
   ActualsSource, 
