@@ -20,15 +20,12 @@ const RequestsContext = createContext<RequestsContextType | undefined>(undefined
 
 // Migrate legacy requests that may have 'ic' approval step
 function migrateRequest(request: SpendRequest): SpendRequest {
-  // Filter out 'ic' steps from approvalSteps (cast to handle legacy data)
   const filteredSteps = (request.approvalSteps || []).filter(
     (step) => (step.level as string) !== 'ic'
   ) as ApprovalStep[];
 
-  // If no steps remain, use default
   const approvalSteps = filteredSteps.length > 0 ? filteredSteps : createDefaultApprovalSteps();
 
-  // Recompute status based on steps
   let status: SpendRequest['status'] = 'pending';
   if (request.status === 'cancelled') {
     status = 'cancelled';
@@ -38,57 +35,88 @@ function migrateRequest(request: SpendRequest): SpendRequest {
     status = 'approved';
   }
 
-  return {
-    ...request,
-    approvalSteps,
-    status,
-  };
+  return { ...request, approvalSteps, status };
 }
 
-// Map DB row to SpendRequest
-function rowToRequest(row: { id: string; status: string; origin_fiscal_year_id: string | null; deleted_at: string | null; data: unknown }): SpendRequest {
-  const data = row.data as Record<string, unknown>;
+// ─── Relational read: assemble SpendRequest from row + steps ───
+
+function assembleRequest(
+  row: Record<string, unknown>,
+  stepRows: Array<Record<string, unknown>>,
+): SpendRequest {
+  const data = (row.data as Record<string, unknown>) || {};
+
+  // Read from relational columns, fall back to JSONB for unmigrated data
+  const approvalSteps: ApprovalStep[] = stepRows.length > 0
+    ? stepRows.map((s) => ({
+        level: s.level as ApprovalStep['level'],
+        status: s.status as ApprovalStep['status'],
+        updatedAt: (s.updated_at as string) ?? undefined,
+        comment: (s.comment as string) ?? undefined,
+      }))
+    : ((data.approvalSteps as ApprovalStep[]) ?? createDefaultApprovalSteps());
+
   const request: SpendRequest = {
-    id: row.id,
-    costCenterId: data.costCenterId as string,
-    costCenterName: data.costCenterName as string,
-    vendorName: data.vendorName as string,
-    amount: data.amount as number,
-    startMonth: data.startMonth as SpendRequest['startMonth'],
-    endMonth: data.endMonth as SpendRequest['endMonth'],
-    isContracted: data.isContracted as boolean,
-    justification: data.justification as string,
+    id: row.id as string,
+    costCenterId: (row.cost_center_id as string) ?? (data.costCenterId as string) ?? '',
+    costCenterName: (row.cost_center_name as string) ?? (data.costCenterName as string) ?? '',
+    vendorName: (row.vendor_name as string) ?? (data.vendorName as string) ?? '',
+    amount: (row.amount as number) ?? (data.amount as number) ?? 0,
+    startMonth: ((row.start_month as string) ?? (data.startMonth as string) ?? 'feb') as SpendRequest['startMonth'],
+    endMonth: ((row.end_month as string) ?? (data.endMonth as string) ?? 'jan') as SpendRequest['endMonth'],
+    isContracted: (row.is_contracted as boolean) ?? (data.isContracted as boolean) ?? false,
+    justification: (row.justification as string) ?? (data.justification as string) ?? '',
     status: row.status as RequestStatus,
-    createdAt: data.createdAt as string,
-    approvalSteps: data.approvalSteps as ApprovalStep[],
-    requesterId: data.requesterId as string | undefined,
-    originSheet: data.originSheet as SpendRequest['originSheet'],
-    originFiscalYearId: row.origin_fiscal_year_id,
-    originCostCenterId: data.originCostCenterId as string | undefined,
-    originLineItemId: data.originLineItemId as string | undefined,
-    originKind: data.originKind as SpendRequest['originKind'],
-    lineItemName: data.lineItemName as string | undefined,
-    targetRequestId: data.targetRequestId as string | undefined,
+    createdAt: (row.created_at as string) ?? (data.createdAt as string) ?? '',
+    approvalSteps,
+    requesterId: (row.requester_id as string) ?? (data.requesterId as string) ?? undefined,
+    originSheet: ((row.origin_sheet as string) ?? (data.originSheet as string) ?? undefined) as SpendRequest['originSheet'],
+    originFiscalYearId: (row.origin_fiscal_year_id as string) ?? undefined,
+    originCostCenterId: (row.origin_cost_center_id as string) ?? (data.originCostCenterId as string) ?? undefined,
+    originLineItemId: (row.origin_line_item_id as string) ?? (data.originLineItemId as string) ?? undefined,
+    originKind: ((row.origin_kind as string) ?? (data.originKind as string) ?? undefined) as SpendRequest['originKind'],
+    lineItemName: (row.line_item_name as string) ?? (data.lineItemName as string) ?? undefined,
+    targetRequestId: (row.target_request_id as string) ?? (data.targetRequestId as string) ?? undefined,
     targetRequestSnapshot: data.targetRequestSnapshot as SpendRequest['targetRequestSnapshot'],
     deletionPending: data.deletionPending as boolean | undefined,
-    deletedAt: row.deleted_at ?? undefined,
+    deletedAt: (row.deleted_at as string) ?? undefined,
     deletedByRole: data.deletedByRole as string | undefined,
     deletedJustification: data.deletedJustification as string | undefined,
+    currentAmount: (row.current_amount as number) ?? (data.currentAmount as number) ?? undefined,
+    revisedAmount: (row.revised_amount as number) ?? (data.revisedAmount as number) ?? undefined,
   };
+
   return migrateRequest(request);
 }
 
-// Map SpendRequest to DB row
-function requestToRow(request: SpendRequest): { id: string; status: string; origin_fiscal_year_id: string | null; deleted_at: string | null; data: Json } {
-  // Store everything except id/status/origin_fiscal_year_id/deleted_at in data
-  const { id, status, originFiscalYearId, deletedAt, ...rest } = request;
+// ─── Relational write helpers ───
+
+function buildRelationalColumns(request: SpendRequest) {
   return {
-    id,
-    status,
-    origin_fiscal_year_id: originFiscalYearId ?? null,
-    deleted_at: deletedAt ?? null,
-    data: rest as unknown as Json,
+    cost_center_id: request.costCenterId || null,
+    cost_center_name: request.costCenterName || null,
+    vendor_name: request.vendorName || null,
+    amount: request.amount ?? null,
+    start_month: request.startMonth || null,
+    end_month: request.endMonth || null,
+    is_contracted: request.isContracted ?? false,
+    justification: request.justification || null,
+    requester_id: request.requesterId || null,
+    origin_sheet: request.originSheet || null,
+    origin_cost_center_id: request.originCostCenterId || null,
+    origin_line_item_id: request.originLineItemId || null,
+    origin_kind: request.originKind || null,
+    line_item_name: request.lineItemName || null,
+    target_request_id: request.targetRequestId || null,
+    current_amount: request.currentAmount ?? null,
+    revised_amount: request.revisedAmount ?? null,
   };
+}
+
+function buildJsonbData(request: SpendRequest): Json {
+  // Keep rarely-queried fields and approval steps snapshot in JSONB for backup
+  const { id, status, originFiscalYearId, deletedAt, ...rest } = request;
+  return rest as unknown as Json;
 }
 
 export function RequestsProvider({ children }: { children: ReactNode }) {
@@ -101,20 +129,30 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
   // Track IDs that need persistence from setRequests bulk updates
   const pendingPersistRef = useRef<Set<string>>(new Set());
 
-  // Fetch all requests from DB
+  // Fetch all requests from DB with their approval steps
   const fetchRequests = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('spend_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [reqRes, stepsRes] = await Promise.all([
+        supabase.from('spend_requests').select('*').order('created_at', { ascending: false }),
+        supabase.from('request_approval_steps').select('*').order('step_order'),
+      ]);
 
-      if (error) {
-        logger.error('Failed to fetch requests:', error);
+      if (reqRes.error) {
+        logger.error('Failed to fetch requests:', reqRes.error);
         return;
       }
 
-      const mapped = (data || []).map(rowToRequest);
+      // Group steps by request_id
+      const stepsByRequestId: Record<string, Array<Record<string, unknown>>> = {};
+      for (const step of (stepsRes.data ?? [])) {
+        const rid = step.request_id as string;
+        if (!stepsByRequestId[rid]) stepsByRequestId[rid] = [];
+        stepsByRequestId[rid].push(step as Record<string, unknown>);
+      }
+
+      const mapped = (reqRes.data || []).map((row) =>
+        assembleRequest(row as Record<string, unknown>, stepsByRequestId[row.id] ?? [])
+      );
       setRequestsState(mapped);
     } catch (err) {
       logger.error('Error fetching requests:', err);
@@ -128,68 +166,23 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     fetchRequests();
   }, [fetchRequests]);
 
-  // Set up realtime subscription with surgical updates
+  // Set up realtime subscriptions for spend_requests and request_approval_steps
   useEffect(() => {
     const channel = supabase
       .channel('spend_requests_changes')
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'spend_requests',
-        },
-        (payload) => {
-          try {
-            const newRow = payload.new as Record<string, unknown>;
-            if (newRow && newRow.id && newRow.data) {
-              const mapped = rowToRequest(newRow as Parameters<typeof rowToRequest>[0]);
-              setRequestsState((prev) => {
-                if (prev.some((r) => r.id === mapped.id)) return prev;
-                return [mapped, ...prev];
-              });
-              return;
-            }
-          } catch (e) {
-            logger.warn('Realtime INSERT parse failed, falling back to refetch', e);
-          }
-          fetchRequests();
-        }
+        { event: 'INSERT', schema: 'public', table: 'spend_requests' },
+        () => { fetchRequests(); }
       )
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'spend_requests',
-        },
-        (payload) => {
-          try {
-            const updatedRow = payload.new as Record<string, unknown>;
-            if (updatedRow && updatedRow.id && updatedRow.data) {
-              const mapped = rowToRequest(updatedRow as Parameters<typeof rowToRequest>[0]);
-              setRequestsState((prev) => {
-                const idx = prev.findIndex((r) => r.id === mapped.id);
-                if (idx === -1) return [mapped, ...prev];
-                const next = [...prev];
-                next[idx] = mapped;
-                return next;
-              });
-              return;
-            }
-          } catch (e) {
-            logger.warn('Realtime UPDATE parse failed, falling back to refetch', e);
-          }
-          fetchRequests();
-        }
+        { event: 'UPDATE', schema: 'public', table: 'spend_requests' },
+        () => { fetchRequests(); }
       )
       .on(
         'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'spend_requests',
-        },
+        { event: 'DELETE', schema: 'public', table: 'spend_requests' },
         (payload) => {
           const oldRow = payload.old as Record<string, unknown>;
           if (oldRow && oldRow.id) {
@@ -198,6 +191,11 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
             fetchRequests();
           }
         }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'request_approval_steps' },
+        () => { fetchRequests(); }
       )
       .subscribe();
 
@@ -212,14 +210,12 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
       for (const request of requests) {
         const prevStatus = prevStatusesRef.current[request.id];
         if (prevStatus && prevStatus !== request.status) {
-          // Status changed - try to resolve row action requests
           await resolveForecastRowActionRequest(request, prevStatus, updateRequest);
         }
       }
     };
     resolveTransitions();
 
-    // Update previous statuses
     const newStatuses: Record<string, RequestStatus> = {};
     for (const request of requests) {
       newStatuses[request.id] = request.status;
@@ -227,18 +223,52 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     prevStatusesRef.current = newStatuses;
   }, [requests]);
 
-  // Add a new request
+  // Add a new request - writes to relational columns + approval steps
   const addRequest = useCallback(async (request: SpendRequest) => {
     // Optimistically add to state
     setRequestsState((prev) => [request, ...prev]);
 
-    const row = requestToRow(request);
-    const { error } = await supabase
-      .from('spend_requests')
-      .insert(row);
+    try {
+      // Insert request row with relational columns
+      const { error: reqErr } = await supabase
+        .from('spend_requests')
+        .insert({
+          id: request.id,
+          status: request.status,
+          origin_fiscal_year_id: request.originFiscalYearId ?? null,
+          deleted_at: request.deletedAt ?? null,
+          data: buildJsonbData(request),
+          ...buildRelationalColumns(request),
+        });
 
-    if (error) {
-      logger.error('Failed to add request:', error);
+      if (reqErr) {
+        logger.error('Failed to add request:', reqErr);
+        setRequestsState((prev) => prev.filter((r) => r.id !== request.id));
+        toast({ variant: 'destructive', title: 'Failed to create request', description: 'Your changes could not be saved. Please try again.' });
+        return;
+      }
+
+      // Insert approval steps
+      if (request.approvalSteps && request.approvalSteps.length > 0) {
+        const stepRows = request.approvalSteps.map((step, i) => ({
+          request_id: request.id,
+          level: step.level,
+          status: step.status,
+          updated_at: step.updatedAt ?? null,
+          comment: step.comment ?? null,
+          step_order: i,
+        }));
+
+        const { error: stepsErr } = await supabase
+          .from('request_approval_steps')
+          .insert(stepRows);
+
+        if (stepsErr) {
+          logger.error('Failed to insert approval steps:', stepsErr);
+        }
+      }
+    } catch (err) {
+      logger.error('Error adding request:', err);
       setRequestsState((prev) => prev.filter((r) => r.id !== request.id));
       toast({ variant: 'destructive', title: 'Failed to create request', description: 'Your changes could not be saved. Please try again.' });
     }
@@ -249,14 +279,16 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     return requests.find((r) => r.id === id);
   }, [requests]);
 
-  // Update a request
+  // Update a request - writes granularly to relational columns and/or approval steps
   const updateRequest = useCallback(async (id: string, updater: (r: SpendRequest) => SpendRequest) => {
+    let oldRequest: SpendRequest | null = null;
     let updatedRequest: SpendRequest | null = null;
 
     // Optimistically update state
     setRequestsState((prev) =>
       prev.map((r) => {
         if (r.id === id) {
+          oldRequest = r;
           updatedRequest = updater(r);
           return updatedRequest;
         }
@@ -264,23 +296,80 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    if (updatedRequest) {
-      const row = requestToRow(updatedRequest);
-      const { error } = await supabase
+    if (!updatedRequest || !oldRequest) return;
+
+    try {
+      // Always update status + relational columns + JSONB backup
+      const { error: updateErr } = await supabase
         .from('spend_requests')
         .update({
-          status: row.status,
-          origin_fiscal_year_id: row.origin_fiscal_year_id,
-          deleted_at: row.deleted_at,
-          data: row.data,
+          status: (updatedRequest as SpendRequest).status,
+          origin_fiscal_year_id: (updatedRequest as SpendRequest).originFiscalYearId ?? null,
+          deleted_at: (updatedRequest as SpendRequest).deletedAt ?? null,
+          data: buildJsonbData(updatedRequest as SpendRequest),
+          ...buildRelationalColumns(updatedRequest as SpendRequest),
         })
         .eq('id', id);
 
-      if (error) {
-        logger.error('Failed to update request:', error);
+      if (updateErr) {
+        logger.error('Failed to update request:', updateErr);
         toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
         fetchRequests();
+        return;
       }
+
+      // Diff approval steps: update only changed steps
+      const oldSteps = (oldRequest as SpendRequest).approvalSteps ?? [];
+      const newSteps = (updatedRequest as SpendRequest).approvalSteps ?? [];
+
+      // If step count changed, replace all steps
+      if (oldSteps.length !== newSteps.length) {
+        // Delete old steps and insert new ones
+        await supabase.from('request_approval_steps').delete().eq('request_id', id);
+        if (newSteps.length > 0) {
+          const stepRows = newSteps.map((step, i) => ({
+            request_id: id,
+            level: step.level,
+            status: step.status,
+            updated_at: step.updatedAt ?? null,
+            comment: step.comment ?? null,
+            step_order: i,
+          }));
+          const { error: stepsErr } = await supabase
+            .from('request_approval_steps')
+            .insert(stepRows);
+          if (stepsErr) logger.error('Failed to replace approval steps:', stepsErr);
+        }
+      } else {
+        // Update only changed steps
+        for (let i = 0; i < newSteps.length; i++) {
+          const oldStep = oldSteps[i];
+          const newStep = newSteps[i];
+          if (
+            oldStep.status !== newStep.status ||
+            oldStep.comment !== newStep.comment ||
+            oldStep.updatedAt !== newStep.updatedAt
+          ) {
+            const { error: stepErr } = await supabase
+              .from('request_approval_steps')
+              .update({
+                status: newStep.status,
+                updated_at: newStep.updatedAt ?? null,
+                comment: newStep.comment ?? null,
+              })
+              .eq('request_id', id)
+              .eq('step_order', i);
+
+            if (stepErr) {
+              logger.error(`Failed to update approval step ${i}:`, stepErr);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.error('Error updating request:', err);
+      toast({ variant: 'destructive', title: 'Failed to save request changes', description: 'Data has been refreshed from the server.' });
+      fetchRequests();
     }
   }, [fetchRequests]);
 
@@ -296,19 +385,32 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
 
     Promise.all(
       toSync.map(async (request) => {
-        const row = requestToRow(request);
         const { error } = await supabase
           .from('spend_requests')
           .upsert({
-            id: row.id,
-            status: row.status,
-            origin_fiscal_year_id: row.origin_fiscal_year_id,
-            deleted_at: row.deleted_at,
-            data: row.data,
+            id: request.id,
+            status: request.status,
+            origin_fiscal_year_id: request.originFiscalYearId ?? null,
+            deleted_at: request.deletedAt ?? null,
+            data: buildJsonbData(request),
+            ...buildRelationalColumns(request),
           });
 
-        if (error) {
-          throw error;
+        if (error) throw error;
+
+        // Also upsert approval steps
+        if (request.approvalSteps && request.approvalSteps.length > 0) {
+          const stepRows = request.approvalSteps.map((step, i) => ({
+            request_id: request.id,
+            level: step.level,
+            status: step.status,
+            updated_at: step.updatedAt ?? null,
+            comment: step.comment ?? null,
+            step_order: i,
+          }));
+          await supabase
+            .from('request_approval_steps')
+            .upsert(stepRows, { onConflict: 'request_id,step_order' });
         }
       })
     ).catch((err) => {
@@ -323,7 +425,6 @@ export function RequestsProvider({ children }: { children: ReactNode }) {
     setRequestsState((prev) => {
       const next = updater(prev);
 
-      // Track changed request IDs by reference equality
       for (const r of next) {
         const old = prev.find((p) => p.id === r.id);
         if (!old || old !== r) {
