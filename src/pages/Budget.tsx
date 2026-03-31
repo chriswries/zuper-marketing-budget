@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SheetTable, CellChangeArgs, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
+import { SheetTable, RowActionArgs, EditTagsArgs, EditLineItemNameArgs } from '@/components/sheet/SheetTable';
 import { RowActionDialog, RowActionData } from '@/components/sheet/RowActionDialog';
 import { AddLineItemDialog } from '@/components/sheet/AddLineItemDialog';
 import { EditTagsDialog, EditTagsData, TagValues } from '@/components/sheet/EditTagsDialog';
@@ -22,7 +22,7 @@ import {
 import { BudgetSetupWizard } from '@/components/budget/BudgetSetupWizard';
 import { EditAllocationsDialog } from '@/components/budget/EditAllocationsDialog';
 import { BudgetAllocationSummary } from '@/components/budget/BudgetAllocationSummary';
-import { AdjustmentJustificationDialog, AdjustmentJustificationData } from '@/components/sheet/AdjustmentJustificationDialog';
+import { AdjustmentJustificationDialog } from '@/components/sheet/AdjustmentJustificationDialog';
 import { AdminOverrideDialog } from '@/components/AdminOverrideDialog';
 import { BulkLineItemApprovalsDrawer } from '@/components/approvals/BulkLineItemApprovalsDrawer';
 import { useFiscalYearBudget, BudgetApprovalStatus } from '@/contexts/FiscalYearBudgetContext';
@@ -33,7 +33,7 @@ import { LineItem, Month, MONTHS, MONTH_LABELS, calculateFYTotal, MonthlyValues,
 import { formatCurrency } from '@/lib/format';
 import { ApprovalAuditEvent } from '@/types/approvalAudit';
 import { useBudgetApproval } from '@/hooks/useBudgetApproval';
-import { shouldTriggerIncreaseApproval, getIncreaseApprovalThreshold } from '@/lib/lineItemApprovalThreshold';
+import { useBudgetCellEdit, OverrideAction } from '@/hooks/useBudgetCellEdit';
 import { findDuplicateLineItemName } from '@/lib/lineItemNameValidation';
 import { requestNeedsApprovalByRole } from '@/lib/requestApproval';
 import {
@@ -151,26 +151,35 @@ export default function Budget() {
     currentRole,
   });
 
-  // Justification dialog state
-  const [justificationDialogOpen, setJustificationDialogOpen] = useState(false);
-  const [pendingAdjustment, setPendingAdjustment] = useState<AdjustmentJustificationData | null>(null);
-  const [pendingUpdatedValues, setPendingUpdatedValues] = useState<MonthlyValues | null>(null);
-  const [pendingOldValues, setPendingOldValues] = useState<MonthlyValues | null>(null);
-
-  // Admin override dialog state
-  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
-  const [pendingOverrideAction, setPendingOverrideAction] = useState<{
-    type: 'cell_edit' | 'delete_line_item';
-    costCenterId: string;
-    lineItemId: string;
-    month?: Month;
-    oldValue?: number;
-    newValue?: number;
-    updatedValues?: MonthlyValues;
-  } | null>(null);
-
   // Admin override mode
   const isAdminOverride = currentRole === 'admin' && adminSettings.adminOverrideEnabled;
+
+  const {
+    handleCellChange,
+    justificationDialogOpen,
+    pendingAdjustment,
+    pendingUpdatedValues,
+    pendingOldValues,
+    setJustificationDialogOpen,
+    handleJustificationSubmit,
+    handleJustificationCancel,
+    overrideDialogOpen,
+    pendingOverrideAction,
+    setOverrideDialogOpen,
+    setPendingOverrideAction,
+    handleOverrideSubmit,
+    handleOverrideCancel,
+  } = useBudgetCellEdit({
+    selectedFiscalYear,
+    selectedFiscalYearId,
+    updateFiscalYearBudget,
+    addRequest,
+    updateRequest,
+    adminSettings,
+    currentRole,
+    isAdminOverride,
+    setApprovalAuditEvents,
+  });
 
   // Edit tags dialog state
   const [editTagsOpen, setEditTagsOpen] = useState(false);
@@ -418,210 +427,6 @@ export default function Budget() {
       return { ...fy, costCenters: updatedCostCenters, updatedAt: new Date().toISOString() };
     });
   }, [requests, selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget]);
-
-  const handleCellChange = useCallback(
-    ({ costCenterId, lineItemId, month, newValue }: CellChangeArgs) => {
-      if (!selectedFiscalYear || !selectedFiscalYearId) return;
-
-      // Find the line item
-      const costCenter = selectedFiscalYear.costCenters.find((cc) => cc.id === costCenterId);
-      const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
-      if (!lineItem) return;
-
-      const lineItemName = lineItem?.name ?? '';
-
-      // Block edits if pending approval or adjustment (unless admin override)
-      if (!isAdminOverride && (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending')) {
-        toast({
-          title: 'Edit locked',
-          description: 'This line item has a pending approval request. Changes are locked until approved/rejected.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const oldBudgetValues = lineItem.budgetValues;
-      const oldValue = oldBudgetValues[month] ?? 0;
-      const updatedBudgetValues = { ...oldBudgetValues, [month]: newValue };
-
-      const oldTotal = calculateFYTotal(oldBudgetValues);
-      const newTotal = calculateFYTotal(updatedBudgetValues);
-
-      // Admin override: skip approval workflow, but require justification
-      if (isAdminOverride) {
-        setPendingOverrideAction({
-          type: 'cell_edit',
-          costCenterId,
-          lineItemId,
-          month,
-          oldValue,
-          newValue,
-          updatedValues: updatedBudgetValues,
-        });
-        setOverrideDialogOpen(true);
-        return;
-      }
-
-      // Check if this triggers an approval workflow
-      if (shouldTriggerIncreaseApproval(oldTotal, newTotal, adminSettings)) {
-        const delta = newTotal - oldTotal;
-        const threshold = getIncreaseApprovalThreshold(oldTotal, adminSettings);
-
-        // Open justification dialog instead of immediately creating request
-        setPendingAdjustment({
-          costCenterId,
-          lineItemId,
-          lineItemName,
-          month,
-          oldValue,
-          newValue,
-          delta,
-          threshold,
-          sheet: 'budget',
-        });
-        setPendingUpdatedValues(updatedBudgetValues);
-        setPendingOldValues(oldBudgetValues);
-        setJustificationDialogOpen(true);
-      } else {
-        // Normal edit without approval
-        updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-          ...fy,
-          updatedAt: new Date().toISOString(),
-          costCenters: fy.costCenters.map((cc) => {
-            if (cc.id !== costCenterId) return cc;
-            return {
-              ...cc,
-              lineItems: cc.lineItems.map((item) => {
-                if (item.id !== lineItemId) return item;
-                return {
-                  ...item,
-                  budgetValues: updatedBudgetValues,
-                };
-              }),
-            };
-          }),
-        }));
-
-        // Add audit entry to Supabase
-        if (oldValue !== newValue) {
-          const costCenterName = costCenter?.name ?? '';
-          appendApprovalAudit('budget', selectedFiscalYearId, {
-            action: 'budget_cell_edit',
-            actorRole: currentRole,
-            note: `${costCenterName} › ${lineItemName} — ${MONTH_LABELS[month]}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`,
-            meta: { costCenterId, lineItemId, month, oldValue, newValue },
-          }).then(() => {
-            loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-          });
-        }
-      }
-    },
-    [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, adminSettings, isAdminOverride]
-  );
-
-  // Handle justification dialog cancel
-  const handleJustificationCancel = useCallback(() => {
-    setJustificationDialogOpen(false);
-    setPendingAdjustment(null);
-    setPendingUpdatedValues(null);
-    setPendingOldValues(null);
-  }, []);
-
-  // Handle justification dialog submit
-  const handleJustificationSubmit = useCallback((userJustification: string) => {
-    if (!pendingAdjustment || !pendingUpdatedValues || !pendingOldValues || !selectedFiscalYearId) return;
-
-    const { costCenterId, lineItemId, lineItemName, month, delta, oldValue, newValue } = pendingAdjustment;
-    const costCenter = selectedFiscalYear?.costCenters.find((cc) => cc.id === costCenterId);
-    const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
-    if (!lineItem) return;
-
-    const costCenterName = costCenter?.name ?? '';
-    const vendorName = lineItem.vendor?.name ?? '—';
-
-    // Find changed months (where delta != 0) for adjustment requests
-    const changedMonths = MONTHS.filter((m) => pendingUpdatedValues[m] !== pendingOldValues[m]);
-    const startMonth: Month = changedMonths[0] ?? 'feb';
-    const endMonth: Month = changedMonths[changedMonths.length - 1] ?? 'feb';
-
-    // Calculate old and new FY totals for adjustment display
-    const oldTotal = calculateFYTotal(pendingOldValues);
-    const newTotal = calculateFYTotal(pendingUpdatedValues);
-
-    // Create the spend request with origin metadata
-    const requestId = crypto.randomUUID();
-    const newRequest = {
-      id: requestId,
-      costCenterId,
-      costCenterName,
-      vendorName,
-      amount: Math.round(delta),
-      startMonth,
-      endMonth,
-      isContracted: lineItem.isContracted,
-      justification: userJustification,
-      status: 'pending' as const,
-      createdAt: new Date().toISOString(),
-      approvalSteps: createDefaultApprovalSteps(),
-      // Origin metadata for deep linking
-      originSheet: 'budget' as const,
-      originFiscalYearId: selectedFiscalYearId,
-      originCostCenterId: costCenterId,
-      originLineItemId: lineItemId,
-      originKind: 'adjustment' as const,
-      lineItemName,
-      // Adjustment amounts for display
-      currentAmount: Math.round(oldTotal),
-      revisedAmount: Math.round(newTotal),
-    };
-    addRequest(newRequest);
-
-    // Update with pending adjustment
-    updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-      ...fy,
-      updatedAt: new Date().toISOString(),
-      costCenters: fy.costCenters.map((cc) => {
-        if (cc.id !== costCenterId) return cc;
-        return {
-          ...cc,
-          lineItems: cc.lineItems.map((item) => {
-            if (item.id !== lineItemId) return item;
-            return {
-              ...item,
-              budgetValues: pendingUpdatedValues,
-              adjustmentStatus: 'pending' as const,
-              adjustmentRequestId: requestId,
-              adjustmentBeforeValues: pendingOldValues,
-              adjustmentSheet: 'budget' as const,
-            };
-          }),
-        };
-      }),
-    }));
-
-    // Add audit entry to Supabase
-    if (oldValue !== newValue) {
-      appendApprovalAudit('budget', selectedFiscalYearId, {
-        action: 'budget_cell_edit',
-        actorRole: currentRole,
-        note: `${costCenterName} › ${lineItemName} — ${MONTH_LABELS[month]}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`,
-        meta: { costCenterId, lineItemId, month, oldValue, newValue },
-      }).then(() => {
-        loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-      });
-    }
-
-    toast({
-      title: 'Approval required',
-      description: `Increase of ${formatCurrency(delta)} exceeds threshold. A spend request has been created.`,
-    });
-
-    // Close dialog and reset state
-    setJustificationDialogOpen(false);
-    setPendingAdjustment(null);
-    setPendingUpdatedValues(null);
-    setPendingOldValues(null);
-  }, [pendingAdjustment, pendingUpdatedValues, pendingOldValues, selectedFiscalYear, selectedFiscalYearId, addRequest, updateFiscalYearBudget]);
 
   const handleDeleteLineItem = useCallback(
     ({ costCenterId, lineItemId }: { costCenterId: string; lineItemId: string }) => {
@@ -963,155 +768,6 @@ export default function Budget() {
       description: `"${updatedLineItem.name}" has been saved.`,
     });
   }, [selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, currentRole, updateRequest]);
-
-  const handleOverrideCancel = useCallback(() => {
-    setOverrideDialogOpen(false);
-    setPendingOverrideAction(null);
-  }, []);
-
-  const handleOverrideSubmit = useCallback((justification: string) => {
-    if (!pendingOverrideAction || !selectedFiscalYear || !selectedFiscalYearId) return;
-
-    const { type, costCenterId, lineItemId, month, oldValue, newValue, updatedValues } = pendingOverrideAction;
-    const costCenter = selectedFiscalYear.costCenters.find((cc) => cc.id === costCenterId);
-    const lineItem = costCenter?.lineItems.find((item) => item.id === lineItemId);
-    if (!lineItem) return;
-
-    const lineItemName = lineItem.name;
-    const costCenterName = costCenter?.name ?? '';
-
-    if (type === 'cell_edit' && updatedValues && month !== undefined) {
-      // Cancel any linked requests if they exist
-      const linkedRequestIds = [
-        lineItem.approvalRequestId,
-        lineItem.adjustmentRequestId,
-        lineItem.deletionRequestId,
-        lineItem.cancellationRequestId,
-      ].filter(Boolean) as string[];
-
-      for (const requestId of linkedRequestIds) {
-        updateRequest(requestId, (request) => ({
-          ...request,
-          status: 'cancelled' as const,
-        }));
-        appendApprovalAudit('budget', selectedFiscalYearId, {
-          action: 'admin_override_cancel_linked_request',
-          actorRole: 'admin',
-          meta: { justification, requestId, lineItemId, costCenterId },
-        });
-      }
-
-      // Apply the edit directly
-      updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-        ...fy,
-        updatedAt: new Date().toISOString(),
-        costCenters: fy.costCenters.map((cc) => {
-          if (cc.id !== costCenterId) return cc;
-          return {
-            ...cc,
-            lineItems: cc.lineItems.map((item) => {
-              if (item.id !== lineItemId) return item;
-              return {
-                ...item,
-                budgetValues: updatedValues,
-                // Clear any pending flags
-                approvalStatus: undefined,
-                approvalRequestId: undefined,
-                adjustmentStatus: undefined,
-                adjustmentRequestId: undefined,
-                adjustmentBeforeValues: undefined,
-                adjustmentSheet: undefined,
-              };
-            }),
-          };
-        }),
-      }));
-
-      // Log the override
-      appendApprovalAudit('budget', selectedFiscalYearId, {
-        action: 'admin_override_cell_edit',
-        actorRole: 'admin',
-        meta: {
-          sheet: 'budget',
-          fiscalYearId: selectedFiscalYearId,
-          costCenterId,
-          costCenterName,
-          lineItemId,
-          lineItemName,
-          month,
-          oldValue,
-          newValue,
-          justification,
-        },
-      });
-
-      // Audit entry already written by appendApprovalAudit above (admin_override_cell_edit)
-      // Refresh audit events
-      loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-
-      toast({
-        title: 'Override applied',
-        description: 'Cell edit applied via admin override.',
-      });
-    } else if (type === 'delete_line_item') {
-      // Cancel any linked requests
-      const linkedRequestIds = [
-        lineItem.approvalRequestId,
-        lineItem.adjustmentRequestId,
-        lineItem.deletionRequestId,
-        lineItem.cancellationRequestId,
-      ].filter(Boolean) as string[];
-
-      for (const requestId of linkedRequestIds) {
-        updateRequest(requestId, (request) => ({
-          ...request,
-          status: 'cancelled' as const,
-        }));
-        appendApprovalAudit('budget', selectedFiscalYearId, {
-          action: 'admin_override_cancel_linked_request',
-          actorRole: 'admin',
-          meta: { justification, requestId, lineItemId, costCenterId },
-        });
-      }
-
-      // Delete the line item
-      updateFiscalYearBudget(selectedFiscalYearId, (fy) => ({
-        ...fy,
-        updatedAt: new Date().toISOString(),
-        costCenters: fy.costCenters.map((cc) => {
-          if (cc.id !== costCenterId) return cc;
-          return {
-            ...cc,
-            lineItems: cc.lineItems.filter((item) => item.id !== lineItemId),
-          };
-        }),
-      }));
-
-      // Log the override
-      appendApprovalAudit('budget', selectedFiscalYearId, {
-        action: 'admin_override_delete_line_item',
-        actorRole: 'admin',
-        meta: {
-          sheet: 'budget',
-          fiscalYearId: selectedFiscalYearId,
-          costCenterId,
-          costCenterName,
-          lineItemId,
-          lineItemName,
-          justification,
-        },
-      });
-
-      toast({
-        title: 'Override applied',
-        description: 'Line item deleted via admin override.',
-      });
-    }
-
-    setOverrideDialogOpen(false);
-    setPendingOverrideAction(null);
-    loadApprovalAudit('budget', selectedFiscalYearId).then(setApprovalAuditEvents);
-  }, [pendingOverrideAction, selectedFiscalYear, selectedFiscalYearId, updateFiscalYearBudget, updateRequest]);
 
   const handleCreateLineItem = useCallback(
     (costCenterId: string, lineItem: LineItem) => {
