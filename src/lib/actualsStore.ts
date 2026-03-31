@@ -67,6 +67,8 @@ function transactionToRow(txn: ActualsTransaction): {
   source: string | null;
   raw: Json;
   canonical_vendor_id: string | null;
+  import_batch_id: string | null;
+  import_filename: string | null;
 } {
   return {
     fiscal_year_id: txn.fiscalYearId,
@@ -77,6 +79,8 @@ function transactionToRow(txn: ActualsTransaction): {
     source: txn.source || null,
     raw: txn as unknown as Json,
     canonical_vendor_id: txn.canonicalVendorId ?? null,
+    import_batch_id: txn.importBatchId ?? null,
+    import_filename: txn.importFilename ?? null,
   };
 }
 
