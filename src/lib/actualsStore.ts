@@ -8,8 +8,20 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ActualsTransaction, ActualsSummary } from '@/types/actuals';
 import type { Json } from '@/integrations/supabase/types';
 
+// Cache TTL: 10 minutes
+const CACHE_TTL = 10 * 60 * 1000;
+
+interface CacheEntry<T> {
+  data: T;
+  loadedAt: number;
+}
+
 // In-memory cache for synchronous access patterns
-let actualsCache: Record<string, ActualsTransaction[]> = {};
+let actualsCache: Record<string, CacheEntry<ActualsTransaction[]>> = {};
+
+function isCacheExpired(entry: CacheEntry<unknown>): boolean {
+  return Date.now() - entry.loadedAt > CACHE_TTL;
+}
 
 // Map DB row to ActualsTransaction
 function rowToTransaction(row: {
@@ -77,7 +89,7 @@ export async function loadActualsAsync(fiscalYearId: string): Promise<ActualsTra
     }
 
     const txns = (data || []).map(rowToTransaction);
-    actualsCache[fiscalYearId] = txns;
+    actualsCache[fiscalYearId] = { data: txns, loadedAt: Date.now() };
     return txns;
   } catch (err) {
     logger.error('Error loading actuals:', err);
@@ -87,8 +99,12 @@ export async function loadActualsAsync(fiscalYearId: string): Promise<ActualsTra
 
 // Synchronous version that returns cached data (for backward compatibility)
 export function loadActuals(fiscalYearId: string): ActualsTransaction[] {
-  if (fiscalYearId in actualsCache) {
-    return actualsCache[fiscalYearId];
+  const entry = actualsCache[fiscalYearId];
+  if (entry) {
+    if (isCacheExpired(entry)) {
+      loadActualsAsync(fiscalYearId).catch(logger.error);
+    }
+    return entry.data;
   }
   
   // Trigger async load for next time
@@ -101,8 +117,8 @@ export async function appendActuals(fiscalYearId: string, txns: ActualsTransacti
   if (txns.length === 0) return;
 
   // Update cache
-  const existing = actualsCache[fiscalYearId] ?? [];
-  actualsCache[fiscalYearId] = [...existing, ...txns];
+  const existing = actualsCache[fiscalYearId]?.data ?? [];
+  actualsCache[fiscalYearId] = { data: [...existing, ...txns], loadedAt: Date.now() };
 
   try {
     const rows = txns.map(transactionToRow);
@@ -135,7 +151,7 @@ export async function replaceActuals(fiscalYearId: string, txns: ActualsTransact
   }
 
   // Update cache only after successful server-side transaction
-  actualsCache[fiscalYearId] = txns;
+  actualsCache[fiscalYearId] = { data: txns, loadedAt: Date.now() };
 }
 
 export async function deleteActualsForFY(fiscalYearId: string): Promise<void> {
@@ -189,6 +205,15 @@ export function clearActualsCache(): void {
 // Clear specific FY from cache
 export function invalidateActualsCache(fyId: string): void {
   delete actualsCache[fyId];
+}
+
+// Clear all cached FYs except the given one
+export function clearActualsCacheExcept(fyId: string): void {
+  const kept = actualsCache[fyId];
+  actualsCache = {};
+  if (kept) {
+    actualsCache[fyId] = kept;
+  }
 }
 
 /**

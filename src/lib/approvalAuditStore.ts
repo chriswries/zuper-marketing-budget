@@ -9,6 +9,15 @@ import {
 } from '@/types/approvalAudit';
 import type { Json } from '@/integrations/supabase/types';
 
+// Cache TTL: 10 minutes
+const CACHE_TTL = 10 * 60 * 1000;
+const MAX_CACHED_ENTITIES = 20;
+
+interface CacheEntry {
+  data: ApprovalAuditEvent[];
+  loadedAt: number;
+}
+
 // Custom event for same-tab updates
 export const APPROVAL_AUDIT_UPDATED_EVENT = 'approval-audit-updated';
 
@@ -40,6 +49,22 @@ function rowToEvent(row: {
   };
 }
 
+// Evict oldest entries when cache exceeds max size
+function evictIfNeeded(): void {
+  const keys = Object.keys(cachedEvents);
+  if (keys.length <= MAX_CACHED_ENTITIES) return;
+
+  // Sort by loadedAt ascending, evict oldest
+  const sorted = keys
+    .map((k) => ({ key: k, loadedAt: cachedEvents[k].loadedAt }))
+    .sort((a, b) => a.loadedAt - b.loadedAt);
+
+  const toEvict = sorted.length - MAX_CACHED_ENTITIES;
+  for (let i = 0; i < toEvict; i++) {
+    delete cachedEvents[sorted[i].key];
+  }
+}
+
 // Load audit events for a specific entity
 export async function loadApprovalAudit(
   entityType: ApprovalEntityType,
@@ -57,19 +82,30 @@ export async function loadApprovalAudit(
     return [];
   }
 
-  return (data || []).map(rowToEvent);
+  const events = (data || []).map(rowToEvent);
+  const key = `${entityType}:${entityId}`;
+  cachedEvents[key] = { data: events, loadedAt: Date.now() };
+  evictIfNeeded();
+  return events;
 }
 
 // Synchronous version that returns cached data or empty array
-// (for backward compatibility - callers should migrate to async version)
-let cachedEvents: Record<string, ApprovalAuditEvent[]> = {};
+let cachedEvents: Record<string, CacheEntry> = {};
 
 export function loadApprovalAuditSync(
   entityType: ApprovalEntityType,
   entityId: string
 ): ApprovalAuditEvent[] {
   const key = `${entityType}:${entityId}`;
-  return cachedEvents[key] ?? [];
+  const entry = cachedEvents[key];
+  if (entry) {
+    if (Date.now() - entry.loadedAt > CACHE_TTL) {
+      // Stale — trigger background refresh
+      loadApprovalAudit(entityType, entityId).catch(logger.error);
+    }
+    return entry.data;
+  }
+  return [];
 }
 
 // Append a new audit event
@@ -113,9 +149,11 @@ export async function appendApprovalAudit(
   // Update cache
   const key = `${entityType}:${entityId}`;
   if (!cachedEvents[key]) {
-    cachedEvents[key] = [];
+    cachedEvents[key] = { data: [], loadedAt: Date.now() };
+    evictIfNeeded();
   }
-  cachedEvents[key].unshift(fullEvent);
+  cachedEvents[key].data.unshift(fullEvent);
+  cachedEvents[key].loadedAt = Date.now();
 
   dispatchAuditUpdated();
   return fullEvent;
@@ -149,20 +187,23 @@ export async function ensureCreatedEventIfMissing(
 
     // Update cache
     const key = `${entityType}:${entityId}`;
-    cachedEvents[key] = existing;
-    cachedEvents[key].push({
-      id,
-      entityType,
-      entityId,
-      action: 'created',
-      timestamp: createdAtIso,
-      actorRole,
-      meta,
-    });
+    cachedEvents[key] = {
+      data: [...existing, {
+        id,
+        entityType,
+        entityId,
+        action: 'created' as ApprovalAuditAction,
+        timestamp: createdAtIso,
+        actorRole,
+        meta,
+      }],
+      loadedAt: Date.now(),
+    };
+    evictIfNeeded();
   } else {
     // Update cache
     const key = `${entityType}:${entityId}`;
-    cachedEvents[key] = existing;
+    cachedEvents[key] = { data: existing, loadedAt: Date.now() };
   }
 }
 
@@ -311,7 +352,8 @@ export async function replaceApprovalAuditForEntity(
 
   // Update cache
   const key = `${entityType}:${entityId}`;
-  cachedEvents[key] = events;
+  cachedEvents[key] = { data: events, loadedAt: Date.now() };
+  evictIfNeeded();
 
   dispatchAuditUpdated();
 }

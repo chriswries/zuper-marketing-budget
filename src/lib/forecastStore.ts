@@ -7,8 +7,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { CostCenter } from '@/types/budget';
 import type { Json } from '@/integrations/supabase/types';
 
+// Cache TTL: 10 minutes
+const CACHE_TTL = 10 * 60 * 1000;
+
+interface CacheEntry<T> {
+  data: T;
+  loadedAt: number;
+}
+
 // In-memory cache for synchronous access patterns
-let forecastCache: Record<string, CostCenter[] | null> = {};
+let forecastCache: Record<string, CacheEntry<CostCenter[] | null>> = {};
+
+function isCacheExpired(entry: CacheEntry<unknown>): boolean {
+  return Date.now() - entry.loadedAt > CACHE_TTL;
+}
 
 export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[] | null> {
   try {
@@ -24,12 +36,12 @@ export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[]
     }
 
     if (!data) {
-      forecastCache[fyId] = null;
+      forecastCache[fyId] = { data: null, loadedAt: Date.now() };
       return null;
     }
 
     const costCenters = data.data as unknown as CostCenter[];
-    forecastCache[fyId] = costCenters;
+    forecastCache[fyId] = { data: costCenters, loadedAt: Date.now() };
     return costCenters;
   } catch (err) {
     logger.error('Error loading forecast:', err);
@@ -39,9 +51,13 @@ export async function loadForecastForFYAsync(fyId: string): Promise<CostCenter[]
 
 // Synchronous version that returns cached data (for backward compatibility)
 export function loadForecastForFY(fyId: string): CostCenter[] | null {
-  // Return cached value if available
-  if (fyId in forecastCache) {
-    return forecastCache[fyId];
+  const entry = forecastCache[fyId];
+  if (entry) {
+    // If expired, return stale data but trigger background refresh
+    if (isCacheExpired(entry)) {
+      loadForecastForFYAsync(fyId).catch(logger.error);
+    }
+    return entry.data;
   }
   
   // Trigger async load for next time
@@ -52,7 +68,7 @@ export function loadForecastForFY(fyId: string): CostCenter[] | null {
 
 export async function saveForecastForFY(fyId: string, costCenters: CostCenter[]): Promise<void> {
   // Update cache immediately
-  forecastCache[fyId] = costCenters;
+  forecastCache[fyId] = { data: costCenters, loadedAt: Date.now() };
 
   try {
     const { error } = await supabase
@@ -101,6 +117,15 @@ export function clearForecastCache(): void {
 // Clear specific FY from cache
 export function invalidateForecastCache(fyId: string): void {
   delete forecastCache[fyId];
+}
+
+// Clear all cached FYs except the given one
+export function clearForecastCacheExcept(fyId: string): void {
+  const kept = forecastCache[fyId];
+  forecastCache = {};
+  if (kept) {
+    forecastCache[fyId] = kept;
+  }
 }
 
 /**
