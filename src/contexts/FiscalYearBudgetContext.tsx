@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { supabase } from '@/integrations/supabase/client';
 import { CostCenter, LineItem, MonthlyValues, MONTHS, FiscalYearStatus, createZeroMonthlyValues } from '@/types/budget';
 export type { FiscalYearStatus } from '@/types/budget';
-import type { Json } from '@/integrations/supabase/types';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
