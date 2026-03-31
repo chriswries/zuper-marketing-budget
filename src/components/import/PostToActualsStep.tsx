@@ -37,6 +37,8 @@ import {
   hasLegacyActualsImportData,
 } from "@/lib/actualsImportStore";
 import { appendActuals } from "@/lib/actualsStore";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUserRole } from "@/contexts/CurrentUserRoleContext";
 import { toast } from "@/hooks/use-toast";
 
 interface PostToActualsStepProps {
