@@ -744,6 +744,7 @@ export default function VarianceReport() {
         </CardContent>
       </Card>
       </div>
+      </div>{/* close report-content-variance */}
     </div>
   );
 }
