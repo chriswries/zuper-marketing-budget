@@ -449,6 +449,7 @@ export default function ForecastAccuracyReport() {
           </div>
         </CardContent>
       </Card>
+      </div>{/* close report-content-forecast-accuracy */}
     </div>
   );
 }

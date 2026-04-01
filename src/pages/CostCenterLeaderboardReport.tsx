@@ -455,6 +455,7 @@ export default function CostCenterLeaderboardReport() {
           </div>
         </CardContent>
       </Card>
+      </div>{/* close report-content-leaderboard */}
     </div>
   );
 }

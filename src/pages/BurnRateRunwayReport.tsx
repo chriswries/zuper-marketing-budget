@@ -568,6 +568,7 @@ export default function BurnRateRunwayReport() {
           </div>
         </CardContent>
       </Card>
+      </div>{/* close report-content-burn-rate */}
     </div>
   );
 }
