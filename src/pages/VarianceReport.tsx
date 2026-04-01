@@ -1049,7 +1049,6 @@ function VarianceCharts({
           )}
         </CardContent>
       </Card>
-      </div>{/* close report-content-variance */}
     </div>
   );
 }
