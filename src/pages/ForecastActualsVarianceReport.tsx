@@ -94,6 +94,7 @@ export default function ForecastActualsVarianceReport() {
   
   const [forecastCCs, setForecastCCs] = useState<CostCenter[] | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Filters
   const [costCenterFilter, setCostCenterFilter] = useState<string>('all');
