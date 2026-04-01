@@ -90,6 +90,7 @@ export default function BurnRateRunwayReport() {
   
   const [forecastCCs, setForecastCCs] = useState<CostCenter[] | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Mode toggle
   const [burnMode, setBurnMode] = useState<BurnMode>('actuals_constant');
