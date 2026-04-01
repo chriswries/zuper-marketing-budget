@@ -794,6 +794,7 @@ export default function ForecastActualsVarianceReport() {
         </CardContent>
       </Card>
       </div>
+      </div>{/* close report-content-forecast-actuals */}
     </div>
   );
 }
@@ -1096,7 +1097,6 @@ function VarianceCharts({
           )}
         </CardContent>
       </Card>
-      </div>{/* close report-content-forecast-actuals */}
     </div>
   );
 }

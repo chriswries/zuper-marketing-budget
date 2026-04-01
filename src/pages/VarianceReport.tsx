@@ -744,6 +744,7 @@ export default function VarianceReport() {
         </CardContent>
       </Card>
       </div>
+      </div>{/* close report-content-variance */}
     </div>
   );
 }
@@ -1048,7 +1049,6 @@ function VarianceCharts({
           )}
         </CardContent>
       </Card>
-      </div>{/* close report-content-variance */}
     </div>
   );
 }
