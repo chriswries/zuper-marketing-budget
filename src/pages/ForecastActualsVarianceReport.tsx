@@ -1096,7 +1096,6 @@ function VarianceCharts({
           )}
         </CardContent>
       </Card>
-      </div>{/* close report-content-forecast-actuals */}
     </div>
   );
 }
