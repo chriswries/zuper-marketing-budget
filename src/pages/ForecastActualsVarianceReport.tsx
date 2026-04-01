@@ -520,10 +520,7 @@ export default function ForecastActualsVarianceReport() {
         Back
       </Button>
 
-      <div className="print-only mb-4">
-        <h1 className="text-2xl font-bold">Forecast vs Actuals Variance — {selectedFiscalYear.name}</h1>
-        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-      </div>
+      <div id="report-content-forecast-actuals" className="space-y-6">
       
       <div className="flex items-center justify-between">
         <div>
@@ -535,19 +532,27 @@ export default function ForecastActualsVarianceReport() {
             Showing: {scopeMode === 'fy' ? 'Full FY' : `YTD through ${MONTH_LABELS[asOfMonth]}`}
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleExportCsv} variant="outline" className="gap-2 no-print">
+        <div className="flex gap-2 no-print">
+          <Button onClick={handleExportCsv} variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 no-print"
-            onClick={() => exportReportToPdf(`${selectedFiscalYear.name}_Forecast_vs_Actuals_Variance`)}
+            className="gap-2"
+            disabled={exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                await exportReportToPdf('report-content-forecast-actuals', `${selectedFiscalYear.name}_Forecast_vs_Actuals_Variance`);
+              } finally {
+                setExporting(false);
+              }
+            }}
           >
-            <FileDown className="h-4 w-4" />
-            Export PDF
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            {exporting ? 'Exporting...' : 'Export PDF'}
           </Button>
         </div>
       </div>

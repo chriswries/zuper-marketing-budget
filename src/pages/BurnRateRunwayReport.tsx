@@ -401,10 +401,7 @@ export default function BurnRateRunwayReport() {
         Back
       </Button>
 
-      <div className="print-only mb-4">
-        <h1 className="text-2xl font-bold">Burn Rate / Runway — {selectedFiscalYear?.name || 'FY'}</h1>
-        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-      </div>
+      <div id="report-content-burn-rate" className="space-y-6">
       
       <div className="flex items-center justify-between">
         <PageHeader
@@ -415,10 +412,18 @@ export default function BurnRateRunwayReport() {
           variant="outline"
           size="sm"
           className="gap-2 no-print"
-          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Burn_Rate_Runway`)}
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await exportReportToPdf('report-content-burn-rate', `${selectedFiscalYear?.name || 'FY'}_Burn_Rate_Runway`);
+            } finally {
+              setExporting(false);
+            }
+          }}
         >
-          <FileDown className="h-4 w-4" />
-          Export PDF
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+          {exporting ? 'Exporting...' : 'Export PDF'}
         </Button>
       </div>
       

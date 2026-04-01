@@ -330,10 +330,7 @@ export default function ForecastAccuracyReport() {
         Back
       </Button>
 
-      <div className="print-only mb-4">
-        <h1 className="text-2xl font-bold">Forecast Accuracy — {selectedFiscalYear?.name || 'FY'}</h1>
-        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-      </div>
+      <div id="report-content-forecast-accuracy" className="space-y-6">
       
       <div className="flex items-center justify-between">
         <PageHeader
@@ -344,10 +341,18 @@ export default function ForecastAccuracyReport() {
           variant="outline"
           size="sm"
           className="gap-2 no-print"
-          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Forecast_Accuracy`)}
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await exportReportToPdf('report-content-forecast-accuracy', `${selectedFiscalYear?.name || 'FY'}_Forecast_Accuracy`);
+            } finally {
+              setExporting(false);
+            }
+          }}
         >
-          <FileDown className="h-4 w-4" />
-          Export PDF
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+          {exporting ? 'Exporting...' : 'Export PDF'}
         </Button>
       </div>
       
