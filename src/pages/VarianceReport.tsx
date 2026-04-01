@@ -39,7 +39,7 @@ import {
 } from '@/lib/budgetForecastVariance';
 import { downloadCsv, CsvColumn } from '@/lib/exportCsv';
 import { MONTHS, MONTH_LABELS, CostCenter, Month } from '@/types/budget';
-import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, ArrowLeft, FileDown } from 'lucide-react';
+import { FileSpreadsheet, TrendingUp, ChevronDown, ChevronRight, Download, BarChart3, X, ArrowLeft, FileDown, Loader2 } from 'lucide-react';
 import { exportReportToPdf } from '@/lib/exportPdf';
 import { toast } from '@/hooks/use-toast';
 import { ScopeMode, sumYTD, getCurrentFiscalMonth } from '@/lib/ytdHelpers';
@@ -99,6 +99,7 @@ export default function VarianceReport() {
   
   const [forecastCCs, setForecastCCs] = useState<CostCenter[] | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Filters
   const [costCenterFilter, setCostCenterFilter] = useState<string>('all');
@@ -469,10 +470,7 @@ export default function VarianceReport() {
         Back
       </Button>
 
-      <div className="print-only mb-4">
-        <h1 className="text-2xl font-bold">Budget vs Forecast Variance — {selectedFiscalYear.name}</h1>
-        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-      </div>
+      <div id="report-content-variance" className="space-y-6">
       
       <div className="flex items-center justify-between">
         <div>
@@ -484,19 +482,27 @@ export default function VarianceReport() {
             Showing: {scopeMode === 'fy' ? 'Full FY' : `YTD through ${MONTH_LABELS[asOfMonth]}`}
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleExportCsv} variant="outline" className="gap-2 no-print">
+        <div className="flex gap-2 no-print">
+          <Button onClick={handleExportCsv} variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 no-print"
-            onClick={() => exportReportToPdf(`${selectedFiscalYear.name}_Budget_vs_Forecast_Variance`)}
+            className="gap-2"
+            disabled={exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                await exportReportToPdf('report-content-variance', `${selectedFiscalYear.name}_Budget_vs_Forecast_Variance`);
+              } finally {
+                setExporting(false);
+              }
+            }}
           >
-            <FileDown className="h-4 w-4" />
-            Export PDF
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            {exporting ? 'Exporting...' : 'Export PDF'}
           </Button>
         </div>
       </div>
@@ -1042,6 +1048,7 @@ function VarianceCharts({
           )}
         </CardContent>
       </Card>
+      </div>{/* close report-content-variance */}
     </div>
   );
 }

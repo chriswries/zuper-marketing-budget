@@ -54,6 +54,7 @@ export default function CostCenterLeaderboardReport() {
   
   const [forecastCCs, setForecastCCs] = useState<CostCenter[] | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Sort controls for each leaderboard
   const [spendSort, setSpendSort] = useState<SortDirection>('high_low');
@@ -303,10 +304,7 @@ export default function CostCenterLeaderboardReport() {
         Back
       </Button>
 
-      <div className="print-only mb-4">
-        <h1 className="text-2xl font-bold">Cost Center Leaderboard — {selectedFiscalYear?.name || 'FY'}</h1>
-        <p className="text-sm text-muted-foreground">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
-      </div>
+      <div id="report-content-leaderboard" className="space-y-6">
       
       <div className="flex items-center justify-between">
         <PageHeader
@@ -317,10 +315,18 @@ export default function CostCenterLeaderboardReport() {
           variant="outline"
           size="sm"
           className="gap-2 no-print"
-          onClick={() => exportReportToPdf(`${selectedFiscalYear?.name || 'FY'}_Cost_Center_Leaderboard`)}
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await exportReportToPdf('report-content-leaderboard', `${selectedFiscalYear?.name || 'FY'}_Cost_Center_Leaderboard`);
+            } finally {
+              setExporting(false);
+            }
+          }}
         >
-          <FileDown className="h-4 w-4" />
-          Export PDF
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+          {exporting ? 'Exporting...' : 'Export PDF'}
         </Button>
       </div>
       
@@ -449,6 +455,7 @@ export default function CostCenterLeaderboardReport() {
           </div>
         </CardContent>
       </Card>
+      </div>{/* close report-content-leaderboard */}
     </div>
   );
 }
