@@ -54,6 +54,7 @@ export default function CostCenterLeaderboardReport() {
   
   const [forecastCCs, setForecastCCs] = useState<CostCenter[] | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Sort controls for each leaderboard
   const [spendSort, setSpendSort] = useState<SortDirection>('high_low');
