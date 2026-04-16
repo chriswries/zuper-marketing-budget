@@ -184,7 +184,13 @@ export default function Forecast() {
   // Guarded by initialLoadDoneRef to prevent stale cache from overwriting DB
   useEffect(() => {
     if (isActiveFY && fyId && costCenters.length > 0 && initialLoadDoneRef.current) {
-      saveForecastForFY(fyId, costCenters);
+      saveForecastForFY(fyId, costCenters).catch((err) => {
+        toast({
+          title: 'Failed to save forecast',
+          description: err instanceof Error ? err.message : 'An unknown error occurred. Please refresh and try again.',
+          variant: 'destructive',
+        });
+      });
     }
   }, [costCenters, isActiveFY, fyId]);
 
