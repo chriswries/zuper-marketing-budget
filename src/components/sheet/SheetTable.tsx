@@ -781,7 +781,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 return (
                                   <TableCell 
                                     key={month} 
-                                    className={`relative z-0 w-[120px] min-w-[120px] text-right tabular-nums bg-background group-hover:bg-muted ${isMonthLocked || isItemLocked ? 'bg-muted cursor-not-allowed text-muted-foreground' : ''}`}
+                                    className={`relative z-0 w-[120px] min-w-[120px] text-right tabular-nums bg-background group-hover:bg-muted ${isMonthLocked || isItemLocked || isCellPendingLocked ? 'bg-muted cursor-not-allowed text-muted-foreground' : ''}`}
+                                    title={isCellPendingLocked ? 'This cell has a pending approval request' : undefined}
                                   >
                                     {formatCurrency(cellValue)}
                                   </TableCell>
