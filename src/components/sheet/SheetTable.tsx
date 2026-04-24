@@ -107,6 +107,9 @@ interface SheetTableProps {
   adminOverrideEnabled?: boolean;
   // Controls whether tag editing is enabled (for archived FYs)
   tagsEditable?: boolean;
+  // Per-cell pending adjustment requests: lineItemId -> Map<Month, requestId>
+  // When a cell is in this map, only that cell is locked (not the whole row).
+  pendingCellLocks?: Map<string, Map<Month, string>>;
 }
 
 import { formatCurrency } from '@/lib/format';
@@ -128,7 +131,7 @@ function calculateFilteredRollup(
   return rollup;
 }
 
-export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, onEditTags, onEditLineItemName, canEditLineItemName = false, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false, tagsEditable = false }: SheetTableProps) {
+export function SheetTable({ costCenters, valueType, editable = false, showEmptyCostCenters = true, onCellChange, onDeleteLineItem, onRowAction, onEditTags, onEditLineItemName, canEditLineItemName = false, currentUserRole, lockedMonths, renderCostCenterFYMeta, renderGrandTotalFYMeta, focusCostCenterId, focusLineItemId, onFocusLineItemNotFound, adminOverrideEnabled = false, tagsEditable = false, pendingCellLocks }: SheetTableProps) {
   const navigate = useNavigate();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(costCenters.map((cc) => cc.id)));
   const [searchQuery, setSearchQuery] = useState('');
@@ -736,8 +739,12 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
                                 // Lock cells during pending cancellation or deletion (unless admin override)
                                 const isItemLocked = !isAdminOverride && (item.cancellationStatus === 'pending' || item.deletionStatus === 'pending');
-                                // Admin override bypasses pending approval locks
-                                const isPendingLocked = !isAdminOverride && (item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending');
+                                // Row-level lock: pending NEW line item creation, OR legacy adjustmentStatus row lock
+                                // (legacy adjustments without per-cell tracking still lock the whole row)
+                                const isRowPendingLocked = !isAdminOverride && (item.approvalStatus === 'pending' || (item.adjustmentStatus === 'pending' && !pendingCellLocks?.has(item.id)));
+                                // Cell-level lock: this specific month has a pending adjustment request
+                                const isCellPendingLocked = !isAdminOverride && !!pendingCellLocks?.get(item.id)?.has(month);
+                                const isPendingLocked = isRowPendingLocked || isCellPendingLocked;
                                 
                                 // Admin override bypasses month locks too
                                 const effectiveMonthLocked = isAdminOverride ? false : isMonthLocked;
@@ -774,7 +781,8 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 return (
                                   <TableCell 
                                     key={month} 
-                                    className={`relative z-0 w-[120px] min-w-[120px] text-right tabular-nums bg-background group-hover:bg-muted ${isMonthLocked || isItemLocked ? 'bg-muted cursor-not-allowed text-muted-foreground' : ''}`}
+                                    className={`relative z-0 w-[120px] min-w-[120px] text-right tabular-nums bg-background group-hover:bg-muted ${isMonthLocked || isItemLocked || isCellPendingLocked ? 'bg-muted cursor-not-allowed text-muted-foreground' : ''}`}
+                                    title={isCellPendingLocked ? 'This cell has a pending approval request' : undefined}
                                   >
                                     {formatCurrency(cellValue)}
                                   </TableCell>

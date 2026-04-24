@@ -103,6 +103,10 @@ export default function Forecast() {
   // Prevents the persist effect from writing stale cache data back to the DB.
   const initialLoadDoneRef = useRef(false);
 
+  // Track which forecast adjustment requests we've already processed (reverted on reject)
+  // Prevents double-revert when the sync effect re-runs.
+  const processedAdjustmentRequestsRef = useRef<Set<string>>(new Set());
+
   // Initialize cost centers - empty array until active FY loads via effect
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
@@ -336,6 +340,125 @@ export default function Forecast() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests]);
+
+  // Derive per-cell pending forecast adjustment requests
+  // Map: lineItemId -> Map<Month, requestId>
+  // Used to lock individual cells (not entire rows) when a cell has a pending request.
+  const pendingCellLocks = useMemo(() => {
+    const map = new Map<string, Map<Month, string>>();
+    for (const req of requests) {
+      if (
+        req.status === 'pending' &&
+        req.originSheet === 'forecast' &&
+        req.originKind === 'adjustment' &&
+        req.originLineItemId &&
+        req.startMonth &&
+        // Only include for current FY (or legacy null FY items)
+        (req.originFiscalYearId === fyId || (!req.originFiscalYearId && !isActiveFY))
+      ) {
+        let cellMap = map.get(req.originLineItemId);
+        if (!cellMap) {
+          cellMap = new Map();
+          map.set(req.originLineItemId, cellMap);
+        }
+        cellMap.set(req.startMonth as Month, req.id);
+      }
+    }
+    return map;
+  }, [requests, fyId, isActiveFY]);
+
+  // Track each forecast adjustment request's status as we first observe it,
+  // so we only revert on a real transition (pending -> rejected/cancelled).
+  // Without this, requests that were already rejected before this session
+  // would be re-reverted on every mount.
+  const observedAdjustmentStatusRef = useRef<Map<string, 'pending' | 'resolved'>>(new Map());
+
+  // Handle revert for per-cell adjustment requests that transition to rejected/cancelled.
+  // Per-cell requests don't store adjustmentBeforeValues on the line item, so we
+  // revert by subtracting request.amount from the affected cell.
+  useEffect(() => {
+    if (!isActiveFY || !fyId) return;
+
+    const toRevert: Array<{ lineItemId: string; month: Month; amount: number; requestId: string }> = [];
+    for (const req of requests) {
+      if (
+        req.originSheet !== 'forecast' ||
+        req.originKind !== 'adjustment' ||
+        !req.originLineItemId ||
+        !req.startMonth ||
+        typeof req.amount !== 'number'
+      ) {
+        continue;
+      }
+      if (processedAdjustmentRequestsRef.current.has(req.id)) continue;
+
+      const isApproved =
+        req.status === 'approved' ||
+        (req.approvalSteps?.length > 0 && req.approvalSteps.every((s) => s.status === 'approved'));
+      const isRejected =
+        req.status === 'rejected' ||
+        req.status === 'cancelled' ||
+        req.approvalSteps?.some((s) => s.status === 'rejected');
+
+      const previouslyObserved = observedAdjustmentStatusRef.current.get(req.id);
+
+      if (isApproved) {
+        // Approved: value is already applied, just mark processed.
+        processedAdjustmentRequestsRef.current.add(req.id);
+        observedAdjustmentStatusRef.current.set(req.id, 'resolved');
+        continue;
+      }
+
+      if (isRejected) {
+        // Only revert if we previously observed this request as pending in this session.
+        // If it was already resolved when we first saw it, the revert was already
+        // persisted in a previous session — don't double-apply.
+        if (previouslyObserved === 'pending') {
+          toRevert.push({
+            lineItemId: req.originLineItemId,
+            month: req.startMonth as Month,
+            amount: req.amount,
+            requestId: req.id,
+          });
+        }
+        observedAdjustmentStatusRef.current.set(req.id, 'resolved');
+        processedAdjustmentRequestsRef.current.add(req.id);
+        continue;
+      }
+
+      // Still pending — record the baseline.
+      if (!previouslyObserved) {
+        observedAdjustmentStatusRef.current.set(req.id, 'pending');
+      }
+    }
+
+    if (toRevert.length === 0) return;
+
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        const matching = toRevert.filter((r) =>
+          cc.lineItems.some((li) => li.id === r.lineItemId)
+        );
+        if (matching.length === 0) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            const reverts = matching.filter((r) => r.lineItemId === item.id);
+            if (reverts.length === 0) return item;
+            // Skip legacy items still using row-level adjustmentBeforeValues
+            // (handled by the existing sync effect above).
+            if (item.adjustmentBeforeValues) return item;
+            const newValues = { ...item.forecastValues };
+            for (const r of reverts) {
+              newValues[r.month] = (newValues[r.month] ?? 0) - r.amount;
+              if (newValues[r.month] < 0) newValues[r.month] = 0;
+            }
+            return { ...item, forecastValues: newValues };
+          }),
+        };
+      })
+    );
+  }, [requests, isActiveFY, fyId]);
 
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
     // Use current costCenters as source of truth for cost center name
@@ -872,11 +995,19 @@ export default function Forecast() {
 
     const lineItemName = lineItem?.name ?? '';
 
-    // Block edits if pending approval or adjustment (unless admin override)
-    if (!isAdminOverride && (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending')) {
+    // Block edits if line item is pending creation, OR if this specific cell has a
+    // pending adjustment request (unless admin override). Other months on the same
+    // line item remain editable so multiple per-cell requests can coexist.
+    const cellHasPendingRequest = !!pendingCellLocks.get(lineItemId)?.has(month);
+    // Legacy row-level adjustment lock: only applies to items still using
+    // adjustmentBeforeValues (pre-per-cell era). New adjustments don't set this.
+    const hasLegacyRowAdjustmentLock = lineItem.adjustmentStatus === 'pending' && !pendingCellLocks.has(lineItemId);
+    if (!isAdminOverride && (lineItem.approvalStatus === 'pending' || hasLegacyRowAdjustmentLock || cellHasPendingRequest)) {
       toast({
         title: 'Edit locked',
-        description: 'This line item has a pending approval request. Changes are locked until approved/rejected.',
+        description: cellHasPendingRequest
+          ? 'This cell has a pending approval request. Wait for it to be resolved before editing again.'
+          : 'This line item has a pending approval request. Changes are locked until approved/rejected.',
         variant: 'destructive',
       });
       return;
@@ -962,7 +1093,7 @@ export default function Forecast() {
         setAuditLog((prev) => [entry, ...prev].slice(0, 50));
       }
     }
-  }, [costCenters, adminSettings, isAdminOverride]);
+  }, [costCenters, adminSettings, isAdminOverride, pendingCellLocks]);
 
   // Handle justification dialog cancel
   const handleJustificationCancel = useCallback(() => {
@@ -1022,7 +1153,10 @@ export default function Forecast() {
     };
     addRequest(newRequest);
 
-    // Update with pending adjustment
+    // Apply the new value optimistically. Do NOT set row-level adjustmentStatus /
+    // adjustmentBeforeValues — that would lock the entire row. The pending state
+    // for this specific cell is derived from the request itself (see pendingCellLocks),
+    // so other months on this line item remain editable in parallel.
     setCostCenters((prev) =>
       prev.map((cc) => {
         if (cc.id !== costCenterId) return cc;
@@ -1033,10 +1167,6 @@ export default function Forecast() {
             return {
               ...item,
               forecastValues: pendingUpdatedValues,
-              adjustmentStatus: 'pending' as const,
-              adjustmentRequestId: requestId,
-              adjustmentBeforeValues: pendingOldValues,
-              adjustmentSheet: 'forecast' as const,
             };
           }),
         };
@@ -1454,6 +1584,7 @@ export default function Forecast() {
             focusLineItemId={focusLineItemId}
             onFocusLineItemNotFound={handleFocusLineItemNotFound}
             adminOverrideEnabled={adminSettings.adminOverrideEnabled}
+            pendingCellLocks={pendingCellLocks}
           />
 
           <AddLineItemDialog
