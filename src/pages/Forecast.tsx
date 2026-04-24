@@ -103,6 +103,10 @@ export default function Forecast() {
   // Prevents the persist effect from writing stale cache data back to the DB.
   const initialLoadDoneRef = useRef(false);
 
+  // Track which forecast adjustment requests we've already processed (reverted on reject)
+  // Prevents double-revert when the sync effect re-runs.
+  const processedAdjustmentRequestsRef = useRef<Set<string>>(new Set());
+
   // Initialize cost centers - empty array until active FY loads via effect
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
