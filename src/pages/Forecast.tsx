@@ -1133,7 +1133,10 @@ export default function Forecast() {
     };
     addRequest(newRequest);
 
-    // Update with pending adjustment
+    // Apply the new value optimistically. Do NOT set row-level adjustmentStatus /
+    // adjustmentBeforeValues — that would lock the entire row. The pending state
+    // for this specific cell is derived from the request itself (see pendingCellLocks),
+    // so other months on this line item remain editable in parallel.
     setCostCenters((prev) =>
       prev.map((cc) => {
         if (cc.id !== costCenterId) return cc;
@@ -1144,10 +1147,6 @@ export default function Forecast() {
             return {
               ...item,
               forecastValues: pendingUpdatedValues,
-              adjustmentStatus: 'pending' as const,
-              adjustmentRequestId: requestId,
-              adjustmentBeforeValues: pendingOldValues,
-              adjustmentSheet: 'forecast' as const,
             };
           }),
         };
