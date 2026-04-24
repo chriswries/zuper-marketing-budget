@@ -341,6 +341,105 @@ export default function Forecast() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requests]);
 
+  // Derive per-cell pending forecast adjustment requests
+  // Map: lineItemId -> Map<Month, requestId>
+  // Used to lock individual cells (not entire rows) when a cell has a pending request.
+  const pendingCellLocks = useMemo(() => {
+    const map = new Map<string, Map<Month, string>>();
+    for (const req of requests) {
+      if (
+        req.status === 'pending' &&
+        req.originSheet === 'forecast' &&
+        req.originKind === 'adjustment' &&
+        req.originLineItemId &&
+        req.startMonth &&
+        // Only include for current FY (or legacy null FY items)
+        (req.originFiscalYearId === fyId || (!req.originFiscalYearId && !isActiveFY))
+      ) {
+        let cellMap = map.get(req.originLineItemId);
+        if (!cellMap) {
+          cellMap = new Map();
+          map.set(req.originLineItemId, cellMap);
+        }
+        cellMap.set(req.startMonth as Month, req.id);
+      }
+    }
+    return map;
+  }, [requests, fyId, isActiveFY]);
+
+  // Handle revert for per-cell adjustment requests that were rejected/cancelled.
+  // Per-cell requests don't store adjustmentBeforeValues on the line item, so we
+  // revert by subtracting request.amount from the affected cell. Track processed
+  // requests via ref to avoid double-revert on re-runs.
+  useEffect(() => {
+    if (!isActiveFY || !fyId) return;
+
+    const toRevert: Array<{ lineItemId: string; month: Month; amount: number; requestId: string }> = [];
+    for (const req of requests) {
+      if (
+        req.originSheet !== 'forecast' ||
+        req.originKind !== 'adjustment' ||
+        !req.originLineItemId ||
+        !req.startMonth ||
+        typeof req.amount !== 'number'
+      ) {
+        continue;
+      }
+      if (processedAdjustmentRequestsRef.current.has(req.id)) continue;
+
+      const isApproved =
+        req.status === 'approved' ||
+        (req.approvalSteps?.length > 0 && req.approvalSteps.every((s) => s.status === 'approved'));
+      const isRejected =
+        req.status === 'rejected' ||
+        req.status === 'cancelled' ||
+        req.approvalSteps?.some((s) => s.status === 'rejected');
+
+      if (isRejected && !isApproved) {
+        toRevert.push({
+          lineItemId: req.originLineItemId,
+          month: req.startMonth as Month,
+          amount: req.amount,
+          requestId: req.id,
+        });
+      } else if (isApproved) {
+        // Approved: value is already applied, just mark processed.
+        processedAdjustmentRequestsRef.current.add(req.id);
+      }
+    }
+
+    if (toRevert.length === 0) return;
+
+    setCostCenters((prev) =>
+      prev.map((cc) => {
+        const matching = toRevert.filter((r) =>
+          cc.lineItems.some((li) => li.id === r.lineItemId)
+        );
+        if (matching.length === 0) return cc;
+        return {
+          ...cc,
+          lineItems: cc.lineItems.map((item) => {
+            const reverts = matching.filter((r) => r.lineItemId === item.id);
+            if (reverts.length === 0) return item;
+            // Skip legacy items still using row-level adjustmentBeforeValues
+            // (handled by the existing sync effect above).
+            if (item.adjustmentBeforeValues) return item;
+            const newValues = { ...item.forecastValues };
+            for (const r of reverts) {
+              newValues[r.month] = (newValues[r.month] ?? 0) - r.amount;
+              if (newValues[r.month] < 0) newValues[r.month] = 0;
+            }
+            return { ...item, forecastValues: newValues };
+          }),
+        };
+      })
+    );
+
+    for (const r of toRevert) {
+      processedAdjustmentRequestsRef.current.add(r.requestId);
+    }
+  }, [requests, isActiveFY, fyId]);
+
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
     // Use current costCenters as source of truth for cost center name
     const cc = costCenters.find((c) => c.id === costCenterId);
