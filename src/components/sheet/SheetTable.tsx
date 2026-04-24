@@ -739,8 +739,12 @@ export function SheetTable({ costCenters, valueType, editable = false, showEmpty
                                 const isMonthLocked = valueType === 'forecastValues' && lockedMonths?.has(month);
                                 // Lock cells during pending cancellation or deletion (unless admin override)
                                 const isItemLocked = !isAdminOverride && (item.cancellationStatus === 'pending' || item.deletionStatus === 'pending');
-                                // Admin override bypasses pending approval locks
-                                const isPendingLocked = !isAdminOverride && (item.approvalStatus === 'pending' || item.adjustmentStatus === 'pending');
+                                // Row-level lock: pending NEW line item creation, OR legacy adjustmentStatus row lock
+                                // (legacy adjustments without per-cell tracking still lock the whole row)
+                                const isRowPendingLocked = !isAdminOverride && (item.approvalStatus === 'pending' || (item.adjustmentStatus === 'pending' && !pendingCellLocks?.has(item.id)));
+                                // Cell-level lock: this specific month has a pending adjustment request
+                                const isCellPendingLocked = !isAdminOverride && !!pendingCellLocks?.get(item.id)?.has(month);
+                                const isPendingLocked = isRowPendingLocked || isCellPendingLocked;
                                 
                                 // Admin override bypasses month locks too
                                 const effectiveMonthLocked = isAdminOverride ? false : isMonthLocked;
