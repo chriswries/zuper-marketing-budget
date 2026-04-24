@@ -238,13 +238,14 @@ export async function saveForecastForFY(fyId: string, costCenters: CostCenter[])
   }
 
   try {
-    // 1. INSERT new line items FIRST (before monthly_values upsert, to satisfy FK)
+    // 1. UPSERT new line items FIRST (before monthly_values upsert, to satisfy FK)
+    // Use upsert with onConflict to handle stale cache (existing items misidentified as new)
     if (newLineItemRows.length > 0) {
-      const { error } = await supabase.from('line_items').insert(newLineItemRows);
+      const { error } = await supabase.from('line_items').upsert(newLineItemRows, { onConflict: 'id' });
       if (error) {
-        logger.error('Failed to insert new forecast line items:', error, newLineItemRows);
+        logger.error('Failed to upsert forecast line items:', error, newLineItemRows);
         // Don't update cache so retry works
-        throw new Error(`Failed to insert new line items: ${error.message}`);
+        throw new Error(`Failed to upsert line items: ${error.message}`);
       }
     }
 
