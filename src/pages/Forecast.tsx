@@ -1564,6 +1564,7 @@ export default function Forecast() {
             focusLineItemId={focusLineItemId}
             onFocusLineItemNotFound={handleFocusLineItemNotFound}
             adminOverrideEnabled={adminSettings.adminOverrideEnabled}
+            pendingCellLocks={pendingCellLocks}
           />
 
           <AddLineItemDialog
