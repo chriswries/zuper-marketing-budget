@@ -975,11 +975,19 @@ export default function Forecast() {
 
     const lineItemName = lineItem?.name ?? '';
 
-    // Block edits if pending approval or adjustment (unless admin override)
-    if (!isAdminOverride && (lineItem.approvalStatus === 'pending' || lineItem.adjustmentStatus === 'pending')) {
+    // Block edits if line item is pending creation, OR if this specific cell has a
+    // pending adjustment request (unless admin override). Other months on the same
+    // line item remain editable so multiple per-cell requests can coexist.
+    const cellHasPendingRequest = !!pendingCellLocks.get(lineItemId)?.has(month);
+    // Legacy row-level adjustment lock: only applies to items still using
+    // adjustmentBeforeValues (pre-per-cell era). New adjustments don't set this.
+    const hasLegacyRowAdjustmentLock = lineItem.adjustmentStatus === 'pending' && !pendingCellLocks.has(lineItemId);
+    if (!isAdminOverride && (lineItem.approvalStatus === 'pending' || hasLegacyRowAdjustmentLock || cellHasPendingRequest)) {
       toast({
         title: 'Edit locked',
-        description: 'This line item has a pending approval request. Changes are locked until approved/rejected.',
+        description: cellHasPendingRequest
+          ? 'This cell has a pending approval request. Wait for it to be resolved before editing again.'
+          : 'This line item has a pending approval request. Changes are locked until approved/rejected.',
         variant: 'destructive',
       });
       return;
