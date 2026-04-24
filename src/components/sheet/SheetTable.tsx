@@ -107,6 +107,9 @@ interface SheetTableProps {
   adminOverrideEnabled?: boolean;
   // Controls whether tag editing is enabled (for archived FYs)
   tagsEditable?: boolean;
+  // Per-cell pending adjustment requests: lineItemId -> Map<Month, requestId>
+  // When a cell is in this map, only that cell is locked (not the whole row).
+  pendingCellLocks?: Map<string, Map<Month, string>>;
 }
 
 import { formatCurrency } from '@/lib/format';
