@@ -367,10 +367,15 @@ export default function Forecast() {
     return map;
   }, [requests, fyId, isActiveFY]);
 
-  // Handle revert for per-cell adjustment requests that were rejected/cancelled.
+  // Track each forecast adjustment request's status as we first observe it,
+  // so we only revert on a real transition (pending -> rejected/cancelled).
+  // Without this, requests that were already rejected before this session
+  // would be re-reverted on every mount.
+  const observedAdjustmentStatusRef = useRef<Map<string, 'pending' | 'resolved'>>(new Map());
+
+  // Handle revert for per-cell adjustment requests that transition to rejected/cancelled.
   // Per-cell requests don't store adjustmentBeforeValues on the line item, so we
-  // revert by subtracting request.amount from the affected cell. Track processed
-  // requests via ref to avoid double-revert on re-runs.
+  // revert by subtracting request.amount from the affected cell.
   useEffect(() => {
     if (!isActiveFY || !fyId) return;
 
@@ -395,16 +400,35 @@ export default function Forecast() {
         req.status === 'cancelled' ||
         req.approvalSteps?.some((s) => s.status === 'rejected');
 
-      if (isRejected && !isApproved) {
-        toRevert.push({
-          lineItemId: req.originLineItemId,
-          month: req.startMonth as Month,
-          amount: req.amount,
-          requestId: req.id,
-        });
-      } else if (isApproved) {
+      const previouslyObserved = observedAdjustmentStatusRef.current.get(req.id);
+
+      if (isApproved) {
         // Approved: value is already applied, just mark processed.
         processedAdjustmentRequestsRef.current.add(req.id);
+        observedAdjustmentStatusRef.current.set(req.id, 'resolved');
+        continue;
+      }
+
+      if (isRejected) {
+        // Only revert if we previously observed this request as pending in this session.
+        // If it was already resolved when we first saw it, the revert was already
+        // persisted in a previous session — don't double-apply.
+        if (previouslyObserved === 'pending') {
+          toRevert.push({
+            lineItemId: req.originLineItemId,
+            month: req.startMonth as Month,
+            amount: req.amount,
+            requestId: req.id,
+          });
+        }
+        observedAdjustmentStatusRef.current.set(req.id, 'resolved');
+        processedAdjustmentRequestsRef.current.add(req.id);
+        continue;
+      }
+
+      // Still pending — record the baseline.
+      if (!previouslyObserved) {
+        observedAdjustmentStatusRef.current.set(req.id, 'pending');
       }
     }
 
@@ -434,10 +458,6 @@ export default function Forecast() {
         };
       })
     );
-
-    for (const r of toRevert) {
-      processedAdjustmentRequestsRef.current.add(r.requestId);
-    }
   }, [requests, isActiveFY, fyId]);
 
   const handleCreateLineItem = useCallback((costCenterId: string, lineItem: LineItem) => {
