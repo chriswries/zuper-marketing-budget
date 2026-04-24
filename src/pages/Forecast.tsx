@@ -1073,7 +1073,7 @@ export default function Forecast() {
         setAuditLog((prev) => [entry, ...prev].slice(0, 50));
       }
     }
-  }, [costCenters, adminSettings, isAdminOverride]);
+  }, [costCenters, adminSettings, isAdminOverride, pendingCellLocks]);
 
   // Handle justification dialog cancel
   const handleJustificationCancel = useCallback(() => {
